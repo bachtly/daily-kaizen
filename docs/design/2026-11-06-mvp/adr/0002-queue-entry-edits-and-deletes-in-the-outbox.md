@@ -1,6 +1,6 @@
 # Queue entry edits and deletes in the Outbox
 
-Status: accepted · Date: 2026-11-06 · Deciders: Bach · Stage: [02-requirements.md](../02-requirements.md)
+Status: superseded by [0004](0004-require-a-connection-for-all-writes.md) · Date: 2026-11-06 · Deciders: Bach · Stage: [02-requirements.md](../02-requirements.md)
 
 ## Context and problem
 

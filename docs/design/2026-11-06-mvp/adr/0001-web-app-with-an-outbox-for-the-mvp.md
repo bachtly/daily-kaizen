@@ -1,6 +1,6 @@
 # Build the MVP as a web app with an Outbox
 
-Status: accepted · Date: 2026-11-06 · Deciders: Bach · Stage: [01-research.md](../01-research.md)
+Status: superseded by [0004](0004-require-a-connection-for-all-writes.md) · Date: 2026-11-06 · Deciders: Bach · Stage: [01-research.md](../01-research.md)
 
 ## Context and problem
 

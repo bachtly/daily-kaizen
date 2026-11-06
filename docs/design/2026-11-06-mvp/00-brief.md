@@ -14,8 +14,8 @@ Me, the only user, on an iPhone · job: log what I did in seconds and see each w
 ## Goals
 
 - G1 Over 14 consecutive days, I log entries on at least 12 days and complete 2 weekly reviews.
-- G2 Logging an entry takes under 15 seconds from opening the app, online or offline.
-- G3 No Synced entry is ever lost. Entries still in the Outbox are best-effort: iPhone browser storage carries no guarantee ([ADR 0001](adr/0001-web-app-with-an-outbox-for-the-mvp.md)).
+- G2 Logging an entry takes under 15 seconds from opening the app, when online.
+- G3 No saved Entry is ever lost. Logging, editing and deleting need a connection, so a saved Entry is always on the Server ([ADR 0004](adr/0004-require-a-connection-for-all-writes.md)).
 
 ## Non-goals
 
@@ -41,7 +41,7 @@ The repo has no code yet, so everything is new. These paths are proposals.
 
 | Module / service | Path | Why it is touched |
 |---|---|---|
-| Phone web app | `app/` (proposed) | Logging, offline storage and sync, weekly page, settings |
+| Phone web app | `app/` (proposed) | Logging, Local copy, weekly page, settings |
 | Database schema | `supabase/migrations/` (proposed) | Entries, categories, push subscriptions, settings |
 | Server functions | `supabase/functions/` (proposed) | Tagging, weekly email, push notifications |
 | Existing docs | `README.md`, `docs/mvp-design.md` | Source of the goals and decisions; update if the design changes them |
@@ -53,7 +53,7 @@ The repo has no code yet, so everything is new. These paths are proposals.
 | research | Run | Verify the biggest risks: iPhone push, offline sync, how similar tools handle review |
 | requirements | Run | Required |
 | data-model | Run | New schema |
-| api | Run | Sync and tagging contracts need defining, even with Supabase's generated API |
+| api | Run | Write and tagging contracts need defining, even with Supabase's generated API |
 | ui | Run | Logging speed (G2) depends on the screens |
 | backend | Run | Scheduled jobs, tagging retries, secrets, deployment |
 | design | Run | Required |
@@ -67,13 +67,11 @@ The repo has no code yet, so everything is new. These paths are proposals.
 | Tag | The category assigned to an entry, by the AI or by me | None yet |
 | Suggested category | A new category proposed by the AI, waiting for my approval | None yet |
 | Untagged | An entry that has no category yet because tagging hasn't succeeded | None yet |
-| Sync | Sending entries saved on the phone to the server | None yet |
+| Local copy | A read-only copy of this week's and last week's data on the phone, for viewing offline; refreshed when online | None yet |
 | Weekly review | My Sunday session using the "This week" page | None yet |
 | Unlogged | Time in a day not covered by any entry | None yet |
 | Nudge | A push notification asking me to log, after 3 hours with no entry | None yet |
 | Quiet hours | The daily period when nudges aren't sent | None yet |
-| Outbox | Entries, and edits and deletes of Entries, saved on the phone that haven't been synced yet. An item leaves the Outbox once the server confirms it ([ADR 0002](adr/0002-queue-entry-edits-and-deletes-in-the-outbox.md)) | None yet |
-| Synced entry | An entry the server has confirmed, so it is no longer in the Outbox | None yet |
 | Review reminder | The Sunday 19:00 email and push asking me to do the Weekly review | None yet |
 | Category suggestion | The push sent when the AI proposes a Suggested category | None yet |
 | Server | Supabase: the database and server functions (see Actors in 02-requirements.md) | None yet |
@@ -81,9 +79,11 @@ The repo has no code yet, so everything is new. These paths are proposals.
 | Active Category | A Category available for tagging: a starting Category or an approved Suggested category | None yet |
 | Rejected category | A Suggested category I rejected; it isn't suggested again | None yet |
 | Tag source | Who set an Entry's Tag: AI or me | None yet |
-| Server-owned field | A field only the Server writes, such as the Tag and Tag source; Sync never overwrites it | None yet |
+| Server-owned field | A field only the Server writes, such as the Tag and Tag source; an edit from the phone never overwrites it | None yet |
 | Tagging check | The 15-minute job that retries Untagged entries ([ADR 0003](adr/0003-retry-untagged-entries-with-a-scheduled-check.md)) | None yet |
 | Push subscription | The phone's Web Push address the Server sends notifications to | None yet |
-| Gap | The time since the end time of my latest Synced entry; a new Synced entry starts a new Gap | None yet |
-| Rejected change | An Outbox item the Server refuses as invalid | None yet |
+| Gap | The time since the latest end time of my saved Entries; a new or edited Entry with a later end time starts a new Gap | None yet |
 | Review done | The record that a week's Weekly review is complete | None yet |
+| Starting Category | One of the five Categories from README §Categories that my account starts with | None yet |
+| This week page | The page showing a week's time per Category, defaulting to the current week, with earlier weeks browsable | None yet |
+| Entry's Suggested category | The Suggested category the AI proposed for an Entry; approving it moves the Entry's Tag to it | None yet (`entries.suggested_category_id` proposed) |
