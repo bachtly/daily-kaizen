@@ -72,7 +72,18 @@ The repo has no code yet, so everything is new. These paths are proposals.
 | Unlogged | Time in a day not covered by any entry | None yet |
 | Nudge | A push notification asking me to log, after 3 hours with no entry | None yet |
 | Quiet hours | The daily period when nudges aren't sent | None yet |
-| Outbox | Entries saved on the phone that haven't been synced yet. An entry leaves the Outbox once the server confirms it | None yet |
+| Outbox | Entries, and edits and deletes of Entries, saved on the phone that haven't been synced yet. An item leaves the Outbox once the server confirms it ([ADR 0002](adr/0002-queue-entry-edits-and-deletes-in-the-outbox.md)) | None yet |
 | Synced entry | An entry the server has confirmed, so it is no longer in the Outbox | None yet |
 | Review reminder | The Sunday 19:00 email and push asking me to do the Weekly review | None yet |
 | Category suggestion | The push sent when the AI proposes a Suggested category | None yet |
+| Server | Supabase: the database and server functions (see Actors in 02-requirements.md) | None yet |
+| AI | Claude Haiku 5.5, called by the Server to choose a Tag (see Actors in 02-requirements.md) | None yet |
+| Active Category | A Category available for tagging: a starting Category or an approved Suggested category | None yet |
+| Rejected category | A Suggested category I rejected; it isn't suggested again | None yet |
+| Tag source | Who set an Entry's Tag: AI or me | None yet |
+| Server-owned field | A field only the Server writes, such as the Tag and Tag source; Sync never overwrites it | None yet |
+| Tagging check | The 15-minute job that retries Untagged entries ([ADR 0003](adr/0003-retry-untagged-entries-with-a-scheduled-check.md)) | None yet |
+| Push subscription | The phone's Web Push address the Server sends notifications to | None yet |
+| Gap | The time since the end time of my latest Synced entry; a new Synced entry starts a new Gap | None yet |
+| Rejected change | An Outbox item the Server refuses as invalid | None yet |
+| Review done | The record that a week's Weekly review is complete | None yet |
