@@ -41,14 +41,14 @@ erDiagram
 |---|---|---|---|---|
 | entries.id | uuid | no | | PK. Created by the phone when the form opens; a create with an existing id changes nothing (AC-2.2) |
 | entries.text | text | no | | Not empty |
-| entries.started_at, ended_at | timestamptz | no | | `ended_at > started_at` |
-| entries.time_zone | text | no | | IANA name at logging (AC-1.2) |
+| entries.started_at, ended_at | timestamptz | no | | `ended_at > started_at`; `ended_at` at most 5 min after Server now (`entry_end_in_future`) |
+| entries.time_zone | text | no | | IANA name at logging (AC-1.2), one Postgres knows (`time_zone_unknown`) |
 | entries.form_opened_at | timestamptz | no | | Phone time the log form opened, sent on create, never changed. NFR-1 = `created_at − form_opened_at` |
 | entries.category_id | uuid | yes | null | **SO**. The Tag; null = Untagged. FK, restrict |
 | entries.tag_source | enum `ai`, `me` | yes | null | **SO**. Tag source |
 | entries.tagged_at | timestamptz | yes | null | **SO**. When the current Tag was saved. NFR-4 = `tagged_at − created_at` |
 | entries.suggested_category_id | uuid | yes | null | **SO**. The Entry's Suggested category (AC-3.4), so approval can move it (AC-4.2). FK, restrict |
-| entries.tag_attempts | int | no | 0 | **SO**. Failed AI calls since the last Tag; reset by a text edit that clears the Tag |
+| entries.tag_attempts | int | no | 0 | **SO**. Failed AI calls since the last Tag, counted only when the guarded update matches; reset by a text edit that clears the Tag |
 | entries.tagging_gave_up_at | timestamptz | yes | null | **SO**. Set when `tag_attempts` reaches the limit (OQ-3); the Tagging check skips the Entry; shown as Untagged with a "couldn't tag" note; I tag it by hand (AC-3.2) |
 | entries.created_at | timestamptz | no | now() | **SO**. Server save time; also the save order used for overlaps (AC-5.1) |
 | entries.updated_at | timestamptz | no | now() | **SO**. Set by a database trigger on every update |
@@ -59,11 +59,10 @@ erDiagram
 | push_subscriptions.id | uuid | no | generated | PK |
 | push_subscriptions.endpoint | text | no | | Unique |
 | push_subscriptions.p256dh, auth | text | no | | The sketch's `keys` |
-| push_subscriptions.last_seen_at | timestamptz | no | now() | Updated each open |
 | settings.user_id | uuid | no | | PK |
-| settings.time_zone | text | yes | null | Latest reported (AC-2.3); jobs skip me while null |
-| settings.quiet_start, quiet_end | time | no | 23:00, 07:00 | Local; may wrap midnight |
-| weekly_reviews.week_start | date | no | | Monday, my time zone; PK with `user_id` |
+| settings.time_zone | text | yes | null | Latest reported (AC-2.3), an IANA name Postgres knows (`time_zone_unknown`); jobs skip me while null |
+| settings.quiet_start, quiet_end | time | no | 23:00, 07:00 | Local; may wrap midnight; `quiet_start <> quiet_end` (`quiet_hours_equal`) |
+| weekly_reviews.week_start | date | no | | Monday, my time zone, checked (`week_start_not_monday`); PK with `user_id` |
 | weekly_reviews.done_at | timestamptz | no | now() | |
 | notifications_sent.kind | enum `nudge`, `review_reminder` | no | | |
 | notifications_sent.about | text | no | | For a Nudge, the Gap start; for a Review reminder, the week start. PK with `user_id`, `kind` |
@@ -73,7 +72,7 @@ Push is on when I have at least one `push_subscriptions` row; there is no separa
 **Gap start**: the latest `ended_at` among my Entries; the Gap runs from it to now. With no Entries there is no Gap and no Nudge; deleting the latest Entry moves the Gap start back, and one Nudge per Gap still applies (user decision).
 
 **Local copy** (phone, read-only, AC-2.4): copies of my Entries that end after the previous Monday 00:00 (this week and last week, including sleep crossing into Monday, and given-up Entries),
-all my Categories, my settings, and `refreshed_at`, the time of the last refresh shown on the This week page.
+all my Categories, my settings, my `weekly_reviews` from the previous Monday on (Review done shown offline), and `refreshed_at`, the time of the last refresh shown on the This week page.
 
 ### Starting Category descriptions (resolves OQ-2)
 
@@ -108,7 +107,7 @@ Examples from README §Categories.
 | Query or write (UC/AC id) | Frequency | Index or key | Expected volume and growth |
 |---|---|---|---|
 | Save, edit or delete an Entry (AC-1.2, 1.3) | ~30/day | `entries` PK | ~11,000 rows/year (NFR-8) |
-| Untagged entries not given up (AC-3.2) | Every 15 min | Partial index: `category_id` null and `tagging_gave_up_at` null | A handful |
+| Untagged entries not given up, created over 2 min ago (AC-3.2) | Every 15 min | Partial index: `category_id` null and `tagging_gave_up_at` null | A handful |
 | Entries overlapping a week; Local copy refresh (AC-5.1, 2.3) | Each open; few/week for older weeks | `(user_id, ended_at)`: Entries ending after the week start | ~200/week |
 | Gap start for Nudge (AC-6.1) | Every few min | `(user_id, ended_at)` | 1 row |
 | Categories (UC-3, AC-4.2) | Each tagging, review and refresh | None: < ~20 rows | Grows by approvals |
@@ -120,7 +119,7 @@ Examples from README §Categories.
 
 - **Entry write:** one row insert, update (including any Tag clearing) or delete.
 - **Save a Tag:** one transaction inserts the Suggested category if the name is new and updates the Entry; if the Entry update matches no row (edited, re-tagged or deleted meanwhile), the transaction rolls back. The Category suggestion push goes after commit, only for a new insert.
-- **Approve:** one transaction sets `active` and moves the Entries that have it as their Entry's Suggested category and are not tagged by me (AC-4.2). **Reject:** one status update; Tags and `suggested_category_id` unchanged.
+- **Approve:** one transaction sets `active` and moves the Entries that have it as their Entry's Suggested category and are not tagged by me (AC-4.2), keeping their `tagged_at` and `tag_source`. **Reject:** one status update; Tags and `suggested_category_id` unchanged.
 - **Nudge, Review reminder:** insert the `notifications_sent` row first, then send. A crash between loses one notification, consistent with no push retry (R4).
 - **Phone:** a refresh replaces the whole Local copy in one write, so it is never half old and half new.
 - **Deletes:** deleting my login user cascades to all my rows. Categories are never deleted, so Entry → Category references restrict. An Entry delete is a hard delete with no dependants; the next refresh drops it from the Local copy. Dead push subscriptions are deleted.

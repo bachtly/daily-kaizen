@@ -87,3 +87,4 @@ The repo has no code yet, so everything is new. These paths are proposals.
 | Starting Category | One of the five Categories from README §Categories that my account starts with | None yet |
 | This week page | The page showing a week's time per Category, defaulting to the current week, with earlier weeks browsable | None yet |
 | Entry's Suggested category | The Suggested category the AI proposed for an Entry; approving it moves the Entry's Tag to it | None yet (`entries.suggested_category_id` proposed) |
+| Notification check | The 5-minute job that sends due Nudges and Review reminders | None yet |
