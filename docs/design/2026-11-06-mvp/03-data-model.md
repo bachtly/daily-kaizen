@@ -49,7 +49,7 @@ erDiagram
 | entries.tagged_at | timestamptz | yes | null | **SO**. When the current Tag was saved. NFR-4 = `tagged_at − created_at` |
 | entries.suggested_category_id | uuid | yes | null | **SO**. The Entry's Suggested category (AC-3.4), so approval can move it (AC-4.2). FK, restrict |
 | entries.tag_attempts | int | no | 0 | **SO**. Failed AI calls since the last Tag, counted only when the guarded update matches; reset by a text edit that clears the Tag |
-| entries.tagging_gave_up_at | timestamptz | yes | null | **SO**. Set when `tag_attempts` reaches the limit (OQ-3); the Tagging check skips the Entry; shown as Untagged with a "couldn't tag" note; I tag it by hand (AC-3.2) |
+| entries.tagging_gave_up_at | timestamptz | yes | null | **SO**. Set when `tag_attempts` reaches 3 (06-backend); the Tagging check skips the Entry; shown as Untagged with a "couldn't tag" note; I tag it by hand (AC-3.2) |
 | entries.created_at | timestamptz | no | now() | **SO**. Server save time; also the save order used for overlaps (AC-5.1) |
 | entries.updated_at | timestamptz | no | now() | **SO**. Set by a database trigger on every update |
 | categories.id | uuid | no | generated | PK |

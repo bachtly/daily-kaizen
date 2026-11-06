@@ -120,17 +120,17 @@ flowchart TD
   C -- no --> C1[Show field error] --> B
   C -- yes, overlaps --> D1[Warn] --> E
   C -- yes --> E[Send to Server]
-  E -- no connection --> N1[Say a connection is needed; keep form] --> B
-  E -- session lost --> N2[Keep form; ask to sign in: UC-6] --> B
-  E -- confirmed --> OK[Show saved; refresh Local copy] --> T[New Entry: UC-3]
+  E -- no connection --> N1["Say a connection is needed; keep form"] --> B
+  E -- session lost --> N2["Keep form; ask to sign in: UC-6"] --> B
+  E -- confirmed --> OK["Show saved; refresh Local copy"] --> T[New Entry: UC-3]
 ```
 
 ```mermaid
 flowchart TD
   S[Open or foreground] --> ON{Online and session live?}
-  ON -- offline --> OFF[Use Local copy; show last refreshed]
+  ON -- offline --> OFF["Use Local copy; show last refreshed"]
   ON -- session lost --> SI[UC-6]
-  ON -- yes --> R[Refresh Local copy; report time zone and Push subscription]
+  ON -- yes --> R["Refresh Local copy; report time zone and Push subscription"]
   R --> USE[Form defaults and This week from Local copy]
   OFF --> USE
   USE -- earlier week or any change offline --> NC[Say a connection is needed]
@@ -141,13 +141,13 @@ flowchart TD
   N[New Entry saved or Tagging check] --> M{Tag source me?}
   M -- yes --> END[Skip]
   M -- no --> AI[Call AI]
-  AI -- error / timeout / not active --> UT[Untagged; Tagging check retries up to the limit]
+  AI -- error / timeout / not active --> UT["Untagged; Tagging check retries up to the limit"]
   AI -- ok --> SV[Save Tag, Tag source AI]
   SV --> SG{New name proposed?}
   SG -- no --> END
   SG -- matches Suggested --> LK[Set as Entry's Suggested category] --> END
   SG -- matches Active or Rejected --> END
-  SG -- new --> SC[Save Suggested category; push Category suggestion]
+  SG -- new --> SC["Save Suggested category; push Category suggestion"]
   SC -- push fails --> SC2[Still shown in app]
   ET[I edit text of Entry not tagged by me] --> UT
 ```
@@ -160,7 +160,7 @@ flowchart TD
   L -- yes --> K
   W --> K{Any Entries in week?}
   K -- no --> K1[Elapsed week Unlogged, neutral wording]
-  K -- yes --> Y[Category, Untagged, Unlogged; last refreshed time]
+  K -- yes --> Y["Category, Untagged, Unlogged; last refreshed time"]
   Y --> FX[Correct Tags] --> AP[Approve / reject Suggested categories] --> DONE[Review done: week shown recorded]
   FX -- offline --> F1[Say a connection is needed]
   K1 --> DONE
@@ -177,10 +177,10 @@ flowchart TD
   SENT -- no --> QH{Inside Quiet hours?}
   QH -- yes --> WAIT[Wait until Quiet hours end] --> J
   QH -- no --> PUSH[Record Nudge, send it]
-  PUSH -- rejected or dropped --> DEAD[No retry; refreshed on next open]
+  PUSH -- rejected or dropped --> DEAD["No retry; refreshed on next open"]
   EN[Tap Turn on notifications] --> PERM{iOS permission}
   PERM -- granted --> SUBS[Send Push subscription] --> SUB
-  PERM -- denied --> OFF[Show push off; email still works]
+  PERM -- denied --> OFF["Show push off; email still works"]
 ```
 
 ```mermaid
