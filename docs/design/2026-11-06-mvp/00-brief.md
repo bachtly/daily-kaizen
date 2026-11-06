@@ -15,7 +15,7 @@ Me, the only user, on an iPhone · job: log what I did in seconds and see each w
 
 - G1 Over 14 consecutive days, I log entries on at least 12 days and complete 2 weekly reviews.
 - G2 Logging an entry takes under 15 seconds from opening the app, online or offline.
-- G3 No entries are lost: every entry logged offline reaches the server after reconnecting.
+- G3 No Synced entry is ever lost. Entries still in the Outbox are best-effort: iPhone browser storage carries no guarantee ([ADR 0001](adr/0001-web-app-with-an-outbox-for-the-mvp.md)).
 
 ## Non-goals
 
@@ -32,7 +32,7 @@ Me, the only user, on an iPhone · job: log what I did in seconds and see each w
 - **Cost:** running costs stay under about $5 a month.
 - **Maintenance:** Claude writes most of the code and I review it, so prefer well-documented,
   conventional approaches.
-- **Device:** iPhone, used as a home-screen web app. Entries are written in English.
+- **Device:** iPhone on iOS 18.4 or later (stated by me, 2026-11-06), used as a home-screen web app. Entries are written in English.
 - **Deadline:** none.
 
 ## Area of the system
@@ -72,3 +72,7 @@ The repo has no code yet, so everything is new. These paths are proposals.
 | Unlogged | Time in a day not covered by any entry | None yet |
 | Nudge | A push notification asking me to log, after 3 hours with no entry | None yet |
 | Quiet hours | The daily period when nudges aren't sent | None yet |
+| Outbox | Entries saved on the phone that haven't been synced yet. An entry leaves the Outbox once the server confirms it | None yet |
+| Synced entry | An entry the server has confirmed, so it is no longer in the Outbox | None yet |
+| Review reminder | The Sunday 19:00 email and push asking me to do the Weekly review | None yet |
+| Category suggestion | The push sent when the AI proposes a Suggested category | None yet |
