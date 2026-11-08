@@ -58,8 +58,11 @@ select results_eq($$select category_id is not null, tag_source::text, tagged_at 
   $$values (true, 'me', true, true, 1)$$, 'text edit keeps a me Tag');
 
 -- updated_at moves on every update
+alter table entries disable trigger entries_set_updated_at;
+update entries set updated_at = '2000-01-01 00:00+00' where id = '00000000-0000-0000-0000-000000000010';
+alter table entries enable trigger entries_set_updated_at;
 update entries set tag_attempts = 1 where id = '00000000-0000-0000-0000-000000000010';
-select ok((select updated_at > created_at from entries where id = '00000000-0000-0000-0000-000000000010'), 'updated_at set on update');
+select ok((select updated_at > '2000-01-01 00:00+00' from entries where id = '00000000-0000-0000-0000-000000000010'), 'updated_at set on update');
 
 -- Text edit on an untagged Entry resets the attempt counters (AC-3.2)
 insert into entries (id, user_id, text, started_at, ended_at, time_zone, form_opened_at, tag_attempts, tagging_gave_up_at)
