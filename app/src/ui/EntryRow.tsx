@@ -16,8 +16,8 @@ export function EntryRow({ entry, category, timeZone, onEdit, onTag }: {
   const to = hhmm(Date.parse(entry.ended_at), timeZone);
   return (
     <div className="entry">
-      <button className="what" onClick={onEdit} aria-label={`Edit ${entry.text}, ${from} to ${to}`}>
-        <span className="text">{entry.text}</span>
+      <button className="what" onClick={onEdit} aria-label={`Edit ${entry.text}, ${from}–${to}`}>
+        <span className="text">{entry.text}</span>{' '}
         <span className="when">{from}–{to}</span>
       </button>
       <button

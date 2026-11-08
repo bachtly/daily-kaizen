@@ -153,12 +153,16 @@ describe('WeekScreen', () => {
   it('refreshes the Local copy when an edit says the Entry is gone', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);
-    readLocalCopy.mockResolvedValue(copy({ entries }));
+    readLocalCopy.mockResolvedValueOnce(copy({ entries }));
+    // After the refresh the Entry is really gone, so its editor unmounts.
+    readLocalCopy.mockResolvedValue(copy({ entries: entries.filter((e) => e.id !== 'a') }));
     editEntry.mockResolvedValue({ ok: false, error: 'entry_not_found' });
     mount('/week');
     fireEvent.click(await screen.findByLabelText(/^Edit Entry a,/));
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText('This Entry was deleted.');
+    expect(screen.queryByLabelText('Activity')).toBeNull();
+    expect(screen.queryByLabelText(/^Edit Entry a,/)).toBeNull();
     expect(refresh).toHaveBeenCalledOnce();
     expect(readLocalCopy.mock.calls.length).toBeGreaterThan(1);
   });

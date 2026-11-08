@@ -72,8 +72,26 @@ const shiftMonday = (monday: string, days: number) => {
 export function WeekView({
   monday, timeZone, now, isCurrentWeek, entries, categories, reviewDone, refreshedAt,
   connection = 'online', load = 'ready', onPrev, onNext, onRetry, onLogSomething, onReviewDone,
-  actions, moveCounts = {}, initialEditId, initialPickerId,
+  actions: liveActions, moveCounts = {}, initialEditId, initialPickerId,
 }: WeekViewProps) {
+  // "This Entry was deleted." outlives the row: the refresh that follows removes the editor that would hold it.
+  const [gone, setGone] = useState<string | null>(null); // the Monday it was raised on
+  const actions = useMemo<WeekActions | undefined>(() => {
+    if (!liveActions) return undefined;
+    const watch = (call: (...a: never[]) => Promise<Result<unknown>>) => async (...a: never[]) => {
+      setGone(null);
+      const r = await call(...a);
+      if (!r.ok && r.error === 'entry_not_found') setGone(monday);
+      return r;
+    };
+    return {
+      editEntry: watch(liveActions.editEntry as never) as WeekActions['editEntry'],
+      deleteEntry: watch(liveActions.deleteEntry as never) as WeekActions['deleteEntry'],
+      setEntryTag: watch(liveActions.setEntryTag as never) as WeekActions['setEntryTag'],
+      approveCategory: liveActions.approveCategory,
+      rejectCategory: liveActions.rejectCategory,
+    };
+  }, [liveActions, monday]);
   const [editId, setEditId] = useState(initialEditId);
   const [picker, setPicker] = useState<{ id: string; opener: HTMLElement | null } | undefined>(
     initialPickerId ? { id: initialPickerId, opener: null } : undefined,
@@ -120,6 +138,8 @@ export function WeekView({
           <RefreshedAt time={refreshedLabel} />
         </div>
       </header>
+
+      {gone === monday && <p className="error notice" role="alert">This Entry was deleted.</p>}
 
       {load === 'loading' && <>{[1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton" />)}</>}
       {load === 'offline-earlier-week' && (

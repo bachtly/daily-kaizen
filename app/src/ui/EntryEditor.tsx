@@ -11,7 +11,6 @@ const messages = {
   entry_text_empty: 'Write what you did.',
   entry_end_not_after_start: 'From must be before To.',
   entry_end_in_future: "To can't be later than now.",
-  entry_not_found: 'This Entry was deleted.',
   time_zone_unknown: "Couldn't save. Try again.",
 } as const;
 type Known = keyof typeof messages;
@@ -57,7 +56,8 @@ export function EntryEditor({ entry, siblings, now, online, onSave, onDelete, on
     const r = await call();
     setBusy(null);
     if (r.ok) onClose();
-    else if (r.error !== 'session_lost') setProblem(explain(r.error)); // session lost: the banner says it and the edit stays
+    // Session lost: the banner says it and the edit stays. Entry gone: the week page says so, as this row goes away.
+    else if (r.error !== 'session_lost' && r.error !== 'entry_not_found') setProblem(explain(r.error));
   };
   const save = () =>
     run('saving', () => onSave({ text: text.trim(), started_at: new Date(from).toISOString(), ended_at: new Date(to).toISOString(), time_zone: tz }));
