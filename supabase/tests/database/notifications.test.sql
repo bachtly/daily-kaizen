@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(33);
 
 -- Dates are in 2024 so Entries are never "in the future" for the real clock.
 -- 2024-11-10 is a Sunday (week starts Monday 2024-11-04); 2024-03-31 is a Sunday (Berlin DST starts).
@@ -12,6 +12,8 @@ select is((select count(*)::int from pg_proc where proname = 'claim_due_notifica
   and not has_function_privilege('authenticated', oid, 'execute')
   and not has_function_privilege('anon', oid, 'execute')
   and prosecdef and proconfig = array['search_path=""']), 1, 'service_role only, security definer, empty search_path');
+
+select lives_ok($$select * from claim_due_notifications()$$, 'the no-argument call resolves');
 
 -- Review reminder -----------------------------------------------------------
 select is_empty($$select * from claim_due_notifications('2024-11-10 20:00+00')$$, 'null time zone: nothing due');
@@ -63,6 +65,8 @@ select is_empty($$select * from claim_due_notifications('2024-11-13 02:00+00')$$
 select is_empty($$select * from claim_due_notifications('2024-11-13 06:59+00')$$, 'just before Quiet hours end: no Nudge');
 select results_eq($$select kind::text, about from claim_due_notifications('2024-11-13 07:00+00')$$,
   $$values ('nudge', '2024-11-12T20:00:00.000000+00:00')$$, 'Quiet hours end (exclusive): Nudge goes out, once');
+
+select is((select max(about::timestamptz) from notifications_sent where kind = 'nudge'), '2024-11-12 20:00+00'::timestamptz, 'Nudge about parses back to the same instant');
 
 -- Non-wrapping Quiet hours
 delete from notifications_sent;
