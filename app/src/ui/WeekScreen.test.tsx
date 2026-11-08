@@ -126,6 +126,26 @@ describe('WeekScreen', () => {
     expect(readLocalCopy).toHaveBeenCalled();
   });
 
+  it('drops the offline message when moving to another week', async () => {
+    readLocalCopy.mockResolvedValue(copy());
+    fetchWeek.mockResolvedValueOnce({ ok: false, error: 'unknown' });
+    mount('/week/2026-10-05');
+    await screen.findByText('Earlier weeks need a connection.');
+    fetchWeek.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.click(screen.getByLabelText('Next week'));
+    await waitFor(() => expect(screen.queryByText('Earlier weeks need a connection.')).toBeNull());
+    expect(screen.getByText('Week of 12 Oct')).toBeTruthy();
+  });
+
+  it('shows the signed-out banner instead of a skeleton when the earlier-week fetch loses the session', async () => {
+    readLocalCopy.mockResolvedValue(copy());
+    fetchWeek.mockResolvedValueOnce({ ok: false, error: 'session_lost' });
+    mount('/week/2026-10-05');
+    await screen.findByText(/Signed out/);
+    expect(document.querySelector('.skeleton')).toBeNull();
+    expect(screen.getByText('Sign in to see earlier weeks.')).toBeTruthy();
+  });
+
   it('marks the review done through the Server, then reads the Local copy again', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);

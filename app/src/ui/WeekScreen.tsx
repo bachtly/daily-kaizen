@@ -25,7 +25,7 @@ export type WeekViewProps = {
   /** ISO time of the last Local copy refresh; null = never. */
   refreshedAt: string | null;
   connection?: Connection;
-  load?: 'ready' | 'loading' | 'offline-earlier-week';
+  load?: 'ready' | 'loading' | 'offline-earlier-week' | 'session-lost-earlier-week';
   onPrev?: () => void;
   onNext?: () => void;
   onRetry?: () => void;
@@ -98,6 +98,8 @@ export function WeekView({
         </div>
       )}
 
+      {load === 'session-lost-earlier-week' && <div className="empty">Sign in to see earlier weeks.</div>}
+
       {load === 'ready' && (
         <>
           <CategoryTotals totals={totals} categories={categories} hasEntries={entries.length > 0} />
@@ -161,7 +163,8 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
   const [copy, setCopy] = useState<LocalCopy>(EMPTY);
   const [copyReady, setCopyReady] = useState(false);
   const [fetched, setFetched] = useState<{ monday: string; entries: EntryRow[] } | null>(null);
-  const [fetchState, setFetchState] = useState<'idle' | 'offline' | 'session-lost'>('idle');
+  // The failure belongs to one week: navigating away leaves it behind.
+  const [failure, setFailure] = useState<{ monday: string; kind: 'offline' | 'session-lost' } | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   const currentMonday = mondayOf(now, tz);
@@ -202,13 +205,14 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     const b = weekBounds(monday, tz);
     void fetchWeek({ start: new Date(b.start).toISOString(), end: new Date(b.end).toISOString() }).then((r) => {
       if (ctl.signal.aborted) return;
-      if (r.ok) { setFetched({ monday, entries: r.data }); setFetchState('idle'); }
-      else setFetchState(r.error === 'session_lost' ? 'session-lost' : 'offline');
+      if (r.ok) { setFetched({ monday, entries: r.data }); setFailure(null); }
+      else setFailure({ monday, kind: r.error === 'session_lost' ? 'session-lost' : 'offline' });
     });
     return () => ctl.abort();
   }, [inLocalCopy, monday, tz, attempt]);
 
   const bounds = weekBounds(monday, tz);
+  const fail = failure?.monday === monday ? failure : null;
   const haveEarlier = !inLocalCopy && fetched?.monday === monday;
   const entries = inLocalCopy
     ? copy.entries.filter((e) => Date.parse(e.started_at) < bounds.end && Date.parse(e.ended_at) > bounds.start)
@@ -216,7 +220,8 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
   const load: WeekViewProps['load'] =
     inLocalCopy ? (copyReady ? 'ready' : 'loading')
     : haveEarlier ? 'ready'
-    : fetchState === 'offline' ? 'offline-earlier-week' : 'loading';
+    : fail?.kind === 'offline' ? 'offline-earlier-week'
+    : fail?.kind === 'session-lost' ? 'session-lost-earlier-week' : 'loading';
   const goto = (m: string) => void navigate(m === currentMonday ? '/week' : `/week/${m}`);
 
   return (
@@ -224,11 +229,11 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
       monday={monday} timeZone={tz} now={now} isCurrentWeek={monday >= currentMonday}
       entries={entries} categories={copy.categories} refreshedAt={copy.refreshedAt}
       reviewDone={inLocalCopy ? copy.reviews.some((r) => r.week_start === monday) : undefined}
-      connection={fetchState === 'session-lost' ? 'signed-out' : online ? 'online' : 'offline'}
+      connection={fail?.kind === 'session-lost' ? 'signed-out' : online ? 'online' : 'offline'}
       load={load}
       onPrev={() => goto(shiftMonday(monday, -7))}
       onNext={() => goto(shiftMonday(monday, 7))}
-      onRetry={() => { setFetchState('idle'); setAttempt((a) => a + 1); }}
+      onRetry={() => { setFailure(null); setAttempt((a) => a + 1); }}
       onLogSomething={() => void navigate('/')}
       onReviewDone={async () => {
         const r = await writes.reviewDone(monday); // refreshes the Local copy after the Server confirms
