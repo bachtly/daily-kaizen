@@ -59,7 +59,7 @@ jobs:
       - uses: supabase/setup-cli@v3
         if: steps.has.outputs.run == 'true'
         with:
-          version: latest
+          version: 3.0.0
       - if: steps.has.outputs.run == 'true'
         run: supabase db start
       - if: steps.has.outputs.run == 'true'
