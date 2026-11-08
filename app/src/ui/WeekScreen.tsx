@@ -39,15 +39,17 @@ export function WeekScreen({
       overlay={pickerEntry && <TagPicker entry={pickerEntry} onClose={() => setPickerFor(undefined)} />}
     >
       <ConnectionBanner state={connection} refreshedAt={refreshedAt} />
-      <div className="week-header">
-        <div className="nav">
+      <header className="week-header">
+        <div className="week-picker" role="group" aria-label="Choose week">
           <button aria-label="Previous week">‹</button>
-          <span>{weekLabel}</span>
+          <h1>{weekLabel}</h1>
           <button aria-label="Next week" disabled={isCurrentWeek}>›</button>
         </div>
-        <span className={done ? 'badge done' : 'badge'}>{done ? 'Review done ✓' : 'Not reviewed'}</span>
-      </div>
-      <p className="refreshed">Updated {refreshedAt}</p>
+        <div className="week-meta">
+          <span className={done ? 'badge done' : 'badge'}>{done ? 'Review done ✓' : 'Not reviewed'}</span>
+          <span className="refreshed">Updated {refreshedAt}</span>
+        </div>
+      </header>
 
       {load === 'loading' && <>{[1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton" />)}</>}
       {load === 'offline-earlier-week' && (
@@ -56,7 +58,9 @@ export function WeekScreen({
 
       {load === 'ready' && (
         <>
-          <ul className="totals" aria-label="Time per category">
+          <section className="panel" aria-labelledby="totals-h">
+          <h2 id="totals-h">Time per category</h2>
+          <ul className="totals">
             {totals.map((t) => (
               <li key={t.id} className={t.neutral ? 'neutral' : undefined}>
                 <span>{t.label}</span>
@@ -65,9 +69,10 @@ export function WeekScreen({
               </li>
             ))}
           </ul>
+          </section>
 
           {suggestion && (
-            <div className="card">
+            <div className="card" role="group" aria-label="Suggested category">
               <div className="title">Suggested category: {suggestion.name}</div>
               <div className="desc">"{suggestion.description}"</div>
               <div className="desc">{moveCount(entries, suggestion.id)}</div>
@@ -83,8 +88,8 @@ export function WeekScreen({
           )}
 
           {days.map((day) => (
-            <section key={day}>
-              <div className="day">{day}</div>
+            <section key={day} className="panel" aria-label={day}>
+              <h2 className="day">{day}</h2>
               {list.filter((e) => e.day === day).map((e) => (
                 e.id === editId
                   ? <EntryEditor
