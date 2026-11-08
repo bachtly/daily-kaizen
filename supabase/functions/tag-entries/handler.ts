@@ -1,6 +1,6 @@
 import { isJobAuthorized } from "../_shared/jobAuth.ts";
 import { loadTagConfig } from "../_shared/config.ts";
-import { tagMany } from "./tagger.ts";
+import { type TagDeps, tagMany } from "./tagger.ts";
 import type { TagDb } from "./types.ts";
 
 export interface HandlerDeps {
@@ -8,6 +8,11 @@ export interface HandlerDeps {
   makeDb: (url: string, serviceRoleKey: string) => TagDb;
   /** `EdgeRuntime.waitUntil` in production. */
   waitUntil: (p: Promise<unknown>) => void;
+  /** Builds the Category suggestion push hook; absent or returning undefined means no push. */
+  makeOnNewSuggestion?: (
+    url: string,
+    serviceRoleKey: string,
+  ) => TagDeps["onNewSuggestion"];
   fetchFn?: typeof fetch;
   now?: () => number;
 }
@@ -53,6 +58,7 @@ export async function handle(req: Request, d: HandlerDeps): Promise<Response> {
         anthropicApiKey: c.anthropicApiKey,
         fetchFn: d.fetchFn,
         now: d.now,
+        onNewSuggestion: d.makeOnNewSuggestion?.(c.supabaseUrl, c.serviceRoleKey),
       });
     } catch (e) {
       console.error(`tag-entries: job failed: ${(e as Error).message}`);

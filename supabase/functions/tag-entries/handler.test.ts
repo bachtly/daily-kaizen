@@ -248,3 +248,19 @@ Deno.test("suggestion hook fires only when save_ai_tag inserted a new category",
     assertEquals(hits, inserted ? ["Social"] : []);
   }
 });
+
+Deno.test("a failing suggestion hook does not fail tagging", async () => {
+  const { db, saves } = fakeDb([entry()], true);
+  const res = await tagEntry(ID, {
+    db,
+    anthropicApiKey: "ak",
+    fetchFn: () =>
+      Promise.resolve(aiReply({
+        category_name: "Deep",
+        proposed: { name: "Social", description: "people" },
+      })),
+    onNewSuggestion: () => Promise.reject(new Error("push down")),
+  });
+  assertEquals(res, "tagged");
+  assertEquals(saves.length, 1);
+});

@@ -8,7 +8,7 @@ export interface TagDeps {
   anthropicApiKey: string;
   fetchFn?: typeof fetch;
   now?: () => number;
-  /** TODO(fn-send-notifications): send the Category suggestion push. Called only for a newly inserted Suggested category. */
+  /** Category suggestion push. Called only for a newly inserted Suggested category; a failure never fails tagging. */
   onNewSuggestion?: (
     info: { entryId: string; userId: string; name: string },
   ) => Promise<void> | void;
@@ -64,11 +64,15 @@ export async function tagEntry(
     proposedDescription: proposed?.description ?? null,
   });
   if (inserted && proposed) {
-    await deps.onNewSuggestion?.({
-      entryId: entry.id,
-      userId: entry.user_id,
-      name: proposed.name,
-    });
+    try {
+      await deps.onNewSuggestion?.({
+        entryId: entry.id,
+        userId: entry.user_id,
+        name: proposed.name,
+      });
+    } catch (e) {
+      console.error(`tag-entries: suggestion push failed: ${(e as Error).message}`);
+    }
   }
   return "tagged";
 }
