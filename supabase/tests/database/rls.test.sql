@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(31);
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-0000000000a1'), ('00000000-0000-0000-0000-0000000000a2');
@@ -57,8 +57,22 @@ select throws_ok($$insert into categories (name, description) values ('x', 'y')$
 select lives_ok($$insert into weekly_reviews (week_start) values ('2026-11-02')$$, 'can insert own Review done');
 select lives_ok($$insert into push_subscriptions (endpoint, p256dh, auth) values ('https://push/mine', 'k', 'a') on conflict (endpoint) do update set p256dh = excluded.p256dh$$, 'can upsert own push subscription');
 select lives_ok($$update settings set quiet_start = '22:00', time_zone = 'UTC'$$, 'can update own settings');
+select throws_ok($$insert into push_subscriptions (endpoint, p256dh, auth) values ('https://push/theirs', 'k2', 'a2') on conflict (endpoint) do update set p256dh = excluded.p256dh$$, '42501', null, 'cannot upsert over another user''s push subscription');
+select lives_ok($$update settings set quiet_start = '01:00' where user_id = '00000000-0000-0000-0000-0000000000a2'$$, 'update of another user''s settings is a silent no-op');
 select throws_ok($$select seed_account('00000000-0000-0000-0000-0000000000a1')$$, '42501', null, 'cannot run seed_account');
 select throws_ok($$insert into settings (user_id) values ('00000000-0000-0000-0000-0000000000a1')$$, '42501', null, 'cannot insert settings');
+reset role;
+
+select is((select quiet_start::text from settings where user_id = '00000000-0000-0000-0000-0000000000a2'), '23:00:00', 'another user''s settings untouched');
+select is((select p256dh from push_subscriptions where endpoint = 'https://push/theirs'), 'k', 'another user''s push subscription untouched');
+
+-- Functions created later are not executable by the app roles
+create function public.zz_new_fn() returns int language sql as 'select 1';
+set local role anon;
+select throws_ok($$select public.zz_new_fn()$$, '42501', null, 'anon cannot execute a new function');
+reset role;
+set local role authenticated;
+select throws_ok($$select public.zz_new_fn()$$, '42501', null, 'authenticated cannot execute a new function');
 reset role;
 
 select * from finish();

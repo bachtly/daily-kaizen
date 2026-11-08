@@ -51,3 +51,7 @@ create policy push_subscriptions_select on public.push_subscriptions for select 
 create policy push_subscriptions_insert on public.push_subscriptions for insert to authenticated with check (user_id = auth.uid());
 create policy push_subscriptions_update on public.push_subscriptions for update to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- New functions start with no execute for the app roles (PUBLIC has it by default).
+alter default privileges revoke execute on functions from public;
+alter default privileges in schema public revoke execute on functions from public, anon, authenticated;
