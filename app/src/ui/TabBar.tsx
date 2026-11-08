@@ -14,10 +14,10 @@ export function TabBar({ current }: { current: Tab }) {
   return (
     <nav className="tabbar" aria-label="Main">
       {tabs.map(({ id, label, to }) => {
-        const props = { key: id, className: 'tab', 'aria-current': current === id ? ('page' as const) : undefined };
+        const aria = current === id ? ('page' as const) : undefined;
         return inRouter
-          ? <Link {...props} to={to}>{label}</Link>
-          : <a {...props} href={to}>{label}</a>;
+          ? <Link key={id} className="tab" aria-current={aria} to={to}>{label}</Link>
+          : <a key={id} className="tab" aria-current={aria} href={to}>{label}</a>;
       })}
     </nav>
   );
