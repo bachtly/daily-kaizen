@@ -129,7 +129,6 @@ export function SignInScreen({ onSignedIn }: { onSignedIn?: () => void } = {}) {
     const r = await verifyCode(email.trim(), code);
     setBusy(false);
     if (r.ok) {
-      // The Local copy refresh joins here when data-local-copy lands.
       onSignedIn?.();
       void navigate('/', { replace: true });
     } else {

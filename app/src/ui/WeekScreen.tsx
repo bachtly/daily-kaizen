@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
-import { TimeChip } from './LogForm';
+import { TimeChip } from './TimeChip';
 import { categories, entries as allEntries, formatMinutes, suggestedAdmin, totals as allTotals, type Category, type Entry, type Total } from './mock';
 
 export type WeekScreenProps = {
