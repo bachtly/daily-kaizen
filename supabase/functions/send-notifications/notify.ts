@@ -65,14 +65,14 @@ export async function sendClaimed(
     try {
       if (row.kind === "nudge") {
         const tz = await d.db.getTimeZone(row.user_id);
-        await pushToUser(
+        const n = await pushToUser(
           d.db,
           row.user_id,
           nudgeMessage(localTime(row.about, tz)),
           d.push,
           d.pushDeps,
         );
-        counts.nudges++;
+        if (n > 0) counts.nudges++;
       } else {
         try {
           await pushToUser(d.db, row.user_id, REVIEW_PUSH, d.push, d.pushDeps);
@@ -86,7 +86,7 @@ export async function sendClaimed(
             subject: "Your weekly review is ready",
             text:
               "See where your time went this week. Open daily-kaizen from your Home Screen and go to This week.",
-          }, d.fetchFn);
+          }, d.fetchFn, `review_reminder:${row.user_id}:${row.about}`);
         }
         counts.review_reminders++;
       }
