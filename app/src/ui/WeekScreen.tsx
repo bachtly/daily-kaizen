@@ -238,8 +238,11 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     const b = weekBounds(monday, tz);
     void fetchWeek({ start: new Date(b.start).toISOString(), end: new Date(b.end).toISOString() }).then((r) => {
       if (ctl.signal.aborted) return;
-      if (r.ok) { setFetched({ monday, entries: r.data }); setFailure(null); }
-      else setFailure({ monday, kind: r.error === 'session_lost' ? 'session-lost' : 'offline' });
+      if (r.ok) { setFetched({ monday, entries: r.data }); setFailure(null); setSessionLost(false); }
+      else {
+        setFailure({ monday, kind: r.error === 'session_lost' ? 'session-lost' : 'offline' });
+        if (r.error === 'session_lost') setSessionLost(true); // stays up when moving to another week
+      }
     });
     return () => ctl.abort();
   }, [inLocalCopy, monday, tz, attempt]);
@@ -285,7 +288,7 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
       monday={monday} timeZone={tz} now={now} isCurrentWeek={monday >= currentMonday}
       entries={entries} categories={copy.categories} refreshedAt={copy.refreshedAt}
       reviewDone={inLocalCopy ? copy.reviews.some((r) => r.week_start === monday) : undefined}
-      connection={fail?.kind === 'session-lost' || sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
+      connection={sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
       load={load} actions={actions} moveCounts={moveCounts}
       onPrev={() => goto(shiftMonday(monday, -7))}
       onNext={() => goto(shiftMonday(monday, 7))}

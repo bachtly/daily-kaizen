@@ -81,3 +81,8 @@ export const NoSuggestion: Story = {
   name: 'No Suggested category',
   args: { categories: categories.filter((c) => c.status === 'active') },
 };
+
+export const EarlierWeekSignedOut: Story = {
+  name: 'Earlier week: signed out',
+  args: { monday: '2026-10-19', isCurrentWeek: false, reviewDone: undefined, load: 'session-lost-earlier-week', connection: 'signed-out' },
+};

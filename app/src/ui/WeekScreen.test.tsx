@@ -175,6 +175,18 @@ describe('WeekScreen', () => {
     await waitFor(() => expect(fetchWeek).toHaveBeenCalledTimes(2));
   });
 
+  it('keeps the signed-out banner when moving to another week while the session is still lost', async () => {
+    readLocalCopy.mockResolvedValue(copy());
+    fetchWeek.mockResolvedValueOnce({ ok: false, error: 'session_lost' });
+    mount('/week/2026-10-05');
+    await screen.findByText(/Signed out/);
+    fetchWeek.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.click(screen.getByLabelText('Next week'));
+    await screen.findByText('Week of 12 Oct');
+    expect(screen.getByText(/Signed out/)).toBeTruthy();
+    expect(screen.queryByText('Sign in to see earlier weeks.')).toBeNull();
+  });
+
   it('marks the review done through the Server, then reads the Local copy again', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);
