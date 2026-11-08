@@ -1,0 +1,11 @@
+# Local secrets. app/.env.production is committed on purpose: it holds public values only.
+.env
+.env.*
+!.env.example
+!app/.env.production
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars

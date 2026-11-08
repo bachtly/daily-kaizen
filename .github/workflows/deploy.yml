@@ -1,0 +1,149 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - app/**
+      - infra/**
+      - supabase/**
+      - .github/workflows/deploy.yml
+  workflow_dispatch:
+
+# Never cancel a deploy halfway; the next one waits its turn.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Until every secret is set, the deploy is skipped and the run finishes green.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          JOB_SECRET: ${{ secrets.JOB_SECRET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          APP_URL: ${{ secrets.APP_URL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+        run: |
+          missing=""
+          for n in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD JOB_SECRET ANTHROPIC_API_KEY RESEND_API_KEY \
+                   RESEND_FROM VAPID_PRIVATE_KEY VAPID_SUBJECT APP_URL CLOUDFLARE_API_TOKEN VERCEL_API_TOKEN; do
+            [ -n "${!n}" ] || missing="$missing $n"
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::Deploy skipped, missing secrets:$missing"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  supabase:
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      JOB_SECRET: ${{ secrets.JOB_SECRET }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      RESEND_FROM: ${{ secrets.RESEND_FROM }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+      APP_URL: ${{ secrets.APP_URL }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 3.0.0
+      - run: supabase link --project-ref naiiplbdydablbudaqzr
+      - name: Migrations
+        run: supabase db push --remote --yes
+      - name: Auth and project config
+        run: supabase config push --yes
+      # `config diff` doesn't compare templates, and sign-in breaks if this one still sends a link.
+      - name: Check the sign-in email sends a code
+        run: |
+          curl -fsS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            https://api.supabase.com/v1/projects/naiiplbdydablbudaqzr/config/auth \
+            | jq -e '.mailer_templates_magic_link_content | contains("{{ .Token }}")'
+      - name: Function secrets
+        run: |
+          supabase secrets set \
+            "JOB_SECRET=$JOB_SECRET" \
+            "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" \
+            "RESEND_API_KEY=$RESEND_API_KEY" \
+            "RESEND_FROM=$RESEND_FROM" \
+            "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY" \
+            "VAPID_SUBJECT=$VAPID_SUBJECT" \
+            "APP_URL=$APP_URL"
+      - name: Functions
+        run: |
+          for f in tag-entries send-notifications; do
+            supabase functions deploy "$f" --no-verify-jwt --use-api --import-map supabase/functions/deno.json
+          done
+      - name: Vault and account seed
+        run: |
+          if ! [[ "$JOB_SECRET" =~ ^[0-9a-fA-F]+$ ]]; then
+            echo "::error::JOB_SECRET must be hex"
+            exit 1
+          fi
+          sql="$(mktemp)"
+          sed "s/__JOB_SECRET__/$JOB_SECRET/" supabase/post_deploy.sql > "$sql"
+          supabase db query --remote --yes --file "$sql" > /dev/null
+          rm -f "$sql"
+
+  terraform:
+    needs: supabase
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+      TF_VAR_vercel_team_id: ${{ vars.VERCEL_TEAM_ID }}
+      PG_CONN_STR: postgres://postgres.naiiplbdydablbudaqzr@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+      - run: terraform init -input=false
+      - run: terraform apply -input=false -auto-approve
+
+  app:
+    needs: terraform
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 40c57ef1d4ac3562a7c1be5a71fef4ba
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx --yes wrangler@4 pages deploy dist --project-name daily-kaizen --branch main
