@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(30);
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-0000000000a1'), ('00000000-0000-0000-0000-0000000000a2');
@@ -60,6 +60,20 @@ select results_eq($$select category_id is not null, tag_source::text, tagged_at 
 -- updated_at moves on every update
 update entries set tag_attempts = 1 where id = '00000000-0000-0000-0000-000000000010';
 select ok((select updated_at > created_at from entries where id = '00000000-0000-0000-0000-000000000010'), 'updated_at set on update');
+
+-- Text edit on an untagged Entry resets the attempt counters (AC-3.2)
+insert into entries (id, user_id, text, started_at, ended_at, time_zone, form_opened_at, tag_attempts, tagging_gave_up_at)
+values ('00000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-0000000000a1', 'untagged', now() - interval '3 hours', now() - interval '2 hours', 'UTC', now(), 3, now());
+update entries set text = 'untagged edited' where id = '00000000-0000-0000-0000-000000000012';
+select results_eq($$select tag_attempts, tagging_gave_up_at is null from entries where id = '00000000-0000-0000-0000-000000000012'$$,
+  $$values (0, true)$$, 'text edit on untagged Entry resets tag_attempts and tagging_gave_up_at');
+
+-- Deleting the login user cascades all rows despite Entry -> Category restrict
+select lives_ok($$delete from auth.users where id = '00000000-0000-0000-0000-0000000000a1'$$, 'deleting the login user succeeds');
+select is((select count(*)::int from entries where user_id = '00000000-0000-0000-0000-0000000000a1')
+  + (select count(*)::int from categories where user_id = '00000000-0000-0000-0000-0000000000a1')
+  + (select count(*)::int from settings where user_id = '00000000-0000-0000-0000-0000000000a1')
+  + (select count(*)::int from weekly_reviews where user_id = '00000000-0000-0000-0000-0000000000a1'), 0, 'all of the user''s rows are gone');
 
 select * from finish();
 rollback;
