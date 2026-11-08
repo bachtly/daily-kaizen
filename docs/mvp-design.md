@@ -42,7 +42,7 @@ Supabase
 
 ### Online writes, offline viewing
 
-- Logging, editing, deleting and every other change need a connection ([ADR 0004](design/2026-11-06-mvp/adr/0004-require-a-connection-for-all-writes.md)). A change shows as saved only after the server confirms it, so a saved entry is never lost.
+- Logging, editing, deleting and every other change need a connection ([D3](design/2026-11-06-mvp/03-data-model.md#decisions)). A change shows as saved only after the server confirms it, so a saved entry is never lost.
 - Without a connection the app says so and keeps what I typed while it stays open. Time missed offline is logged later as a backfill.
 - The entry ID is created on the phone, so saving again after an unknown result never makes a duplicate.
 - A read-only Local copy of this week and last week lets me view the "This week" page and form defaults offline. It refreshes when the app opens online.

@@ -1,10 +1,10 @@
 # daily-kaizen MVP: backend
 
 Everything is new. Contracts are in [04-api.md](04-api.md), tables in [03-data-model.md](03-data-model.md). Decisions:
-[ADR 0003](adr/0003-retry-untagged-entries-with-a-scheduled-check.md) (Tagging check),
-[ADR 0004](adr/0004-require-a-connection-for-all-writes.md) (online writes, read-only Local copy),
-[ADR 0005](adr/0005-use-database-functions-for-server-owned-writes-and-edge.md) (rpc functions; Edge Functions only for AI, push, email),
-[ADR 0006](adr/0006-send-web-push-with-pushforge-builder.md) (push library).
+[D2](02-requirements.md#decisions) (Tagging check),
+[D3](03-data-model.md#decisions) (online writes, read-only Local copy),
+[D4](04-api.md#decisions) (rpc functions; Edge Functions only for AI, push, email),
+[D5](#decisions) (push library).
 
 ## Components
 
@@ -102,12 +102,12 @@ sequenceDiagram
 
 ## Modules and types
 
-Repo layering is new; this follows Supabase defaults (`supabase/migrations`, `supabase/functions`) and keeps business rules in the database where ADR 0005 puts them.
+Repo layering is new; this follows Supabase defaults (`supabase/migrations`, `supabase/functions`) and keeps business rules in the database where D4 puts them.
 
 | Module | Responsibility | Main types / interfaces | Depends on |
 |---|---|---|---|
 | `supabase/migrations/` | Tables, checks, indexes, RLS, grants, triggers (`updated_at`, clear the Tag on a text edit, insert → pg_net), phone rpcs from 04-api.md, internal job helpers `untagged_due()`, `save_ai_tag()`, `claim_due_notifications()`, cron schedules, `seed_account(uid)`, Vault secret + function URLs | Enums as in 03-data-model.md | Postgres, pg_net, pg_cron, Vault |
-| `supabase/functions/_shared/` | Job-secret check, config check (503), service-role client, `sendPush()`, `sendEmail()` | `PushPayload`, `JobRequest` (implementation names) | `@pushforge/builder` (ADR 0006), Resend HTTP API |
+| `supabase/functions/_shared/` | Job-secret check, config check (503), service-role client, `sendPush()`, `sendEmail()` | `PushPayload`, `JobRequest` (implementation names) | `@pushforge/builder` (D5), Resend HTTP API |
 | `supabase/functions/tag-entries/` | Build prompt, call AI, validate reply, call `save_ai_tag()` | `TagReply {category_name, proposed}` | `_shared`, Anthropic API |
 | `supabase/functions/send-notifications/` | Call `claim_due_notifications()`, send claimed rows | `ClaimedNotification {kind, about}` | `_shared` |
 | `app/src/data/` | Supabase client, writes with resend-on-unknown, Local copy refresh into Dexie, last ~50 save and refresh durations | `LocalCopy` | supabase-js, Dexie |
@@ -162,12 +162,12 @@ Missing a run just delays to the next one (≤ 5 min, NFR-6). A Review reminder 
 | Local copy | IndexedDB via Dexie, `navigator.storage.persist()` on each launch [S4, S23] | $0 | Disposable (G3 holds without it); confirmed by device test |
 | Email | Resend Free (100/day) as Supabase SMTP and via HTTP API for the Review reminder [S13, S18] | $0 | Sending domain `mail.<my domain>`, set at setup |
 | AI | Anthropic API, `claude-haiku-5-5` | < $1/month (judgement: ~900 short calls) | Price: open question |
-| Push | Web Push to Apple, VAPID keys | $0 | `@pushforge/builder` (ADR 0006) |
+| Push | Web Push to Apple, VAPID keys | $0 | `@pushforge/builder` (D5) |
 | Secrets | Edge Function secrets: `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `VAPID_PRIVATE_KEY`, `JOB_SECRET`; Vault: `job_secret`, function URL | | NFR-11; VAPID public key is the only key in the app |
 | Free-plan pause | Daily use is the mechanism; the pause warning email is the signal [S8]; a cron keep-alive write is an unverified extra | | Pause after a week without "sufficient user database activity" [S8] |
 | Backup (NFR-5) | Weekly export (dashboard CSV or `pg_dump`) during the 14-day run | $0 | Free-plan backup availability unverified |
 
-No new infrastructure beyond `docs/mvp-design.md`; the push library is ADR 0006.
+No new infrastructure beyond `docs/mvp-design.md`; the push library is D5.
 
 **Sign-in code:** Supabase allows a resend once per 60 s and codes expire after 1 hour by default [S16]; custom SMTP starts at 30 emails/hour [S13]. "Send a new code" enables after 60 s.
 
@@ -179,12 +179,12 @@ No new infrastructure beyond `docs/mvp-design.md`; the push library is ADR 0006.
 |---|---|---|---|
 | AI slow or down | Timeout, 5xx; `tag_attempts` rises | Entries Untagged | Tagging check every 15 min; give up at 3; tag by hand |
 | AI returns unknown name | Validation | Same | Counts as an attempt |
-| pg_net call lost or Edge Function down | Untagged count; `net._http_response` | Tag delayed ≤ 15 min | Tagging check (ADR 0003); trigger never fails the insert |
+| pg_net call lost or Edge Function down | Untagged count; `net._http_response` | Tag delayed ≤ 15 min | Tagging check (D2); trigger never fails the insert |
 | Config missing (kill switch) | 503 in `net._http_response` | Entries stay Untagged | 503 not counted as an attempt |
 | pg_cron stops / project paused | `cron.job_run_details`; pause email [S8]; no `notifications_sent` on Sunday | No Nudge, reminder, retries; paused → app can't save | Daily use; restore from dashboard |
 | Apple push down or subscription silently dead [S20, S21] | 404/410 only; otherwise invisible | Missed Nudge or suggestion | No retry; re-send subscription on every open; reminder also by email |
 | Resend slow or down | Non-2xx, timeout | No reminder email, no sign-in code | Push still sent; code: retry after 60 s; row already recorded, so no duplicate |
-| Supabase API slow or down | Phone timeout 10 s | Can't save (online-only, ADR 0004) | "Needs a connection", keep form, resend same request |
+| Supabase API slow or down | Phone timeout 10 s | Can't save (online-only, D3) | "Needs a connection", keep form, resend same request |
 | Cloudflare Pages down | App fails to load first time | None once cached | Service worker serves cached shell + Local copy |
 | iOS clears IndexedDB | Empty Local copy | Nothing lost | Rebuild on next refresh |
 | Session revoked (refresh reuse) [S15] | 401 | Must sign in | Keep form, sign in (UC-6) |
@@ -222,7 +222,7 @@ No alerting service: one user reviews `nfr_report` weekly (judgement; fits the c
 - **Database (pgTAP via `supabase test db`, fixtures via `seed_account(uid)`):** constraints and error keys (AC-1.2, AC-1.3); RLS, grants, job-helper EXECUTE per role (AC-7.2, NFR-11); Tag cleared on text edit (AC-3.2, AC-3.3); guarded AI update races (AC-3.2, AC-3.4); Suggested category and approve/reject (AC-4.1, AC-4.2, AC-4.3); `claim_due_notifications()` with fixed `now()` across zones, DST, Quiet hours wrapping midnight, no subscription, no Entries, settings changes, double claim (NFR-6, NFR-7, AC-5.2, AC-5.3, AC-6.1, AC-6.2, AC-6.3); insert trigger survives a pg_net error.
 - **Edge Functions (Deno test, mocked AI/push/Resend):** reply validation, attempt counting, give-up at 3, 503 on missing config, 110 s budget, 404/410 deletes subscription, secret check.
 - **Contract:** phone data layer against local Supabase (`supabase start`): create resend with same id, edit, delete twice, refresh (AC-2.1–2.4, incl. AC-2.3); sign-in with code and expired session (UC-6).
-- **Device (iPhone, iOS 18.4+):** first push (ADR 0006), session after 7+ days, Local copy survives a week, offline open from cache, Pages headers.
+- **Device (iPhone, iOS 18.4+):** first push (D5), session after 7+ days, Local copy survives a week, offline open from cache, Pages headers.
 - **Load:** none; the 14-day run checks NFRs through `nfr_report`.
 
 ## Rollout and rollback
@@ -247,9 +247,21 @@ No alerting service: one user reviews `nfr_report` weekly (judgement; fits the c
 
 ## Decisions
 
-- [ADR 0006](adr/0006-send-web-push-with-pushforge-builder.md): send Web Push with `@pushforge/builder`.
+### D5 · Send Web Push from Edge Functions with `@pushforge/builder`
+
+Nudges, the Review reminder and Category suggestions go out as Web Push from Edge Functions, which run on Deno. The usual
+npm `web-push` library relies on Node APIs, so we need a sender that works on Deno, with little code and at no cost.
+
+| Option | Outcome | Reason |
+|---|---|---|
+| `@pushforge/builder` (Web Crypto, sent with `fetch`) [S40] | **Chosen** | No Node dependencies and states Deno support; we control the `fetch` call, its timeout and 404/410 handling |
+| `negrel/webpush` on JSR [S41] | Rejected (fallback) | Built for Deno, but little documentation beyond the package page |
+| npm `web-push` | Rejected | "Limited" on Deno: uses Node `crypto.createECDH` and `https.request` [S40] |
+
+Consequences:
+- The sources are snippets and untested on iOS. The first push on the iPhone confirms it; if it fails, switch to
+  `negrel/webpush`.
+
+### Other backend choices
+
 - Sending domain `mail.<my domain>` (setup step); retry cap 3; pause handled by daily use plus warning email.
-
-## ADR candidates
-
-None beyond ADR 0006.

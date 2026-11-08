@@ -15,7 +15,7 @@ Me, the only user, on an iPhone · job: log what I did in seconds and see each w
 
 - G1 Over 14 consecutive days, I log entries on at least 12 days and complete 2 weekly reviews.
 - G2 Logging an entry takes under 15 seconds from opening the app, when online.
-- G3 No saved Entry is ever lost. Logging, editing and deleting need a connection, so a saved Entry is always on the Server ([ADR 0004](adr/0004-require-a-connection-for-all-writes.md)).
+- G3 No saved Entry is ever lost. Logging, editing and deleting need a connection, so a saved Entry is always on the Server ([D3](03-data-model.md#decisions)).
 
 ## Non-goals
 
@@ -80,7 +80,7 @@ The repo has no code yet, so everything is new. These paths are proposals.
 | Rejected category | A Suggested category I rejected; it isn't suggested again | None yet |
 | Tag source | Who set an Entry's Tag: AI or me | None yet |
 | Server-owned field | A field only the Server writes, such as the Tag and Tag source; an edit from the phone never overwrites it | None yet |
-| Tagging check | The 15-minute job that retries Untagged entries ([ADR 0003](adr/0003-retry-untagged-entries-with-a-scheduled-check.md)) | None yet |
+| Tagging check | The 15-minute job that retries Untagged entries ([D2](02-requirements.md#decisions)) | None yet |
 | Push subscription | The phone's Web Push address the Server sends notifications to | None yet |
 | Gap | The time since the latest end time of my saved Entries; a new or edited Entry with a later end time starts a new Gap | None yet |
 | Review done | The record that a week's Weekly review is complete | None yet |

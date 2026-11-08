@@ -1,7 +1,7 @@
 # daily-kaizen MVP: data model
 
-All new; extends [`docs/mvp-design.md`](../../mvp-design.md) §Data under ADRs [0004](adr/0004-require-a-connection-for-all-writes.md)
-(writes online, read-only Local copy) and [0003](adr/0003-retry-untagged-entries-with-a-scheduled-check.md) (Tagging check).
+All new; extends [`docs/mvp-design.md`](../../mvp-design.md) §Data under [D3](#decisions)
+(writes online, read-only Local copy) and [D2](02-requirements.md#decisions) (Tagging check).
 Conventions (Supabase defaults; no repo schema yet): snake_case plural tables, `uuid` keys, `timestamptz` times, and on every Server
 table a `user_id` to the login user with row-level security limiting rows to the signed-in user (AC-7.2, NFR-11).
 Only my account exists: sign-ups are disabled in the Supabase Auth settings and I create my login user once from the dashboard,
@@ -137,6 +137,28 @@ The Local copy has no migration: a new app version may discard and rebuild it. U
 - **Retention:** Entries until I delete them; Review done and `notifications_sent` records kept for G1 and the NFRs.
 - **Deletion and export:** deleting my login user removes everything; no in-app export, the Supabase dashboard can export. Daily free-plan backup is unverified (NFR-5).
 - **Phone:** the Local copy holds this week's and last week's Entry text; losing it to iOS storage clearing loses nothing (G3).
+
+## Decisions
+
+### D3 · Require a connection for every write
+
+The research and requirements stages first planned an Outbox on the phone, so Entries could be logged, edited and deleted
+offline. Working through the data model showed its cost: change ordering, deletes of Entries the Server never saw,
+rejected changes, phone-clock versioning, and best-effort iPhone storage that can lose unsynced Entries without a trace
+(R1). For one user who is almost always online, that is a lot of design and code for a rare case. Drivers: G3 (no saved
+Entry is ever lost), little code with light edge cases, and G2 (logging stays fast).
+
+| Option | Outcome | Reason |
+|---|---|---|
+| Every write needs a connection; the phone keeps a read-only Local copy of this week and last week | **Chosen** | No sync rules; a saved Entry is on the Server the moment it is saved, so G3 holds without exceptions; the This week page and form defaults still work offline |
+| Outbox for new Entries only; edits and deletes online | Rejected | Unsynced Entries sit in best-effort browser storage; a wrong time can't be fixed offline |
+| Outbox for new Entries, edits and deletes; Tag and Category decisions online | Rejected | Sync must also carry updates and deletes, with ordering and phone-clock versioning, on top of the storage risk |
+| Outbox for every write, including Tag corrections | Rejected | Offline Tag corrections conflict with AI tagging and need more rules |
+| Fully online, with no local copy | Rejected | The This week page and the form defaults wouldn't work offline at all |
+
+Consequences:
+- I can't log, edit or delete without a connection. Missed time is logged later as a backfill, which the form supports.
+- The Local copy can be out of date until the next online open; it is read-only.
 
 ## Open questions
 

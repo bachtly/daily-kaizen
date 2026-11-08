@@ -1,11 +1,11 @@
 # daily-kaizen MVP: API
 
-Direction: [ADR 0004](adr/0004-require-a-connection-for-all-writes.md) (every write online, read-only Local copy) and
-[ADR 0003](adr/0003-retry-untagged-entries-with-a-scheduled-check.md) (Tagging check). Shapes use the fields in
+Direction: [D3](03-data-model.md#decisions) (every write online, read-only Local copy) and
+[D2](02-requirements.md#decisions) (Tagging check). Shapes use the fields in
 [03-data-model.md](03-data-model.md). The repo has no API yet, so the style is Supabase's own: the generated API (PostgREST)
 for table reads and writes, Postgres functions called through it (`POST /rest/v1/rpc/<name>`) for writes that touch
 Server-owned fields, and Edge Functions only where the Server calls something outside the database (AI, push, email)
-([ADR 0005](adr/0005-use-database-functions-for-server-owned-writes-and-edge.md)).
+([D4](#decisions)).
 
 **Rule for choosing:** plain row write → generated API, guarded by row-level security (RLS) and column grants. Write that
 sets a Server-owned field or spans rows → Postgres function (one transaction, no extra hop). Needs the AI, Web Push or
@@ -117,7 +117,7 @@ are refused by column grants (403); the app never sends them.
 
 - **Idempotency:** create and Review done ignore duplicates by key; edit, settings, Tag change and the push upsert set
   the same values again; delete, approve and reject are no-ops when already done. So every phone write is safe to resend
-  after an unknown result (AC-2.2). Internal calls are safe to repeat (ADR 0003; `notifications_sent` key).
+  after an unknown result (AC-2.2). Internal calls are safe to repeat (D2; `notifications_sent` key).
 - **Pagination:** none. The refresh returns at most ~400 Entries, a week ~200, under the 1,000-row default limit.
 - **Rate limits:** Supabase defaults; sign-in code limits are OQ-1 (backend).
 - **Timeouts:** the phone waits 10 s (judgement; NFR-2 expects under 1 s); the AI call timeout is the backend stage's.
@@ -134,7 +134,7 @@ are refused by column grants (403); the app never sends them.
 ## Compatibility
 
 Greenfield, nothing to break. The app and schema ship together; schema changes are additive, and a new app version may
-rebuild the Local copy. `docs/mvp-design.md` (Outbox sync) is superseded here by ADR 0004.
+rebuild the Local copy. `docs/mvp-design.md` (Outbox sync) is superseded here by [D3](03-data-model.md#decisions).
 
 ## Consumer check
 
@@ -146,6 +146,28 @@ rebuild the Local copy. `docs/mvp-design.md` (Outbox sync) is superseded here by
 | Settings page | AC-6.2, AC-6.3 | Yes |
 | Service worker / iOS | Push payloads | Yes |
 | pg_cron, Entry insert trigger | UC-3, UC-5, AC-5.2 | Yes |
+
+## Decisions
+
+### D4 · Database functions for Server-owned writes; Edge Functions only for outside calls
+
+Most phone writes are plain row changes on my own fields. Changing an Entry's Tag and approving or rejecting a Suggested
+category set Server-owned fields and can change several rows at once. Tagging, Nudges and the Review reminder call outside
+services (the AI, Web Push, Resend). Drivers: a Server-owned field is never written by the phone directly
+([03-data-model.md](03-data-model.md)); approving a Suggested category moves Entries in one step or not at all; little
+code; near-free.
+
+| Option | Outcome | Reason |
+|---|---|---|
+| Generated API for plain writes, Postgres functions (rpc) for Server-owned writes, Edge Functions only for the AI, Web Push and Resend | **Chosen** | Each write is one transaction with no extra hop; RLS and column grants enforce the Server-owned field rule |
+| An Edge Function for every write | Rejected | An extra hop on every write, and transactions handled by hand |
+| Generated API only, with database triggers for all logic | Rejected | Hidden trigger logic is hard to follow, and calls to outside services don't belong in triggers |
+
+Consequences:
+- Approve and reject complete fully or not at all. Validation lives in the database as checks that return named error
+  keys, so every write path follows the same rules.
+- Logic is split between SQL and TypeScript; the SQL side is small and the split is one rule.
+- Supabase's default table grants are wide open, so the backend revokes them and grants per table.
 
 ## Glossary proposals
 

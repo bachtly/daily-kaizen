@@ -1,8 +1,7 @@
 # daily-kaizen MVP: requirements
 
-Direction: [ADR 0004](adr/0004-require-a-connection-for-all-writes.md) (every write needs a connection; the phone keeps a
-read-only Local copy; supersedes ADRs 0001 and 0002) and [ADR 0003](adr/0003-retry-untagged-entries-with-a-scheduled-check.md)
-(Tagging check). Sources: [`docs/mvp-design.md`](../../mvp-design.md) (`mvp-design §…`), [`README.md`](../../../README.md)
+Direction: [D3](03-data-model.md#decisions) (every write needs a connection; the phone keeps a read-only Local copy)
+and [D2](#decisions) (Tagging check). Sources: [`docs/mvp-design.md`](../../mvp-design.md) (`mvp-design §…`), [`README.md`](../../../README.md)
 §Categories, and [01-research.md](01-research.md) "Our system today" items 1 to 8 (`R1` to `R8`). Terms follow the
 [00-brief.md](00-brief.md) Glossary. (judgement) marks points not in an approved doc. Each rule is stated once, in its
 AC; use cases refer to it.
@@ -68,7 +67,7 @@ Logging burden (R8) is owned by the ui stage.
 - AC-1.3 When I edit or delete an Entry, the app shall apply the AC-1.2 checks to an edit, without sending a form-open time (NFR-1 measures creates only); a delete removes the Entry for good (judgement).
 
 ### US-2 · As me, I want every saved change to be on the Server, and this week and last week readable offline, so that nothing saved is lost and the app stays useful without a connection (G3, G1, G2)
-- AC-2.1 When I save any change (Entry, Tag, Suggested category decision, Review done or setting), the app shall show it as done only after the Server confirms it (ADR 0004).
+- AC-2.1 When I save any change (Entry, Tag, Suggested category decision, Review done or setting), the app shall show it as done only after the Server confirms it (D3).
 - AC-2.2 If a save fails or its result is unknown (no connection, timeout or lost login session), then the app shall say so and keep what I typed in the form while the app stays open (judgement), and saving again shall be safe: a repeated create never makes a duplicate Entry (mechanism: api stage); a lost session also asks me to sign in.
 - AC-2.3 When the app opens or returns to the foreground online, or the Server confirms a change, the app shall:
   - refresh the Local copy: my Entries that end after the previous Monday 00:00 (so sleep crossing into Monday is included), Categories and settings (judgement);
@@ -78,7 +77,7 @@ Logging burden (R8) is owned by the ui stage.
 ### US-3 · As me, I want Entries tagged without my effort, so that the Weekly review needs no categorising (G1, G2)
 Starting Categories: Deep, Shallow, Maintenance, Waste, Recovery (README §Categories); their descriptions are in [03-data-model.md](03-data-model.md).
 - AC-3.1 When a new Entry is saved, or the Tagging check picks up an Untagged entry, the Server shall ask the AI to pick one Active Category and save it as the Tag with Tag source AI.
-- AC-3.2 If an Entry is Untagged, because tagging failed or timed out, or because I changed the text of an Entry whose Tag source isn't me (which clears its Tag and retry count), then the Tagging check shall retry it every 15 minutes, up to a limit (OQ-3, ADR 0003). After the limit, the This week page shall show it as Untagged with a "couldn't tag" note, and I tag it by hand (AC-4.1). Repeated tagging shall leave one Tag and at most one Suggested category and one Category suggestion.
+- AC-3.2 If an Entry is Untagged, because tagging failed or timed out, or because I changed the text of an Entry whose Tag source isn't me (which clears its Tag and retry count), then the Tagging check shall retry it every 15 minutes, up to a limit (OQ-3, D2). After the limit, the This week page shall show it as Untagged with a "couldn't tag" note, and I tag it by hand (AC-4.1). Repeated tagging shall leave one Tag and at most one Suggested category and one Category suggestion.
 - AC-3.3 If an Entry's Tag source is me, then the Server shall never change that Tag, even if I edit its text.
 - AC-3.4 When the AI proposes a new category, the Server shall keep the Entry in the best Active Category and:
   - if the name matches a Suggested category, set it as the Entry's Suggested category and send nothing;
@@ -202,7 +201,7 @@ flowchart TD
 | NFR-1 | Task time (G2) | App open → Entry saved, online, one-line text; measured from the form-open time and the Server save time | ≤ 15 s for 9 of 10 Entries in the 14-day run (9 of 10 is judgement) |
 | NFR-2 | Latency | Save tap → Server confirmation on screen, on home Wi-Fi or 4G | p95 < 1 s (judgement) |
 | NFR-3 | Local copy | App opens online → Local copy refreshed | Within 3 s (judgement) |
-| NFR-4 | Tagging | New Entry saved → Tag saved; measured from save and tag times, only over Entries tagged by the AI and never corrected or re-tagged | 95% within 30 min, allowing one Tagging check retry (ADR 0003) |
+| NFR-4 | Tagging | New Entry saved → Tag saved; measured from save and tag times, only over Entries tagged by the AI and never corrected or re-tagged | 95% within 30 min, allowing one Tagging check retry (D2) |
 | NFR-5 | Durability (G3) | Saved Entries | 0 lost; kept until I delete them; daily free-plan backup (unverified) |
 | NFR-6 | Schedule accuracy | Review reminder; measured from its recorded send time | Sent within 5 min of Sunday 19:00 local, every week of the run |
 | NFR-7 | Nudge limits | Per Gap; Quiet hours default 23:00–07:00; measured from recorded Nudges against the current Quiet hours | ≤ 1 Nudge per Gap, 0 inside Quiet hours |
@@ -215,7 +214,7 @@ flowchart TD
 ## Out of scope
 
 - Brief Non-goals: improvement experiments, AI suggestions, app tracking, other users, to-do lists, precise timesheets.
-- Offline writing: logging, editing, deleting, Tag corrections, Suggested category decisions and settings changes all need a connection; I log missed time later as a backfill ([ADR 0004](adr/0004-require-a-connection-for-all-writes.md)).
+- Offline writing: logging, editing, deleting, Tag corrections, Suggested category decisions and settings changes all need a connection; I log missed time later as a backfill ([D3](03-data-model.md#decisions)).
 - Keeping unsaved form text after the app closes (judgement); background refresh of the Local copy.
 - Running timers (mvp-design §Logging); in-app export (R1); push retries (R4).
 - Apple Shortcut logging and a native app (see 01-research.md).
@@ -227,7 +226,7 @@ flowchart TD
 |---|---|---|
 | OQ-1 | How long before I can request a new sign-in code? | backend |
 | OQ-2 | Starting Category descriptions: resolved in 03-data-model.md | data-model |
-| OQ-3 | Retry limit for an Entry that always fails tagging, and how it is shown (ADR 0003) | backend |
+| OQ-3 | Retry limit for an Entry that always fails tagging, and how it is shown (D2) | backend |
 | OQ-4 | Which writes the Server rejects as invalid, and the messages shown | api |
 | OQ-5 | Does the free-plan pause rule count pg_cron or Edge Function traffic? (R7) | backend |
 | OQ-6 | Does the login session survive long gaps between opens; can push re-subscribe without a tap? (R2, R4) | backend, device test |
@@ -235,6 +234,26 @@ flowchart TD
 | OQ-8 | Which library the Server uses to send Web Push | backend, device test |
 | OQ-9 | Which phone storage holds the Local copy, and does Cloudflare Pages hosting behave as expected in the iOS home-screen app? | backend, device test |
 | OQ-10 | pg_cron runs in UTC: how jobs convert Sunday 19:00 and Quiet hours from my time zone | backend |
+
+## Decisions
+
+### D2 · Retry Untagged entries with a scheduled Tagging check
+
+Tagging runs on the Server after an Entry arrives. Database Webhooks and pg_net document no retries, pg_net's default
+timeout is 2 seconds, and pending requests can be lost in a crash (R3). A failed call would leave an Entry Untagged for
+good, which distorts the Weekly review (G1). Volume is about 30 Entries a day.
+
+| Option | Outcome | Reason |
+|---|---|---|
+| A pg_cron check every 15 minutes tags Untagged entries; tagging is safe to repeat | **Chosen** | Simple, already in Supabase, and catches every kind of failure, including lost requests |
+| Rely on Database Webhook delivery | Rejected | A failed or lost call is never retried |
+| A queue table with attempt counts and backoff | Rejected | Controls retries precisely, but is more to build than 30 Entries a day need |
+
+Consequences:
+- No Entry stays Untagged for more than about 15 minutes after a failure; a fresh failure can wait that long.
+- A call that times out but keeps running could tag an Entry twice, so tagging is safe to repeat: a repeat never
+  overwrites a Tag set by me and never creates a second Suggested category.
+- An Entry that always fails would be retried forever; the backend caps the attempts and shows it as Untagged (OQ-3).
 
 ## Glossary proposals
 

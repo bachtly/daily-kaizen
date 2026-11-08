@@ -1,9 +1,12 @@
 # daily-kaizen MVP: research
 
-Sources are cited as `[S1]` and listed in [`research/report.md`](research/report.md). Marks:
+Sources are cited as `[S1]` and listed under [Sources](#sources). Marks:
 **(snippet)** means only a search summary was seen, **(forum)** means a forum post with no vendor reply,
 **(judgement)** is my reasoning, and **(general knowledge)** has no source in this run. Unmarked
 citations are official or project pages that were read. Nothing has been tested on a device.
+
+This research was done when the agreed design still had an offline Outbox, so the items below mention it. The
+design later dropped it: every write needs a connection ([D3](03-data-model.md#decisions)).
 
 ## Our system today
 
@@ -101,16 +104,35 @@ mobile app. Doing nothing produces no data and fails every goal. Reversible: yes
 
 ## Recommendation
 
-**O1**, recorded as [ADR 0001](adr/0001-web-app-with-an-outbox-for-the-mvp.md). It keeps the agreed stack
-and budget, and adds no service. It accepts best-effort storage for the Outbox, silently missed Nudges, and
-hand-written sync code.
+**O1** on the agreed stack, recorded as [D1](#decisions). It keeps the agreed stack and budget, and adds no service.
+It accepts silently missed Nudges. Its Outbox was later dropped for online-only writes ([D3](03-data-model.md#decisions)).
 
 What would change this:
 
 - **Logging feels too slow:** speed up the logging form first. Add O4 only if authentication and offline queuing are solved.
 - **Nudges aren't delivered during the 14-day run, or Web Push fails the device test:** drop all push (Nudge, Review reminder and Category suggestion), and rely on the Review reminder email.
 - **Weekly reviews are missed:** check whether the Review reminder email arrived. Email is the dependable channel for G1's reviews, since push can die silently (item 4).
-- **Outbox entries are lost in practice:** consider O3, which needs the budget relaxed. This is noticed only if I remember an entry that isn't on the server, since eviction leaves no trace.
+
+## Decisions
+
+### D1 · Build the MVP as a home-screen web app on the agreed stack
+
+The MVP must log an Entry in under 15 seconds on an iPhone, for under about $5 a month, using conventional approaches
+(brief). Options are described above.
+
+| Option | Outcome | Reason |
+|---|---|---|
+| O1 · Web app on the agreed stack (React + Vite on Cloudflare Pages, Supabase) | **Chosen** | Keeps the agreed stack and budget and adds no service |
+| O2a · Web app with RxDB | Rejected | Licence and price not found; a new library and data model; still relies on browser storage |
+| O2b · Web app with PowerSync | Rejected | Adds a service that deactivates when idle; Pro is $49 a month |
+| O3 · Native iPhone app | Rejected | $99 a year breaks the budget, and it replaces the planned app |
+| O4 · O1 plus an Apple Shortcut | Rejected | No defined way to authenticate, and offline posts fail; reconsider only if logging is too slow |
+| O0 · Reuse TimeTagger, or do nothing | Rejected | No AI tagging or Weekly review found; drops most of the design |
+
+Consequences:
+- O1 as researched also queued offline writes in an Outbox on the phone. That part is not in the design: every write
+  needs a connection ([D3](03-data-model.md#decisions)).
+- Nudges can be missed silently (item 4), so email stays the dependable channel for the Review reminder.
 
 ## Open questions
 
@@ -120,3 +142,76 @@ What would change this:
 - Does the pause rule count pg_cron or Edge Function traffic? Not found [S8]. (backend)
 - Cloudflare Pages limits and Dexie behaviour on iOS: unresearched. (backend, device test)
 - How accurately does Claude Haiku 5.5 tag my entries? Benchmark later, as `docs/mvp-design.md:103` plans. (after launch)
+
+## Sources
+
+Official means the vendor's own docs or blog. Snippet means only a search-result summary was seen. Unless marked, the page was read.
+
+| Id | Title | URL | Publisher | Date | Official |
+|---|---|---|---|---|---|
+| S1 | Web Push for Web Apps on iOS and iPadOS | https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/ | WebKit | 2023-02-16 | Yes |
+| S2 | Meet Declarative Web Push | https://webkit.org/blog/16535/meet-declarative-web-push/ | WebKit | 2025-03-27 | Yes |
+| S3 | Full Third-Party Cookie Blocking and More (7-day cap) | https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/ | WebKit | 2020 (date not shown) | Yes |
+| S4 | Updates to Storage Policy | https://webkit.org/blog/14403/updates-to-storage-policy/ | WebKit | 2023-08-10 | Yes |
+| S5 | Supabase push notifications example | https://supabase.com/docs/guides/functions/examples/push-notifications | Supabase | n/k | Yes |
+| S6 | Billing on Supabase | https://supabase.com/docs/guides/platform/billing-on-supabase | Supabase | n/k | Yes |
+| S7 | Supabase Free plan | https://supabase.com/docs/guides/platform/free-plan | Supabase | n/k | Yes |
+| S8 | Project Pausing | https://supabase.com/docs/guides/platform/project-pausing | Supabase | n/k | Yes |
+| S9 | Database Webhooks | https://supabase.com/docs/guides/database/webhooks | Supabase | n/k | Yes |
+| S10 | pg_net | https://supabase.com/docs/guides/database/extensions/pg_net | Supabase | n/k | Yes |
+| S11 | Edge Functions limits | https://supabase.com/docs/guides/functions/limits | Supabase | n/k | Yes |
+| S12 | Auth rate limits | https://supabase.com/docs/guides/auth/rate-limits | Supabase | n/k | Yes |
+| S13 | Auth custom SMTP | https://supabase.com/docs/guides/auth/auth-smtp | Supabase | n/k | Yes |
+| S14 | Supabase Cron | https://supabase.com/docs/guides/cron | Supabase | n/k | Yes |
+| S15 | Auth sessions | https://supabase.com/docs/guides/auth/sessions | Supabase | n/k | Yes |
+| S16 | Passwordless email logins | https://supabase.com/docs/guides/auth/auth-email-passwordless | Supabase | n/k | Yes |
+| S17 | Storage downloads | https://supabase.com/docs/guides/storage/serving/downloads | Supabase | n/k | Yes |
+| S18 | Resend pricing | https://resend.com/pricing | Resend | n/k | Yes |
+| S19 | Resend quotas and limits | https://resend.com/docs/knowledge-base/account-quotas-and-limits | Resend | n/k | Yes |
+| S20 | WebKit bug 273063 (iOS push subscription becomes invalid) | https://bugs.webkit.org/show_bug.cgi?id=273063 | WebKit Bugzilla | 2024-04-22 to 2024-07-30 | Semi (engineer comments) |
+| S21 | Apple forum: Web Push response always success | https://developer.apple.com/forums/thread/719990 | Apple Developer Forums | 2022-11, 2024-02 | Forum, no Apple reply seen |
+| S22 | Supabase GitHub discussion 2557 (HTML in Storage) | https://github.com/orgs/supabase/discussions/2557 | Supabase maintainer | 2021-07-26, 2023-06-12 | Semi |
+| S23 | Apple forum: Safari iOS PWA data persistence beyond 7 days | https://developer.apple.com/forums/thread/710157 | Apple Developer Forums | 2022-07 to 2023-02 | Forum, no Apple staff |
+| S24 | Replicache | https://replicache.dev/ | Rocicorp | n/k | Yes |
+| S25 | Electric: writes guide | https://electric.ax/docs/guides/writes | ElectricSQL | n/k | Yes |
+| S26 | RxDB Supabase replication | https://rxdb.info/replication-supabase.html | RxDB | n/k | Yes |
+| S27 | PowerSync pricing | https://powersync.com/pricing.md | PowerSync | n/k | Yes |
+| S28 | TimeTagger on GitHub | https://github.com/almarklein/timetagger | TimeTagger | n/k | Yes |
+| S29 | timetagger.app | https://timetagger.app/ | TimeTagger | n/k | Yes |
+| S30 | TimeTagger docs landing | https://timetagger.readthedocs.io/en/latest/ | TimeTagger | n/k | Yes |
+| S31 | Traggo server | https://github.com/traggo/server | Traggo | n/k | Yes |
+| S32 | aTimeLogger | https://atimelogger.pro/ | aTimeLogger | n/k | Yes |
+| S33 | Toggl Track features | https://toggl.com/track/features/ | Toggl | n/k | Yes |
+| S34 | Apple Developer Program enrollment | https://developer.apple.com/programs/enroll/ | Apple | n/k | Yes |
+| S35 | Compare memberships | https://developer.apple.com/support/compare-memberships/ | Apple | n/k | Yes |
+| S36 | Supabase: Scheduling Edge Functions | https://supabase.com/docs/guides/functions/schedule-functions | Supabase | n/k | Yes |
+| S37 | Supabase: Background tasks | https://supabase.com/docs/guides/functions/background-tasks | Supabase | n/k | Yes |
+| S38 | MDN: Background Synchronization API | https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API | MDN | modified 2024-04 | Yes (page lacks compat table) |
+| S39 | MDN: StorageManager.persist() | https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist | MDN | n/k | Yes |
+| S40 | Snippet: PushForge builder README (Deno support; web-push "limited") | https://cdn.jsdelivr.net/npm/@pushforge/builder@2.0.4/README.md | PushForge | n/k | No, snippet |
+| S41 | Snippet: negrel/webpush on JSR | https://jsr.io/@negrel/webpush | JSR | n/k | No, snippet |
+| S42 | Snippet: Supabase CLI issue 4396 (HTML served as text/plain) | https://github.com/supabase/cli/issues/4396 | GitHub | 2025-11 | No, snippet |
+| S43 | Snippet: blog guides saying pg_cron runs in UTC | https://www.rapidevelopers.com/md/supabase-tutorial/how-to-schedule-cron-jobs-with-supabase | Blogs | n/k | No |
+| S44 | Snippet: WebKit bug 249766, push to expired endpoint returns 200 | https://lists.webkit.org/pipermail/webkit-unassigned/2023-January/1079032.html | WebKit Bugzilla mailing list | 2023-01 | Semi, snippet |
+| S45 | Snippet: Zero 1.0 | https://infoq.com/news/2026/06/zero-version-1 | InfoQ | 2026-06 | No, snippet |
+| S46 | Snippet: Beyond Abandonment to Next Steps (Epstein et al.) | https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5428074/ | PMC / CHI 2016 | 2016 | Peer-reviewed, snippet |
+| S47 | Snippet: Simple Time Tracker (Razeeman) | https://f-droid.org/packages/com.razeeman.util.simpletimetracker | F-Droid | n/k | Catalogue, snippet |
+| S48 | Snippets: AI logging apps (Everlog, No Time, GamiNote, Rize) | https://apps.apple.com/app/everlog/id6761266088 | App Store / vendors | n/k | Vendor, snippet |
+| S49 | Snippets: vendor/forum posts on why manual time tracking stops | https://medium.com/shoutbase/why-we-stop-tracking-time-b0582f2b6599 | Medium, Atlassian community | n/k | No |
+| S50 | Snippet: WebKit bug 181850 (home-screen app storage on other origins) | https://bugs.webkit.org/show_bug.cgi?id=181850 | WebKit Bugzilla | 2018, 2022 comment | Semi, snippet |
+| S51 | Apple Shortcuts User Guide (titles only) | https://support.apple.com/guide/shortcuts/welcome/ios | Apple | n/k | Yes, no detail seen |
+| S52 | life_logger README | https://github.com/mvi-x/life_logger | mvi-x | n/k | Project's own |
+| S53 | LIFE-LOGGER README | https://github.com/naborajs/LIFE-LOGGER | naborajs | n/k | Project's own |
+| S54 | Super Productivity wiki index | https://github.com/super-productivity/super-productivity/wiki | Super Productivity | n/k | Yes (titles only) |
+| S55 | Super Productivity wiki: 4.18 Reflection | https://github.com/super-productivity/super-productivity/wiki/4.18-Reflection | Super Productivity | n/k | Yes |
+| S56 | Super Productivity wiki: 4.17 Idle Time | https://github.com/super-productivity/super-productivity/wiki/4.17-Idle-Time | Super Productivity | n/k | Yes |
+| S57 | Kimai documentation index | https://www.kimai.org/documentation/ | Kimai | n/k | Yes (index only) |
+| S58 | Kimai: Weekly hours | https://www.kimai.org/documentation/weekly-times.html | Kimai | n/k | Yes |
+| S59 | Kimai: Reporting | https://www.kimai.org/documentation/reporting.html | Kimai | n/k | Yes |
+| S60 | TimeTagger home | https://timetagger.app/ | TimeTagger | n/k | Yes |
+| S61 | Toggl: Saving, sharing and scheduling reports | https://support.toggl.com/saving-sharing-and-scheduling-reports | Toggl | n/k | Yes |
+| S62 | Toggl help search results (weekly overview email, reminders) | support.toggl.com (result list) | Toggl | n/k | Yes (snippet only) |
+| S63 | Beyond Abandonment to Next Steps (Epstein et al.) | https://pmc.ncbi.nlm.nih.gov/articles/PMC5428074/ | PMC / CHI | about 2016 | Peer-reviewed |
+| S64 | Apple forum post: IndexedDB connection lost, then localStorage cleared on iOS 17 (URL not recorded) | not recorded | Apple Developer Forums | n/k | Forum, snippet only |
+
+n/k = not known. Not reached: Apple's "Sending web push notifications in web apps and browsers" (no page text), docs.timetagger.app (DNS failure), superproductivity.com (empty page), one Toggl digest URL (404).
