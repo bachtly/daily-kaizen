@@ -1,14 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { CategoryRow, EntryRow } from '../data/db';
-import { WeekView } from './WeekScreen';
+import type { Result } from '../data/request';
+import { WeekView, type WeekActions } from './WeekScreen';
 
 const cat = (id: string, name: string): CategoryRow => ({ id, name, description: name, status: 'active' });
-const categories = [
+const categories: CategoryRow[] = [
   cat('deep', 'Deep'),
   cat('shallow', 'Shallow'),
   cat('maintenance', 'Maintenance'),
   cat('recovery', 'Recovery'),
   cat('waste', 'Waste'),
+  { id: 'admin', name: 'Admin', description: 'Forms, bills, paperwork', status: 'suggested' },
 ];
 
 const entry = (id: string, day: string, text: string, from: string, to: string, category: string | null): EntryRow => ({
@@ -21,13 +23,18 @@ const entries = [
   entry('e3', '02', 'Lunch with Sam', '12:30', '13:30', 'recovery'),
   entry('e4', '03', 'Reviewed PRs', '09:00', '10:30', 'deep'),
   entry('e5', '03', 'Standup', '10:30', '10:45', 'shallow'),
-  entry('e6', '03', 'Tax form', '11:00', '11:20', null),
+  { ...entry('e6', '03', 'Tax form', '11:00', '11:20', null), suggested_category_id: 'admin' },
+  { ...entry('e9', '03', 'Parking permit', '15:00', '15:20', null), tagging_gave_up_at: '2026-11-03T16:00:00Z' },
   entry('e7', '04', 'Commute', '08:00', '08:40', 'maintenance'),
   entry('e8', '04', 'Scrolled reddit', '13:00', '13:20', 'waste'),
 ];
 
 const weekEarlier = (iso: string) => new Date(Date.parse(iso) - 7 * 86_400_000).toISOString();
 const ok = () => Promise.resolve({ ok: true as const, data: null });
+const later = (r: Result<unknown> = { ok: true, data: null }) => () => new Promise<Result<unknown>>((res) => setTimeout(() => res(r), 600));
+const actions: WeekActions = {
+  editEntry: later(), deleteEntry: later(), setEntryTag: later(), approveCategory: later(), rejectCategory: later(),
+};
 
 const meta = {
   title: 'Screens/2 This week',
@@ -35,6 +42,7 @@ const meta = {
   args: {
     monday: '2026-11-02', timeZone: 'UTC', now: Date.parse('2026-11-04T14:05:00Z'), isCurrentWeek: true,
     entries, categories, reviewDone: false, refreshedAt: '2026-11-04T14:02:00Z', onReviewDone: ok,
+    actions, moveCounts: { admin: 1 },
   },
   parameters: {
     docs: { description: { component: 'Time per Category for a week, with Unlogged and Untagged as neutral grey rows. Read from the Local copy; earlier weeks are fetched.' } },
@@ -61,3 +69,15 @@ export const Offline: Story = {
   parameters: { docs: { description: { story: 'Tap "Mark review done" to see "Needs a connection."' } } },
 };
 export const SignedOut: Story = { args: { connection: 'signed-out' } };
+export const EditInline: Story = { name: 'Edit an Entry inline', args: { initialEditId: 'e2' } };
+export const EditInlineOffline: Story = { name: 'Edit inline: offline', args: { initialEditId: 'e2', connection: 'offline' } };
+export const EditInlineNoConnection: Story = {
+  name: 'Edit inline: save fails',
+  args: { initialEditId: 'e2', actions: { ...actions, editEntry: later({ ok: false, error: 'unknown' }) } },
+  parameters: { docs: { description: { story: 'Tap Save to see "Needs a connection."; the edit stays open.' } } },
+};
+export const TagPickerOpen: Story = { name: 'Change a Tag', args: { initialPickerId: 'e6' } };
+export const NoSuggestion: Story = {
+  name: 'No Suggested category',
+  args: { categories: categories.filter((c) => c.status === 'active') },
+};

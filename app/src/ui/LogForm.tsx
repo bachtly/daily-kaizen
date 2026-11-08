@@ -3,7 +3,6 @@ import type { EntryRow } from '../data/db';
 import { readLocalCopy } from '../data/localCopy';
 import { findOverlaps, prefill, recentTexts } from '../data/prefill';
 import type { Result } from '../data/request';
-import { zonedParts } from '../data/week';
 import type { NewEntry } from '../data/writes';
 import { deviceZone, writes } from './liveWrites';
 import { OverlapNote } from './OverlapNote';
@@ -11,6 +10,7 @@ import { ConnectionBanner, Phone, type Connection } from './Phone';
 import { RecentChips } from './RecentChips';
 import { SaveStatus, type SaveState } from './SaveStatus';
 import { TimeChip } from './TimeChip';
+import { hhmm, withTime } from './weekFormat';
 
 type LogEntry = Pick<EntryRow, 'id' | 'text' | 'started_at' | 'ended_at' | 'created_at'>;
 
@@ -28,18 +28,6 @@ export type LogFormViewProps = {
   initialText?: string;
   /** Start the form with From already changed (ms), for stories. */
   initialFrom?: number;
-};
-
-const MINUTE = 60_000;
-const hhmm = (ms: number, tz: string) => {
-  const p = zonedParts(ms, tz);
-  return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
-};
-/** Move `ms` to the wall-clock time `value` (HH:MM) on the same day in the zone. */
-const withTime = (ms: number, value: string, tz: string) => {
-  const [h, m] = value.split(':').map(Number);
-  const p = zonedParts(ms, tz);
-  return ms + ((h - p.hour) * 60 + (m - p.minute)) * MINUTE - p.second * 1000;
 };
 
 const fieldMessage = {

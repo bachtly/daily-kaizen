@@ -1,15 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import type { CategoryRow, EntryRow } from '../data/db';
-import { fetchWeek, readLocalCopy, type LocalCopy } from '../data/localCopy';
+import { fetchWeek, readLocalCopy, refresh, type LocalCopy } from '../data/localCopy';
 import type { Result } from '../data/request';
 import { mondayOf, weekBounds, weekTotals, zonedParts } from '../data/week';
+import type { EntryFields } from '../data/writes';
 import { CategoryTotals } from './CategoryTotals';
-import { deviceZone, writes } from './liveWrites';
+import { EntryEditor } from './EntryEditor';
+import { EntryRow as EntryLine } from './EntryRow';
+import { deviceZone, liveWindow, writes } from './liveWrites';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
 import { RefreshedAt } from './RefreshedAt';
 import { ReviewDoneButton } from './ReviewDoneButton';
-import { categoryColour } from './weekFormat';
+import { SuggestedCategoryCard } from './SuggestedCategoryCard';
+import { TagPicker } from './TagPicker';
+import { hhmm } from './weekFormat';
+
+/** Phone writes the page can make. Each resolves when the Server answers. */
+export type WeekActions = {
+  editEntry: (id: string, fields: EntryFields) => Promise<Result<unknown>>;
+  deleteEntry: (id: string) => Promise<Result<unknown>>;
+  setEntryTag: (entryId: string, categoryId: string) => Promise<Result<unknown>>;
+  approveCategory: (categoryId: string) => Promise<Result<unknown>>;
+  rejectCategory: (categoryId: string) => Promise<Result<unknown>>;
+};
 
 export type WeekViewProps = {
   /** The week shown: its Monday, `YYYY-MM-DD`. */
@@ -31,11 +45,12 @@ export type WeekViewProps = {
   onRetry?: () => void;
   onLogSomething?: () => void;
   onReviewDone?: () => Promise<Result<unknown>>;
-};
-
-const clock = (ms: number, tz: string) => {
-  const p = zonedParts(ms, tz);
-  return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
+  actions?: WeekActions;
+  /** Entries that approving each Suggested category would move, by category id. */
+  moveCounts?: Record<string, number>;
+  /** Start with a row expanded or the Tag picker open (stories). */
+  initialEditId?: string;
+  initialPickerId?: string;
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -53,14 +68,20 @@ const shiftMonday = (monday: string, days: number) => {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 };
 
-/** This week page: time per Category, Entries by day, Review done (UC-4). Editing and tagging come in a later PR. */
+/** This week page: time per Category, Suggested categories, Entries by day with inline edit and Tag, Review done (UC-4). */
 export function WeekView({
   monday, timeZone, now, isCurrentWeek, entries, categories, reviewDone, refreshedAt,
   connection = 'online', load = 'ready', onPrev, onNext, onRetry, onLogSomething, onReviewDone,
+  actions, moveCounts = {}, initialEditId, initialPickerId,
 }: WeekViewProps) {
+  const [editId, setEditId] = useState(initialEditId);
+  const [picker, setPicker] = useState<{ id: string; opener: HTMLElement | null } | undefined>(
+    initialPickerId ? { id: initialPickerId, opener: null } : undefined,
+  );
+  const online = connection !== 'offline';
   const bounds = useMemo(() => weekBounds(monday, timeZone), [monday, timeZone]);
   const totals = useMemo(() => weekTotals(entries, bounds, now), [entries, bounds, now]);
-  const refreshedLabel = refreshedAt ? clock(Date.parse(refreshedAt), timeZone) : null;
+  const refreshedLabel = refreshedAt ? hhmm(Date.parse(refreshedAt), timeZone) : null;
   const days = useMemo(() => {
     const out: { label: string; entries: EntryRow[] }[] = [];
     for (const e of [...entries].sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at))) {
@@ -71,10 +92,20 @@ export function WeekView({
     }
     return out;
   }, [entries, bounds, timeZone]);
+  const suggested = categories.filter((c) => c.status === 'suggested');
+  const pickerEntry = picker && entries.find((e) => e.id === picker.id);
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   return (
-    <Phone tab="week">
+    <Phone
+      tab="week"
+      overlay={pickerEntry && actions && (
+        <TagPicker
+          entry={pickerEntry} categories={categories} online={online} returnFocusTo={picker?.opener}
+          onPick={(categoryId) => actions.setEntryTag(pickerEntry.id, categoryId)} onClose={() => setPicker(undefined)}
+        />
+      )}
+    >
       <ConnectionBanner state={connection} refreshedAt={refreshedLabel ?? '–'} />
       <header className="week-header">
         <div className="week-picker" role="group" aria-label="Choose week">
@@ -104,6 +135,13 @@ export function WeekView({
         <>
           <CategoryTotals totals={totals} categories={categories} hasEntries={entries.length > 0} />
 
+          {actions && suggested.map((c) => (
+            <SuggestedCategoryCard
+              key={c.id} category={c} moveCount={moveCounts[c.id] ?? 0} online={online}
+              onApprove={() => actions.approveCategory(c.id)} onReject={() => actions.rejectCategory(c.id)}
+            />
+          ))}
+
           {entries.length === 0 && (
             <div className="empty">
               Nothing logged this week yet.
@@ -116,9 +154,20 @@ export function WeekView({
           {days.map((day) => (
             <section key={day.label} className="panel" aria-label={day.label}>
               <h2 className="day">{day.label}</h2>
-              {day.entries.map((e) => (
-                <EntryLine key={e.id} entry={e} category={e.category_id ? catById.get(e.category_id) : undefined} timeZone={timeZone} />
-              ))}
+              {day.entries.map((e) =>
+                actions && e.id === editId ? (
+                  <EntryEditor
+                    key={e.id} entry={e} siblings={entries} now={now} online={online}
+                    onSave={(fields) => actions.editEntry(e.id, fields)} onDelete={() => actions.deleteEntry(e.id)}
+                    onClose={() => setEditId(undefined)}
+                  />
+                ) : (
+                  <EntryLine
+                    key={e.id} entry={e} category={e.category_id ? catById.get(e.category_id) : undefined} timeZone={timeZone}
+                    onEdit={() => setEditId(e.id)} onTag={(opener) => setPicker({ id: e.id, opener })}
+                  />
+                ),
+              )}
             </section>
           ))}
 
@@ -128,23 +177,6 @@ export function WeekView({
         </>
       )}
     </Phone>
-  );
-}
-
-function EntryLine({ entry, category, timeZone }: { entry: EntryRow; category?: CategoryRow; timeZone: string }) {
-  return (
-    <div className="entry">
-      <div className="what" style={{ cursor: 'default' }}>
-        <span className="text">{entry.text}</span>
-        <span className="when">{clock(Date.parse(entry.started_at), timeZone)}–{clock(Date.parse(entry.ended_at), timeZone)}</span>
-      </div>
-      <span
-        className={category ? 'tag' : 'tag neutral'}
-        style={{ background: category ? categoryColour(category.name) : undefined, display: 'inline-flex', alignItems: 'center', cursor: 'default' }}
-      >
-        {category?.name ?? 'Untagged'}
-      </span>
-    </div>
   );
 }
 
@@ -166,6 +198,7 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
   // The failure belongs to one week: navigating away leaves it behind.
   const [failure, setFailure] = useState<{ monday: string; kind: 'offline' | 'session-lost' } | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [sessionLost, setSessionLost] = useState(false);
 
   const currentMonday = mondayOf(now, tz);
   const monday = param && MONDAY.test(param) ? param : currentMonday;
@@ -222,6 +255,29 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     : haveEarlier ? 'ready'
     : fail?.kind === 'offline' ? 'offline-earlier-week'
     : fail?.kind === 'session-lost' ? 'session-lost-earlier-week' : 'loading';
+  // After a write: a confirmed one already refreshed the Local copy; a refusal that means "your view is stale" refreshes it here.
+  const STALE = ['entry_not_found', 'category_not_active', 'category_already_decided'];
+  const afterWrite = async (r: Result<unknown>) => {
+    if (!r.ok && STALE.includes(r.error)) await refresh(liveWindow(Date.now(), tz));
+    if (r.ok || STALE.includes(r.error)) {
+      await reload();
+      if (!inLocalCopy) setAttempt((a) => a + 1); // an earlier week is read again with the same GET
+    }
+    if (r.ok) setSessionLost(false);
+    else if (r.error === 'session_lost') setSessionLost(true);
+    return r;
+  };
+  const actions: WeekActions = {
+    editEntry: async (id, fields) => afterWrite(await writes.editEntry(id, fields)),
+    deleteEntry: async (id) => afterWrite(await writes.deleteEntry(id)),
+    setEntryTag: async (entryId, categoryId) => afterWrite(await writes.setEntryTag(entryId, categoryId)),
+    approveCategory: async (id) => afterWrite(await writes.approveCategory(id)),
+    rejectCategory: async (id) => afterWrite(await writes.rejectCategory(id)),
+  };
+  const moveCounts: Record<string, number> = {};
+  for (const e of copy.entries) {
+    if (e.suggested_category_id && e.tag_source !== 'me') moveCounts[e.suggested_category_id] = (moveCounts[e.suggested_category_id] ?? 0) + 1;
+  }
   const goto = (m: string) => void navigate(m === currentMonday ? '/week' : `/week/${m}`);
 
   return (
@@ -229,8 +285,8 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
       monday={monday} timeZone={tz} now={now} isCurrentWeek={monday >= currentMonday}
       entries={entries} categories={copy.categories} refreshedAt={copy.refreshedAt}
       reviewDone={inLocalCopy ? copy.reviews.some((r) => r.week_start === monday) : undefined}
-      connection={fail?.kind === 'session-lost' ? 'signed-out' : online ? 'online' : 'offline'}
-      load={load}
+      connection={fail?.kind === 'session-lost' || sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
+      load={load} actions={actions} moveCounts={moveCounts}
       onPrev={() => goto(shiftMonday(monday, -7))}
       onNext={() => goto(shiftMonday(monday, 7))}
       onRetry={() => { setFailure(null); setAttempt((a) => a + 1); }}

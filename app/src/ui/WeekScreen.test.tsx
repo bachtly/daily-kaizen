@@ -8,8 +8,10 @@ import type { Result } from '../data/request';
 const readLocalCopy = vi.fn<() => Promise<LocalCopy>>();
 const fetchWeek = vi.fn<(r: { start: string; end: string }) => Promise<Result<EntryRow[]>>>();
 const reviewDone = vi.fn<(monday: string) => Promise<Result<unknown>>>();
-vi.mock('../data/localCopy', () => ({ readLocalCopy, fetchWeek }));
-vi.mock('./liveWrites', () => ({ deviceZone: () => 'UTC', writes: { reviewDone } }));
+const editEntry = vi.fn<(id: string, f: unknown) => Promise<Result<unknown>>>();
+const refresh = vi.fn(async () => ({ ok: true }));
+vi.mock('../data/localCopy', () => ({ readLocalCopy, fetchWeek, refresh }));
+vi.mock('./liveWrites', () => ({ deviceZone: () => 'UTC', liveWindow: () => ({ since: '', sinceDate: '' }), writes: { reviewDone, editEntry } }));
 const { WeekScreen, WeekView } = await import('./WeekScreen');
 
 const categories: CategoryRow[] = [
@@ -41,6 +43,8 @@ beforeEach(() => {
   readLocalCopy.mockReset();
   fetchWeek.mockReset();
   reviewDone.mockReset();
+  editEntry.mockReset();
+  refresh.mockClear();
 });
 afterEach(cleanup);
 
@@ -144,6 +148,31 @@ describe('WeekScreen', () => {
     await screen.findByText(/Signed out/);
     expect(document.querySelector('.skeleton')).toBeNull();
     expect(screen.getByText('Sign in to see earlier weeks.')).toBeTruthy();
+  });
+
+  it('refreshes the Local copy when an edit says the Entry is gone', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    readLocalCopy.mockResolvedValue(copy({ entries }));
+    editEntry.mockResolvedValue({ ok: false, error: 'entry_not_found' });
+    mount('/week');
+    fireEvent.click(await screen.findByLabelText(/^Edit Entry a,/));
+    fireEvent.click(screen.getByText('Save'));
+    await screen.findByText('This Entry was deleted.');
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(readLocalCopy.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('reads an earlier week again after a confirmed write', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    readLocalCopy.mockResolvedValue(copy());
+    fetchWeek.mockResolvedValue({ ok: true, data: [entry('x', '02', '09:00', '10:00', 'deep')] });
+    editEntry.mockResolvedValue({ ok: true, data: null });
+    mount('/week/2026-10-05');
+    fireEvent.click(await screen.findByLabelText(/^Edit Entry x,/));
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => expect(fetchWeek).toHaveBeenCalledTimes(2));
   });
 
   it('marks the review done through the Server, then reads the Local copy again', async () => {
