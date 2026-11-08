@@ -83,5 +83,6 @@ jobs:
           if [ -f deno.json ] && jq -e '.tasks.test' deno.json >/dev/null 2>&1; then
             deno task test
           else
+            echo "::warning::no deno.json test task; running plain deno test (deno check skipped)"
             deno test --allow-env --allow-net --allow-read
           fi
