@@ -55,16 +55,17 @@
 .phone-home { height: 34px; flex: none; }
 
 .tabbar { display: flex; border-top: 1px solid var(--line); flex: none; }
-.tabbar button {
-  flex: 1; min-height: 50px; background: none; border: 0; font: inherit; font-size: 15px;
-  color: var(--muted); cursor: pointer;
+.tabbar .tab {
+  flex: 1; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--muted); text-decoration: none; font-size: 11px;
 }
-.tabbar button[aria-current="page"] { color: var(--accent); font-weight: 600; }
+.tabbar .tab[aria-current="page"] { color: var(--accent); font-weight: 600; }
 
 .banner {
   background: var(--warn-bg); color: var(--warn-text); border-radius: 12px;
   padding: 10px 12px; font-size: 14px; margin-bottom: 12px;
 }
+.banner a { color: inherit; font-weight: 600; }
 .banner button { background: none; border: 0; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; padding: 0; cursor: pointer; }
 
 h1 { font-size: 28px; margin: 4px 0 16px; }

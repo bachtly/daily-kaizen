@@ -1,13 +1,6 @@
 /* Colours come from ui/theme.css (light/dark by system). On a phone the frame fills the screen. */
 body { margin: 0; }
 
-.tabbar .tab {
-  flex: 1; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: var(--muted); text-decoration: none; font-size: 11px;
-}
-.tabbar .tab[aria-current="page"] { color: var(--accent); font-weight: 600; }
-.banner a { color: inherit; font-weight: 600; }
-
 @media (max-width: 500px) {
   .phone {
     width: 100%; height: 100dvh; margin: 0; border: 0; border-radius: 0; box-shadow: none;
