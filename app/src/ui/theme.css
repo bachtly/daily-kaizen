@@ -12,11 +12,13 @@
   --error: #c0362c;
   --neutral-bar: #c9c9ce;
   --cat-deep: #4a6fa5;
-  --cat-shallow: #7a9cc6;
-  --cat-maintenance: #8a8f6a;
-  --cat-recovery: #5f9a7a;
-  --cat-waste: #b98a6e;
-  --cat-new: #9a7fb5;
+  --cat-shallow: #3a7a90;
+  --cat-maintenance: #6f7440;
+  --cat-recovery: #3f7a5a;
+  --cat-waste: #8a5f43;
+  --cat-new: #7a5f9a;
+  --cat-on: #ffffff;
+  --done-text: #2f6a4a;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   color: var(--text);
 }
@@ -29,6 +31,15 @@
     --muted: #a1a1a8;
     --line: #2e2e33;
     --accent: #5b8ff0;
+    --accent-text: #111113;
+    --cat-deep: #7a9cc6;
+    --cat-shallow: #6fb0c8;
+    --cat-maintenance: #a3a876;
+    --cat-recovery: #6fb08c;
+    --cat-waste: #c99a7c;
+    --cat-new: #a98fc5;
+    --cat-on: #111113;
+    --done-text: #8fd0aa;
     --warn-bg: #3a3018;
     --warn-text: #f3d98c;
     --error: #ff7a6e;
@@ -76,7 +87,7 @@ input.text {
   width: 100%; font: inherit; font-size: 17px; padding: 12px 14px; border-radius: 12px;
   border: 1px solid var(--line); background: var(--surface); color: var(--text);
 }
-input.text:read-only { opacity: 0.6; }
+input.text:read-only { color: var(--muted); }
 input.text[aria-invalid="true"] { border-color: var(--error); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
@@ -131,7 +142,7 @@ input.text[aria-invalid="true"] { border-color: var(--error); }
 .week-picker button:disabled { background: transparent; color: var(--neutral-bar); cursor: default; }
 .week-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 0 4px; }
 .badge { font-size: 13px; padding: 4px 10px; border-radius: 12px; background: var(--surface); color: var(--muted); }
-.badge.done { color: var(--cat-recovery); font-weight: 600; }
+.badge.done { color: var(--done-text); font-weight: 600; }
 .refreshed { font-size: 13px; color: var(--muted); margin: 0; }
 
 .totals { list-style: none; padding: 0; margin: 0; }
@@ -157,7 +168,7 @@ input.text[aria-invalid="true"] { border-color: var(--error); }
 .link.danger { color: var(--error); }
 .entry .what { grid-area: what; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 56px; background: none; border: 0; text-align: left; font: inherit; font-size: 15px; color: var(--text); padding: 6px 0; cursor: pointer; }
 .entry .what .when { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tag { min-height: 44px; padding: 0 10px; border-radius: 16px; border: 0; font: inherit; font-size: 13px; color: #fff; cursor: pointer; }
+.tag { min-height: 44px; padding: 0 10px; border-radius: 16px; border: 0; font: inherit; font-size: 13px; color: var(--cat-on); cursor: pointer; }
 .tag.neutral { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
 .entry .gaveup { grid-column: 1 / 3; grid-row: 2; font-size: 13px; color: var(--muted); padding-bottom: 10px; }
 
