@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EntryRow } from '../data/db';
-import { readLocalCopy, refresh } from '../data/localCopy';
+import { readLocalCopy } from '../data/localCopy';
 import { findOverlaps, prefill, recentTexts } from '../data/prefill';
 import type { Result } from '../data/request';
-import { recordTiming } from '../data/timings';
-import { mondayOf, weekBounds, zonedParts } from '../data/week';
-import { createWrites, type NewEntry } from '../data/writes';
+import { zonedParts } from '../data/week';
+import type { NewEntry } from '../data/writes';
+import { deviceZone, writes } from './liveWrites';
 import { OverlapNote } from './OverlapNote';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
 import { RecentChips } from './RecentChips';
@@ -185,20 +185,6 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', onS
 }
 
 // ---- live wiring: Local copy in, Server writes out ----
-
-/** What the Local copy holds: from the previous Monday 00:00 (same window as routes.refreshWindow). */
-function liveWindow(now: number, tz: string) {
-  const [y, m, d] = mondayOf(now, tz).split('-').map(Number);
-  const prev = new Date(Date.UTC(y, m - 1, d - 7)).toISOString().slice(0, 10);
-  return { since: new Date(weekBounds(prev, tz).start).toISOString(), sinceDate: prev };
-}
-
-const deviceZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-const writes = createWrites({
-  refresh: () => refresh(liveWindow(Date.now(), deviceZone())),
-  recordTiming,
-});
 
 /** The Log form wired to the Local copy and the Server. */
 export function LogForm() {
