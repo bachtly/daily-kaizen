@@ -22,7 +22,7 @@ export function refreshAfterSignIn() {
 
 const guarded = (element: React.ReactNode) => <RequireSession>{element}</RequireSession>;
 
-// Screens render with mock data until the data layer lands.
+// All screens but /sign-in need a session. The screens still show mock data until their ui-* tasks wire them to the Local copy.
 export const routes: RouteObject[] = [
   { path: '/', element: guarded(<LogForm />) },
   { path: '/week', element: guarded(<WeekScreen />) },
