@@ -1,6 +1,7 @@
 // App-shell service worker. Registered at /sw.js with scope /, which pushManager.subscribe also needs.
 // Declarative Web Push (iOS 18.4+) needs no push handler here.
 const CACHE = 'dk-shell-v1'
+const NAV_TIMEOUT_MS = 3000
 
 // Cache the shell and the hashed assets it references so the app opens offline after one visit.
 async function precache() {
@@ -43,14 +44,18 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return
 
   if (req.mode === 'navigate') {
-    // Network first so a deploy shows up; the cached shell opens the app offline.
+    // Network first so a deploy shows up, but on a weak signal open the cached shell after 3 s (G2).
     event.respondWith(
-      fetch(req)
-        .then(async (res) => {
+      (async () => {
+        const cached = await caches.match('/', { ignoreVary: true })
+        const net = fetch(req).then(async (res) => {
           if (res.ok) (await caches.open(CACHE)).put('/', res.clone())
           return res
         })
-        .catch(async () => (await caches.match('/', { ignoreVary: true })) ?? Response.error()),
+        if (!cached) return net.catch(() => Response.error())
+        const slow = new Promise((resolve) => setTimeout(() => resolve(cached), NAV_TIMEOUT_MS))
+        return Promise.race([net.catch(() => cached), slow])
+      })(),
     )
     return
   }

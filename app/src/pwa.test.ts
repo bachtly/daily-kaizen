@@ -80,7 +80,7 @@ describe('sw-register', () => {
 describe('sw.js', () => {
   type Handler = (e: Record<string, unknown>) => void
 
-  function load(opts: { online: boolean }) {
+  function load(opts: { online: boolean; hang?: boolean }) {
     const store = new Map<string, Response>()
     const handlers: Record<string, Handler> = {}
     const key = (r: string | Request) => (typeof r === 'string' ? r : new URL(r.url).pathname)
@@ -105,6 +105,7 @@ describe('sw.js', () => {
     const fetchFn = (r: string | Request) => {
       const path = key(r)
       fetched.push(path)
+      if (opts.hang) return new Promise<Response>(() => {})
       if (!opts.online || !(path in net)) return Promise.reject(new TypeError('offline'))
       return Promise.resolve(new Response(net[path]))
     }
@@ -157,6 +158,24 @@ describe('sw.js', () => {
     for (const [k, v] of sw.store) off.store.set(k, v)
     const res = await respond(off, { method: 'GET', url: 'https://app.example/week', mode: 'navigate' })
     expect(await res!.text()).toContain('/assets/index-abc.js')
+  })
+
+  it('falls back to the cached shell when the network hangs past 3 s', async () => {
+    vi.useFakeTimers()
+    try {
+      const sw = load({ online: true, hang: true })
+      sw.store.set('/', new Response('cached shell'))
+      const p = respond(sw, { method: 'GET', url: 'https://app.example/', mode: 'navigate' })
+      await vi.advanceTimersByTimeAsync(2900)
+      let settled = false
+      void p.then(() => (settled = true))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(200)
+      expect(await (await p)!.text()).toBe('cached shell')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('serves hashed assets from the cache first', async () => {
