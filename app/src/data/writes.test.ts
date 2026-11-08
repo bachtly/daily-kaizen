@@ -61,7 +61,10 @@ function rpc(name: string, args: unknown) {
   };
   return b;
 }
-vi.mock('./supabase', () => ({ supabase: { from, rpc } }));
+let session: { user: { id: string } } | null = { user: { id: 'u1' } };
+vi.mock('./supabase', () => ({
+  supabase: { from, rpc, auth: { getSession: async () => ({ data: { session } }) } },
+}));
 
 const { createWrites } = await import('./writes');
 
@@ -181,6 +184,13 @@ describe('reviewDone, settings, push', () => {
     await w.saveSettings({ quiet_start: '22:00', quiet_end: '07:00' });
     expect(calls[0]).toMatchObject({ table: 'settings', op: 'update' });
     expect(calls[0].args[0]).toEqual({ quiet_start: '22:00', quiet_end: '07:00' });
+    expect(calls[0].filter).toEqual(['user_id', 'u1']);
+  });
+  it('saveSettings without a session is session_lost and sends nothing', async () => {
+    session = null;
+    expect(await w.saveSettings({ quiet_start: '22:00' })).toEqual({ ok: false, error: 'session_lost' });
+    expect(calls).toHaveLength(0);
+    session = { user: { id: 'u1' } };
   });
   it('saveSettings maps quiet_hours_equal', async () => {
     server.failNext = { data: null, error: { message: 'violates check constraint "quiet_hours_equal"' }, status: 400 };

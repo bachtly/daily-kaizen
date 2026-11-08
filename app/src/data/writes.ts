@@ -95,7 +95,13 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
 
   async function saveSettings(patch: SettingsPatch) {
     const started = performance.now();
-    const r = await request((signal) => supabase.from('settings').update(patch).select().abortSignal(signal));
+    // PostgREST (pg_safeupdate) refuses an UPDATE with no WHERE, so filter by the signed-in user.
+    const { data: auth } = await supabase.auth.getSession();
+    const userId = auth.session?.user.id;
+    if (!userId) return fail('session_lost');
+    const r = await request((signal) =>
+      supabase.from('settings').update(patch).eq('user_id', userId).select().abortSignal(signal),
+    );
     return confirmed(started, r.ok ? { ok: true as const, data: r.data[0] ?? null } : r);
   }
 
