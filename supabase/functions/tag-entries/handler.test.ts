@@ -31,6 +31,7 @@ const entry = (over: Partial<EntryRow> = {}): EntryRow => ({
 
 function fakeDb(entries: EntryRow[], saveResult = false) {
   const saves: SaveAiTagArgs[] = [];
+  const failures: string[] = [];
   const db: TagDb = {
     untaggedDue: () => Promise.resolve(entries.map((e) => ({ id: e.id }))),
     getEntry: (id) => Promise.resolve(entries.find((e) => e.id === id) ?? null),
@@ -39,8 +40,12 @@ function fakeDb(entries: EntryRow[], saveResult = false) {
       saves.push(a);
       return Promise.resolve(saveResult);
     },
+    recordTagFailure: (id, at) => {
+      failures.push(`${id}@${at}`);
+      return Promise.resolve();
+    },
   };
-  return { db, saves };
+  return { db, saves, failures };
 }
 
 const aiReply = (input: unknown) =>
@@ -132,7 +137,7 @@ Deno.test("proposal is passed on to save_ai_tag", async () => {
 });
 
 Deno.test("a name that is not Active counts as a failed attempt", async () => {
-  const { db, saves } = fakeDb([entry()]);
+  const { db, saves, failures } = fakeDb([entry()]);
   const t = setup({
     db,
     fetchFn: () =>
@@ -140,8 +145,8 @@ Deno.test("a name that is not Active counts as a failed attempt", async () => {
   });
   await t.call({ entry_id: ID });
   await t.done();
-  assertEquals(saves.length, 1);
-  assertEquals(saves[0].categoryId, null);
+  assertEquals(saves.length, 0);
+  assertEquals(failures, [`${ID}@2026-11-08T10:00:00Z`]);
 });
 
 Deno.test("malformed reply, 5xx and timeout each count one failed attempt", async () => {
@@ -151,11 +156,12 @@ Deno.test("malformed reply, 5xx and timeout each count one failed attempt", asyn
     () => Promise.reject(new DOMException("timeout", "TimeoutError")),
   ];
   for (const f of cases) {
-    const { db, saves } = fakeDb([entry()]);
+    const { db, saves, failures } = fakeDb([entry()]);
     const t = setup({ db, fetchFn: f });
     await t.call({ entry_id: ID });
     await t.done();
-    assertEquals(saves.map((s) => s.categoryId), [null]);
+    assertEquals(saves.length, 0);
+    assertEquals(failures.length, 1);
   }
 });
 

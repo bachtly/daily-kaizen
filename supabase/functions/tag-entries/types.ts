@@ -25,19 +25,22 @@ export interface TagReply {
  * Contract this function codes against:
  *   save_ai_tag(p_entry_id uuid, p_read_updated_at timestamptz, p_category_id uuid,
  *               p_proposed_name text, p_proposed_description text) returns boolean
- * - p_category_id set: one tx inserts the Suggested category (if proposed and new, on conflict do nothing),
+ * - one tx inserts the Suggested category (if proposed and new, on conflict do nothing),
  *   then updates the Entry only if tag_source is distinct from 'me' and updated_at = p_read_updated_at.
- *   Returns true only when a new Suggested category was inserted.
- * - p_category_id null: failure path. Increments tag_attempts under the same guard and sets
- *   tagging_gave_up_at at 3. Returns false.
+ *   Returns true only when a new Suggested category was inserted (false: none inserted or guard missed).
+ * Failure path is separate:
+ *   record_tag_failure(p_entry_id uuid, p_read_updated_at timestamptz) returns void
+ *   (guarded attempts+1, sets tagging_gave_up_at at 3).
+ * `untagged_due()` returns setof entries.
  */
 export interface SaveAiTagArgs {
   entryId: string;
   readUpdatedAt: string;
-  categoryId: string | null;
+  categoryId: string;
   proposedName: string | null;
   proposedDescription: string | null;
 }
+
 
 export interface TagDb {
   /** `untagged_due()`: oldest first, max 20, created over 2 min ago, not given up. */
@@ -45,4 +48,5 @@ export interface TagDb {
   getEntry(id: string): Promise<EntryRow | null>;
   getCategories(userId: string): Promise<CategoryRow[]>;
   saveAiTag(args: SaveAiTagArgs): Promise<boolean>;
+  recordTagFailure(entryId: string, readUpdatedAt: string): Promise<void>;
 }

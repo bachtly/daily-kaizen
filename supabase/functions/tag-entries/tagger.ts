@@ -52,14 +52,17 @@ export async function tagEntry(
     );
   }
 
+  if (categoryId === null) {
+    await db.recordTagFailure(entry.id, entry.updated_at);
+    return "failed";
+  }
   const inserted = await db.saveAiTag({
     entryId: entry.id,
     readUpdatedAt: entry.updated_at,
     categoryId,
-    proposedName: categoryId ? proposed?.name ?? null : null,
-    proposedDescription: categoryId ? proposed?.description ?? null : null,
+    proposedName: proposed?.name ?? null,
+    proposedDescription: proposed?.description ?? null,
   });
-  if (categoryId === null) return "failed";
   if (inserted && proposed) {
     await deps.onNewSuggestion?.({
       entryId: entry.id,

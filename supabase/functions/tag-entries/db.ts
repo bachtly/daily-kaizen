@@ -39,5 +39,12 @@ export function dbFromClient(client: SupabaseClient): TagDb {
       if (error) throw new Error(`save_ai_tag: ${error.message}`);
       return data === true;
     },
+    async recordTagFailure(entryId, readUpdatedAt) {
+      const { error } = await client.rpc("record_tag_failure", {
+        p_entry_id: entryId,
+        p_read_updated_at: readUpdatedAt,
+      });
+      if (error) throw new Error(`record_tag_failure: ${error.message}`);
+    },
   };
 }
