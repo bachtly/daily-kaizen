@@ -82,7 +82,9 @@ export async function turnOnPush(env: PushEnv, vapidKey: string | undefined, rep
     const permission = await env.requestPermission();
     if (permission === 'denied') return { state: 'denied' };
     if (permission !== 'granted') return { state: 'off' };
-    return await subscribeAndReport(env, vapidKey, report);
+    const o = await subscribeAndReport(env, vapidKey, report);
+    // The Server was not told: stay off so the button is still there. A retry is safe (same endpoint, same upsert).
+    return o.error ? { state: 'off', error: o.error } : o;
   } catch {
     return { state: 'off', error: 'server' };
   }

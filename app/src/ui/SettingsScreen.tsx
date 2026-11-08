@@ -110,8 +110,7 @@ export function SettingsScreen() {
     // Opening the page sends the subscription again when permission is already granted.
     void openPush(browserEnv(), VAPID, report).then((o) => {
       if (!live) return;
-      setPush(o.state);
-      setPushProblem(pushProblemText(o.error));
+      setPush(o.state); // an unsent subscription is not an error here: the next open sends it again
     });
     return () => {
       live = false;

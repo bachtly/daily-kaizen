@@ -65,6 +65,10 @@ describe('turnOnPush', () => {
     expect(subscribe).toHaveBeenCalledOnce();
     expect(report).toHaveBeenCalledOnce();
   });
+  it('stays off with the error when the subscription could not be sent, so the button stays', async () => {
+    const report = vi.fn(async () => ({ ok: false as const, error: 'unknown' as const }));
+    expect(await turnOnPush(env().e, KEY, report)).toEqual({ state: 'off', error: 'unknown' });
+  });
   it('shows denied and sends nothing when refused', async () => {
     const report = vi.fn(ok);
     const { e, subscribe } = env({ requestPermission: async () => 'denied' });
