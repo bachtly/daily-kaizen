@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "test": "deno test --allow-env --allow-net --allow-read"
+    "test": "deno check */index.ts && deno test --allow-env --allow-net --allow-read"
   },
   "imports": {
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
