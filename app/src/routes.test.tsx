@@ -72,3 +72,9 @@ test('signing in refreshes the Local copy with the device time zone', () => {
   expect(tz).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
   expect(win.sinceDate).toMatch(/^\d{4}-\d\d-\d\d$/)
 })
+
+test('the /sign-in route hands the refresh to SignInScreen', () => {
+  const route = routes.find((r) => r.path === '/sign-in')
+  const element = route?.element as { props: { onSignedIn?: () => void } }
+  expect(element.props.onSignedIn).toBe(refreshAfterSignIn)
+})
