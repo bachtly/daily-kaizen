@@ -104,9 +104,17 @@ export async function persist(): Promise<boolean> {
   }
 }
 
-/** Report the phone's IANA time zone (`{time_zone}` only), so scheduled jobs use it (AC-2.3). */
-export function reportTimeZone(timeZone: string): Promise<Result<unknown>> {
-  return request((signal) => supabase.from('settings').update({ time_zone: timeZone }).abortSignal(signal));
+/**
+ * Report the phone's IANA time zone (`{time_zone}` only), so scheduled jobs use it (AC-2.3).
+ * Filtered by the signed-in user's id: PostgREST (pg_safeupdate) refuses an UPDATE with no WHERE.
+ */
+export async function reportTimeZone(timeZone: string): Promise<Result<unknown>> {
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user.id;
+  if (!userId) return { ok: false, error: 'session_lost' };
+  return request((signal) =>
+    supabase.from('settings').update({ time_zone: timeZone }).eq('user_id', userId).abortSignal(signal),
+  );
 }
 
 /** On app open or foreground: ask for persistence, report the time zone, then refresh. */

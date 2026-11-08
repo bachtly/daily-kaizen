@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Reply = { data: unknown; error: unknown; status: number };
+let session: () => { user: { id: string } } | null = () => ({ user: { id: 'u1' } });
 const replies: Record<string, Reply> = {};
 const calls: { table: string; ops: [string, unknown[]][] }[] = [];
 
@@ -9,7 +10,7 @@ function builder(table: string) {
   const ops: [string, unknown[]][] = [];
   calls.push({ table, ops });
   const b: Record<string, unknown> = {};
-  for (const m of ['select', 'gt', 'gte', 'lt', 'order', 'abortSignal', 'update']) {
+  for (const m of ['select', 'eq', 'gt', 'gte', 'lt', 'order', 'abortSignal', 'update']) {
     b[m] = (...args: unknown[]) => {
       ops.push([m, args]);
       return b;
@@ -19,7 +20,7 @@ function builder(table: string) {
     Promise.resolve(replies[table] ?? { data: [], error: null, status: 200 }).then(ok, bad);
   return b;
 }
-vi.mock('./supabase', () => ({ supabase: { from: (t: string) => builder(t) } }));
+vi.mock('./supabase', () => ({ supabase: { from: (t: string) => builder(t), auth: { getSession: async () => ({ data: { session: session() } }) } } }));
 
 const { refresh, readLocalCopy, fetchWeek, reportTimeZone, persist } = await import('./localCopy');
 const { db } = await import('./db');
@@ -120,12 +121,17 @@ describe('fetchWeek', () => {
 });
 
 describe('reportTimeZone and persist', () => {
-  it('sends only time_zone', async () => {
+  it('sends only time_zone, filtered by the user id', async () => {
     await reportTimeZone('Asia/Bangkok');
-    expect(calls[0]).toEqual({
-      table: 'settings',
-      ops: expect.arrayContaining([['update', [{ time_zone: 'Asia/Bangkok' }]]]),
-    });
+    expect(calls[0].table).toBe('settings');
+    expect(calls[0].ops).toContainEqual(['update', [{ time_zone: 'Asia/Bangkok' }]]);
+    expect(calls[0].ops).toContainEqual(['eq', ['user_id', 'u1']]);
+  });
+  it('without a session it is session_lost and sends nothing', async () => {
+    session = () => null;
+    expect(await reportTimeZone('UTC')).toEqual({ ok: false, error: 'session_lost' });
+    expect(calls).toHaveLength(0);
+    session = () => ({ user: { id: 'u1' } });
   });
   it('persist is best effort', async () => {
     expect(typeof (await persist())).toBe('boolean');
