@@ -113,13 +113,26 @@ input.text[aria-invalid="true"] { border-color: var(--error); }
 .row-actions { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
 .status { font-size: 14px; color: var(--muted); margin-top: 10px; min-height: 20px; }
 
-.week-header { display: flex; align-items: center; justify-content: space-between; }
-.week-header .nav { display: flex; align-items: center; gap: 4px; font-size: 20px; font-weight: 700; }
-.week-header .nav button { min-width: 44px; min-height: 44px; background: none; border: 0; font-size: 22px; color: var(--accent); cursor: pointer; }
-.week-header .nav button:disabled { color: var(--line); }
+/* Sections: each block is a panel on a surface colour with space between, so groups read apart. */
+.panel { background: var(--surface); border-radius: 18px; padding: 16px; margin-top: 16px; }
+.panel h2 { margin-top: 0; }
+.panel .secondary, .panel .chip, .panel .time .value, .panel input.text { background: var(--bg); }
+
+.week-header { margin-bottom: 4px; }
+.week-picker {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px;
+  background: var(--surface); border-radius: 22px; padding: 4px;
+}
+.week-picker h1 { margin: 0; font-size: 18px; font-weight: 600; text-align: center; flex: 1; }
+.week-picker button {
+  min-width: 44px; min-height: 44px; border: 0; border-radius: 18px; background: var(--bg);
+  font-size: 22px; line-height: 1; color: var(--accent); cursor: pointer;
+}
+.week-picker button:disabled { background: transparent; color: var(--neutral-bar); cursor: default; }
+.week-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding: 0 4px; }
 .badge { font-size: 13px; padding: 4px 10px; border-radius: 12px; background: var(--surface); color: var(--muted); }
 .badge.done { color: var(--cat-recovery); font-weight: 600; }
-.refreshed { font-size: 13px; color: var(--muted); margin: 2px 0 8px 48px; }
+.refreshed { font-size: 13px; color: var(--muted); margin: 0; }
 
 .totals { list-style: none; padding: 0; margin: 0; }
 .totals li { display: grid; grid-template-columns: 104px 1fr 72px; align-items: center; gap: 10px; min-height: 30px; font-size: 15px; }
@@ -127,23 +140,26 @@ input.text[aria-invalid="true"] { border-color: var(--error); }
 .totals .val { text-align: right; font-variant-numeric: tabular-nums; }
 .totals li.neutral { color: var(--muted); }
 
-.card { border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 16px; }
+.card { border: 1px solid var(--accent); border-radius: 18px; padding: 16px; margin-top: 16px; }
 .card .title { font-weight: 600; }
 .card .desc { color: var(--muted); font-size: 14px; margin: 4px 0; }
 
-.day { margin-top: 18px; font-size: 13px; font-weight: 600; color: var(--muted); }
-.entry { display: grid; grid-template-columns: 92px 1fr auto; gap: 8px; align-items: center; min-height: 44px; border-bottom: 1px solid var(--line); }
-.entry .when { background: none; border: 0; padding: 0; text-align: left; font: inherit; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; cursor: pointer; }
-.entry-edit { padding: 12px; margin: 6px -12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--accent); }
+.day { margin-bottom: 4px; }
+.entry {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "what tag";
+  column-gap: 12px; align-items: center; padding: 0; min-height: 56px; border-bottom: 1px solid var(--line);
+}
+.entry:last-child { border-bottom: 0; }
+.entry .tag { grid-area: tag; }
+.entry-edit { padding: 12px; margin: 6px 0; border-radius: 14px; background: var(--bg); border: 1px solid var(--accent); }
 .entry-edit .times { margin-top: 10px; }
-.entry-edit input.text { background: var(--bg); }
-.entry-edit .time .value { background: var(--bg); }
 .primary.small { width: auto; margin-top: 0; padding: 0 20px; }
 .link.danger { color: var(--error); }
-.entry .what { background: none; border: 0; text-align: left; font: inherit; font-size: 15px; color: var(--text); padding: 0; cursor: pointer; }
-.tag { min-height: 32px; padding: 0 10px; border-radius: 16px; border: 0; font: inherit; font-size: 13px; color: #fff; cursor: pointer; }
-.tag.neutral { background: var(--surface); color: var(--muted); border: 1px solid var(--line); }
-.entry .gaveup { grid-column: 2 / 4; font-size: 13px; color: var(--muted); padding-bottom: 8px; }
+.entry .what { grid-area: what; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 56px; background: none; border: 0; text-align: left; font: inherit; font-size: 15px; color: var(--text); padding: 6px 0; cursor: pointer; }
+.entry .what .when { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tag { min-height: 44px; padding: 0 10px; border-radius: 16px; border: 0; font: inherit; font-size: 13px; color: #fff; cursor: pointer; }
+.tag.neutral { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.entry .gaveup { grid-column: 1 / 3; grid-row: 2; font-size: 13px; color: var(--muted); padding-bottom: 10px; }
 
 .sheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.35); display: flex; align-items: flex-end; }
 .sheet { width: 100%; background: var(--bg); border-radius: 20px 20px 0 0; padding: 16px 20px 34px; }

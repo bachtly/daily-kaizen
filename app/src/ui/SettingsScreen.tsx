@@ -20,15 +20,19 @@ export function SettingsScreen({
       <ConnectionBanner state={connection} />
       <h1>Settings</h1>
 
-      <h2>Notifications</h2>
-      <PushStatus state={push} />
+      <section className="panel" aria-labelledby="notif-h">
+        <h2 id="notif-h">Notifications</h2>
+        <PushStatus state={push} />
+      </section>
 
-      <h2>Quiet hours (no Nudges)</h2>
+      <section className="panel" aria-labelledby="quiet-h">
+      <h2 id="quiet-h">Quiet hours (no Nudges)</h2>
       <div className="times">
         <div className="time"><label className="field-label">From</label><button className="value" aria-invalid={quietError}>{quietStart}</button></div>
         <div className="time"><label className="field-label">To</label><button className="value" aria-invalid={quietError}>{quietEnd}</button></div>
       </div>
       {quietError && <p className="error">Start and end must differ.</p>}
+      </section>
       <button className="primary">Save</button>
       <p className="status" aria-live="polite">{saved ? 'Saved.' : ''}</p>
     </Phone>
