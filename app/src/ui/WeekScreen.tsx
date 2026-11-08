@@ -116,8 +116,10 @@ function EntryRow({ entry, onEdit, onTag }: { entry: Entry; onEdit: () => void; 
   const cat = categories.find((c) => c.id === entry.categoryId);
   return (
     <div className="entry">
-      <button className="when" onClick={onEdit} aria-label={`Edit times ${entry.start} to ${entry.end}`}>{entry.start}–{entry.end}</button>
-      <button className="what" onClick={onEdit}>{entry.text}</button>
+      <button className="what" onClick={onEdit} aria-label={`Edit ${entry.text}, ${entry.start} to ${entry.end}`}>
+        <span className="text">{entry.text}</span>
+        <span className="when">{entry.start}–{entry.end}</span>
+      </button>
       <button
         className={cat ? 'tag' : 'tag neutral'} style={cat ? { background: cat.colour } : undefined}
         onClick={onTag} aria-label={`Category: ${cat?.name ?? 'Untagged'}. Change`}
