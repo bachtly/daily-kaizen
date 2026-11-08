@@ -1,134 +1,234 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { EntryRow } from '../data/db';
+import { readLocalCopy, refresh } from '../data/localCopy';
+import { findOverlaps, prefill, recentTexts } from '../data/prefill';
+import type { Result } from '../data/request';
+import { recordTiming } from '../data/timings';
+import { mondayOf, weekBounds, zonedParts } from '../data/week';
+import { createWrites, type NewEntry } from '../data/writes';
+import { OverlapNote } from './OverlapNote';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
-import { recentTexts } from './mock';
+import { RecentChips } from './RecentChips';
+import { SaveStatus, type SaveState } from './SaveStatus';
+import { TimeChip } from './TimeChip';
 
-export type SaveOutcome = 'ok' | 'no-connection' | 'server-error' | 'end-in-future';
+type LogEntry = Pick<EntryRow, 'id' | 'text' | 'started_at' | 'ended_at' | 'created_at'>;
 
-export type LogFormProps = {
+export type LogFormViewProps = {
+  /** Entries in the Local copy (current and previous week). */
+  entries: readonly LogEntry[];
+  timeZone: string;
+  /** Current time in ms; the live wrapper ticks it. */
+  now: number;
   connection?: Connection;
-  /** Prefilled start: latest end time in the Local copy, or 00:00 when there are no Entries (AC-1.1). */
-  start?: string;
-  now?: string;
-  text?: string;
-  /** End time the user picked; empty means "now" and it follows the clock. */
-  end?: string;
-  recent?: string[];
-  overlapWith?: string;
-  /** What the mock Server answers when Save is tapped. */
-  saveOutcome?: SaveOutcome;
-  /** Freeze the form in a state for review. */
+  /** Resolves when the Server answers; `unknown` means the result is not known and a resend is safe. */
+  onSave: (entry: NewEntry) => Promise<Result<unknown>>;
+  /** Freeze the form in a state for review (stories). */
   frozen?: 'saving' | 'saved';
+  initialText?: string;
+  /** Start the form with From already changed (ms), for stories. */
+  initialFrom?: number;
 };
 
-/** Log form: the screen the app opens on. Only the text is required; times are prefilled. */
-export function LogForm({
-  connection = 'online', start = '09:40', now = '10:52', text = '', end = '',
-  recent = recentTexts, overlapWith, saveOutcome = 'ok', frozen,
-}: LogFormProps) {
-  const [value, setValue] = useState(text);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | SaveOutcome>(frozen ?? 'idle');
-  const [from, setFrom] = useState(start);
-  const [to, setTo] = useState(end);
+const MINUTE = 60_000;
+const hhmm = (ms: number, tz: string) => {
+  const p = zonedParts(ms, tz);
+  return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
+};
+/** Move `ms` to the wall-clock time `value` (HH:MM) on the same day in the zone. */
+const withTime = (ms: number, value: string, tz: string) => {
+  const [h, m] = value.split(':').map(Number);
+  const p = zonedParts(ms, tz);
+  return ms + ((h - p.hour) * 60 + (m - p.minute)) * MINUTE - p.second * 1000;
+};
 
-  useEffect(() => setValue(text), [text]);
-  useEffect(() => setFrom(start), [start]);
-  useEffect(() => setTo(end), [end]);
+const fieldMessage = {
+  entry_text_empty: 'Write what you did.',
+  entry_end_not_after_start: 'From must be before To.',
+  entry_end_in_future: "To can't be later than now.",
+} as const;
+type FieldKey = keyof typeof fieldMessage;
 
-  const toValue = to || now;
-  const timeError =
-    status === 'end-in-future' || toValue > now ? "To can't be later than now."
-    : from >= toValue ? 'From must be before To.'
-    : undefined;
+const newDraft = () => ({ id: crypto.randomUUID(), openedAt: new Date().toISOString() });
 
-  const saving = status === 'saving';
-  const save = () => {
-    if (!value.trim()) return;
-    setStatus('saving');
-    setTimeout(() => {
-      if (saveOutcome === 'ok') {
-        setStatus('saved');
-        setValue(''); setFrom(toValue > start ? toValue : start); setTo(''); // AC-1.1: latest end
-        setTimeout(() => setStatus('idle'), 2000);
-      } else setStatus(saveOutcome);
-    }, 700);
+/** Log form: the screen the app opens on. Only the text is required; times are prefilled (AC-1.1). */
+export function LogFormView({ entries, timeZone, now, connection = 'online', onSave, frozen, initialText = '', initialFrom }: LogFormViewProps) {
+  const [text, setText] = useState(initialText);
+  const [fromEdit, setFromEdit] = useState<number | null>(initialFrom ?? null);
+  const [toEdit, setToEdit] = useState<number | null>(null);
+  const [state, setState] = useState<SaveState>(frozen ?? 'idle');
+  const [fieldError, setFieldError] = useState<FieldKey>();
+  const [sessionLost, setSessionLost] = useState(false);
+  // One id per draft: a resend after an unknown result reuses it so it cannot create a second Entry (AC-2.2).
+  const draft = useRef(newDraft());
+  const saving = state === 'saving';
+
+  const pre = useMemo(() => prefill(entries, now, timeZone), [entries, now, timeZone]);
+  const from = fromEdit ?? pre.start;
+  const to = toEdit ?? now;
+
+  const edit = (next: string) => {
+    // Fresh form (the text was or becomes empty): a new id and form_opened_at.
+    if (!text.trim() || !next.trim()) draft.current = newDraft();
+    setText(next);
+    setFieldError(undefined);
+    if (state !== 'saving' && !frozen) setState('idle');
   };
+
+  const timeError: FieldKey | undefined =
+    fieldError === 'entry_end_in_future' || to > now ? 'entry_end_in_future'
+    : fieldError === 'entry_end_not_after_start' || from >= to ? 'entry_end_not_after_start'
+    : undefined;
+  const textError = fieldError === 'entry_text_empty' ? fieldError : undefined;
+
+  const overlap = useMemo(() => (from < to ? findOverlaps(entries, from, to)[0] : undefined), [entries, from, to]);
+  const overlapLabel =
+    overlap && `${overlap.text} ${hhmm(Date.parse(overlap.started_at), timeZone)}–${hhmm(Date.parse(overlap.ended_at), timeZone)}`;
+  const recent = useMemo(() => recentTexts(entries), [entries]);
+
+  const save = async () => {
+    if (saving || frozen || !text.trim() || timeError) return;
+    setState('saving');
+    setFieldError(undefined);
+    const r = await onSave({
+      id: draft.current.id,
+      form_opened_at: draft.current.openedAt,
+      text: text.trim(),
+      started_at: new Date(from).toISOString(),
+      ended_at: new Date(toEdit ?? now).toISOString(),
+      time_zone: timeZone,
+    });
+    if (r.ok) {
+      setState('saved');
+      setText('');
+      setFromEdit(null);
+      setToEdit(null);
+      setSessionLost(false);
+      draft.current = newDraft();
+    } else if (r.error === 'session_lost') {
+      setSessionLost(true); // the text stays
+      setState('idle');
+    } else if (r.error in fieldMessage) {
+      setFieldError(r.error as FieldKey);
+      setState('idle');
+    } else {
+      setState(r.error === 'unknown' ? 'unknown' : 'server');
+    }
+  };
+
+  // "Saved." goes away after 2 s.
+  useEffect(() => {
+    if (state !== 'saved' || frozen) return;
+    const t = setTimeout(() => setState('idle'), 2000);
+    return () => clearTimeout(t);
+  }, [state, frozen]);
 
   return (
     <Phone tab="log">
-      <ConnectionBanner state={connection} />
+      <ConnectionBanner state={sessionLost ? 'signed-out' : connection} />
       <h1>What did you do?</h1>
 
       <label className="field-label" htmlFor="entry-text">Activity</label>
       <input
         id="entry-text" className="text" autoFocus enterKeyHint="done" placeholder="e.g. Email triage"
-        value={value} readOnly={saving} onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && save()}
+        value={text} readOnly={saving} aria-invalid={!!textError} aria-describedby={textError ? 'text-error' : undefined}
+        onChange={(e) => edit(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && void save()}
       />
+      {textError && <p id="text-error" className="error" role="alert">{fieldMessage[textError]}</p>}
 
-      {recent.length > 0 && (
-        <div className="chips" aria-label="Recent">
-          {recent.map((r) => (
-            <button key={r} className="chip" onClick={() => setValue(r)} disabled={saving}>{r}</button>
-          ))}
-        </div>
-      )}
+      <RecentChips texts={recent} onPick={edit} disabled={saving} />
 
       <div className="times">
-        <TimeChip label="From" value={from} onChange={setFrom} disabled={saving} invalid={!!timeError && !timeError.startsWith('To')} />
         <TimeChip
-          label="To" value={toValue} onChange={setTo} disabled={saving} invalid={!!timeError?.startsWith('To')}
-          hint={to ? undefined : 'now'} onReset={to ? () => setTo('') : undefined}
+          label="From" value={hhmm(from, timeZone)} disabled={saving} describedBy="time-error"
+          invalid={timeError === 'entry_end_not_after_start'}
+          onChange={(v) => setFromEdit(withTime(from, v, timeZone))}
+        />
+        <TimeChip
+          label="To" value={hhmm(to, timeZone)} disabled={saving} describedBy="time-error"
+          invalid={timeError === 'entry_end_in_future'}
+          hint={toEdit === null ? 'now' : undefined}
+          onReset={toEdit === null ? undefined : () => setToEdit(null)}
+          onChange={(v) => setToEdit(withTime(to, v, timeZone))}
         />
       </div>
-      {timeError && <p className="error" role="alert">{timeError}</p>}
+      {timeError && <p id="time-error" className="error" role="alert">{fieldMessage[timeError]}</p>}
 
-      {overlapWith && (
-        <p className="note warn" role="status">Overlaps "{overlapWith}". It will still be saved.</p>
-      )}
+      <OverlapNote with={overlapLabel} />
 
-      <button className="primary" onClick={save} disabled={saving || !value.trim() || !!timeError}>
+      <button className="primary" onClick={() => void save()} disabled={saving || !text.trim() || !!timeError}>
         {saving ? 'Saving…' : 'Save'}
       </button>
 
-      <SaveStatus status={status} />
+      <SaveStatus state={state} />
 
-      {value && !saving && (
-        <div className="row-actions"><button className="link" onClick={() => setValue('')}>Clear</button></div>
+      {text && !saving && (
+        <div className="row-actions"><button className="link" onClick={() => edit('')}>Clear</button></div>
       )}
-
     </Phone>
   );
 }
 
-/**
- * Prefilled time. It is a native time input, so on iPhone a tap opens the iOS time wheel.
- * To shows "now" and follows the clock until changed; "Use now" puts it back.
- */
-export function TimeChip({ label, value, onChange, hint, onReset, invalid, disabled }: {
-  label: string; value: string; onChange: (v: string) => void;
-  hint?: string; onReset?: () => void; invalid?: boolean; disabled?: boolean;
-}) {
-  const id = `time-${label.toLowerCase()}`;
-  return (
-    <div className="time">
-      <label className="field-label" htmlFor={id}>{label}</label>
-      <input
-        id={id} type="time" className="value" value={value} disabled={disabled} aria-invalid={invalid}
-        onChange={(e) => e.target.value && onChange(e.target.value)}
-      />
-      {hint && <span className="hint">{hint}</span>}
-      {onReset && <button className="link hint" onClick={onReset}>Use now</button>}
-    </div>
-  );
+// ---- live wiring: Local copy in, Server writes out ----
+
+/** What the Local copy holds: from the previous Monday 00:00 (same window as routes.refreshWindow). */
+function liveWindow(now: number, tz: string) {
+  const [y, m, d] = mondayOf(now, tz).split('-').map(Number);
+  const prev = new Date(Date.UTC(y, m - 1, d - 7)).toISOString().slice(0, 10);
+  return { since: new Date(weekBounds(prev, tz).start).toISOString(), sinceDate: prev };
 }
 
-/** Shows done only after the Server confirms (AC-2.1). */
-function SaveStatus({ status }: { status: string }) {
-  const text: Record<string, string> = {
-    saved: 'Saved.',
-    'no-connection': 'Needs a connection. Your text is kept. Tap Save again.',
-    'server-error': "Couldn't save. Try again.",
-  };
-  const isError = status === 'no-connection' || status === 'server-error';
-  return <p className={isError ? 'error' : 'status'} aria-live="polite">{text[status] ?? ''}</p>;
+const deviceZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+const writes = createWrites({
+  refresh: () => refresh(liveWindow(Date.now(), deviceZone())),
+  recordTiming,
+});
+
+/** The Log form wired to the Local copy and the Server. */
+export function LogForm() {
+  const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+  const [online, setOnline] = useState(() => navigator.onLine);
+
+  const reload = useCallback(async () => {
+    try {
+      setEntries((await readLocalCopy()).entries);
+    } catch {
+      // Storage unavailable: the form still works without Recent chips and prefill.
+    }
+  }, []);
+  useEffect(() => {
+    let live = true;
+    Promise.resolve()
+      .then(() => readLocalCopy())
+      .then((c) => live && setEntries(c.entries), () => {});
+    return () => { live = false; };
+  }, []);
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 15_000);
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      clearInterval(tick);
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
+
+  const onSave = useCallback(async (entry: NewEntry) => {
+    const r = await writes.createEntry(entry); // refreshes the Local copy after the Server confirms
+    if (r.ok) await reload();
+    return r;
+  }, [reload]);
+
+  return (
+    <LogFormView
+      entries={entries} timeZone={deviceZone()} now={now}
+      connection={online ? 'online' : 'offline'} onSave={onSave}
+    />
+  );
 }
