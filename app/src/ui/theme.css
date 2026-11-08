@@ -165,7 +165,7 @@ input.text[aria-invalid="true"] { border-color: var(--error); }
 .entry-edit { padding: 12px; margin: 6px 0; border-radius: 14px; background: var(--bg); border: 1px solid var(--accent); }
 .entry-edit .times { margin-top: 10px; }
 .primary.small { width: auto; margin-top: 0; padding: 0 20px; }
-.link.danger { color: var(--error); }
+.link.danger:not(:disabled) { color: var(--error); }
 .entry .what { grid-area: what; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 56px; background: none; border: 0; text-align: left; font: inherit; font-size: 15px; color: var(--text); padding: 6px 0; cursor: pointer; }
 .entry .what .when { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .tag { min-height: 44px; padding: 0 10px; border-radius: 16px; border: 0; font: inherit; font-size: 13px; color: var(--cat-on); cursor: pointer; }
