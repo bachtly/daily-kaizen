@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Each job checks its prerequisite first; if it is missing, the remaining steps
+# are skipped and the job finishes green.
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check for app/package.json
+        id: has
+        working-directory: .
+        run: |
+          if [ -f app/package.json ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "app/package.json missing, skipping"; fi
+      - name: Check for a test script
+        id: has_test
+        if: steps.has.outputs.run == 'true'
+        run: |
+          if node -e 'process.exit(require("./package.json").scripts?.test ? 0 : 1)'; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "no npm test script yet, skipping tests"; fi
+      - uses: actions/setup-node@v6
+        if: steps.has.outputs.run == 'true'
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - if: steps.has.outputs.run == 'true'
+        run: npm ci
+      - if: steps.has.outputs.run == 'true'
+        run: npm run lint
+      - if: steps.has.outputs.run == 'true'
+        run: npm run build
+      - if: steps.has_test.outputs.run == 'true'
+        run: npm test
+
+  db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check for supabase/config.toml
+        id: has
+        run: |
+          if [ -f supabase/config.toml ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "supabase/config.toml missing, skipping"; fi
+      - uses: supabase/setup-cli@v3
+        if: steps.has.outputs.run == 'true'
+        with:
+          version: 3.0.0
+      - if: steps.has.outputs.run == 'true'
+        run: supabase db start
+      - if: steps.has.outputs.run == 'true'
+        run: supabase test db
+
+  functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check for supabase/functions
+        id: has
+        run: |
+          if [ -d supabase/functions ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "supabase/functions missing, skipping"; fi
+      - uses: denoland/setup-deno@v2
+        if: steps.has.outputs.run == 'true'
+        with:
+          deno-version: v2.x
+      - if: steps.has.outputs.run == 'true'
+        working-directory: supabase/functions
+        run: |
+          if [ -f deno.json ] && deno task 2>&1 | grep -qE '^- test( |$)'; then
+            deno task test
+          else
+            deno test --allow-env --allow-net --allow-read
+          fi
