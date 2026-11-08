@@ -1,4 +1,8 @@
-// Placeholder until app-shell adds the router and screens.
+import { RouterProvider } from 'react-router';
+import { router } from './routes';
+
+const r = router();
+
 export default function App() {
-  return <h1>Daily Kaizen</h1>
+  return <RouterProvider router={r} />;
 }
