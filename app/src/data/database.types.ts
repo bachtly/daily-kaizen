@@ -1,6 +1,8 @@
 // Generated, do not edit. From the repo root, with the local db started from main's migrations:
-//   npx supabase db start && npx supabase gen types typescript --local --schema public > app/src/data/database.types.ts
-// then formatted with: npx oxfmt app/src/data/database.types.ts
+//   npx supabase@3.0.0 db start
+//   npx supabase@3.0.0 gen types typescript --local --schema public > /tmp/db.raw.ts
+//   { head -n 6 app/src/data/database.types.ts; cat /tmp/db.raw.ts; } > /tmp/db.ts && mv /tmp/db.ts app/src/data/database.types.ts
+//   (cd app && npx oxfmt src/data/database.types.ts)
 // Regenerate after any migration change.
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -197,9 +199,49 @@ export type Database = {
     };
     Functions: {
       approve_category: { Args: { category_id: string }; Returns: Json };
+      record_tag_failure: {
+        Args: { p_entry_id: string; p_read_updated_at: string };
+        Returns: undefined;
+      };
       reject_category: { Args: { category_id: string }; Returns: Json };
+      save_ai_tag: {
+        Args: {
+          p_category_id: string;
+          p_entry_id: string;
+          p_proposed_description: string;
+          p_proposed_name: string;
+          p_read_updated_at: string;
+        };
+        Returns: boolean;
+      };
       seed_account: { Args: { uid: string }; Returns: undefined };
       set_entry_tag: { Args: { category_id: string; entry_id: string }; Returns: Json };
+      untagged_due: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          category_id: string | null;
+          created_at: string;
+          ended_at: string;
+          form_opened_at: string;
+          id: string;
+          started_at: string;
+          suggested_category_id: string | null;
+          tag_attempts: number;
+          tag_source: Database["public"]["Enums"]["tag_source"] | null;
+          tagged_at: string | null;
+          tagging_gave_up_at: string | null;
+          text: string;
+          time_zone: string;
+          updated_at: string;
+          user_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "entries";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
     };
     Enums: {
       category_status: "active" | "suggested" | "rejected";
