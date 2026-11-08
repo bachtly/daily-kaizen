@@ -80,7 +80,7 @@ update settings set quiet_start = '23:00', quiet_end = '07:00', time_zone = 'Asi
 select is_empty($$select * from claim_due_notifications('2024-11-13 16:00+00')$$, '23:00 local in Ho Chi Minh is Quiet');
 select is((select count(*)::int from claim_due_notifications('2024-11-13 00:00+00')), 1, '07:00 local in Ho Chi Minh is not Quiet');
 
--- Deleting the latest Entry moves the Gap start back; its Nudge row stays, so no repeat for an older Gap start
+-- Deleting the latest Entry moves the Gap start back (notifications_sent is cleared first, so repeat suppression is not tested here)
 delete from notifications_sent;
 delete from entries where id = '00000000-0000-0000-0000-000000000003';
 select results_eq($$select about from claim_due_notifications('2024-11-13 00:00+00')$$,
