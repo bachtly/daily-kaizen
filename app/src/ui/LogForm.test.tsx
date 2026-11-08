@@ -71,6 +71,29 @@ describe('LogFormView', () => {
     expect(onSave.mock.calls[1][0].id).not.toBe(onSave.mock.calls[0][0].id);
   });
 
+  it('sets form_opened_at when the form is shown, not at the first keystroke (NFR-1)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-11-04T10:00:00Z'));
+      const onSave = vi.fn<(e: NewEntry) => Promise<Result<unknown>>>(async () => ok);
+      mount(onSave);
+      vi.setSystemTime(new Date('2026-11-04T10:00:30Z'));
+      type('Reading');
+      fireEvent.click(screen.getByText('Save'));
+      await waitFor(() => expect(onSave).toHaveBeenCalled());
+      expect(onSave.mock.calls[0][0].form_opened_at).toBe('2026-11-04T10:00:00.000Z');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('starts a fresh form with new prefill when shown again with empty text', () => {
+    mount(vi.fn());
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '08:00' } });
+    document.dispatchEvent(new Event('visibilitychange'));
+    return waitFor(() => expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('09:40'));
+  });
+
   it('shows a new id after clearing the text', async () => {
     const onSave = vi.fn<(e: NewEntry) => Promise<Result<unknown>>>(async () => ok);
     mount(onSave, { initialText: 'draft' });

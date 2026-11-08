@@ -68,8 +68,8 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', onS
   const to = toEdit ?? now;
 
   const edit = (next: string) => {
-    // Fresh form (the text was or becomes empty): a new id and form_opened_at.
-    if (!text.trim() || !next.trim()) draft.current = newDraft();
+    // Clearing the text starts a fresh form; typing keeps the id and the time the form was shown (NFR-1).
+    if (!next.trim()) draft.current = newDraft();
     setText(next);
     setFieldError(undefined);
     if (state !== 'saving' && !frozen) setState('idle');
@@ -115,6 +115,20 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', onS
       setState(r.error === 'unknown' ? 'unknown' : 'server');
     }
   };
+
+  // Shown again with empty text (app foregrounded): a fresh form with new prefill.
+  const textRef = useRef(text);
+  useEffect(() => { textRef.current = text; }, [text]);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || textRef.current.trim()) return;
+      draft.current = newDraft();
+      setFromEdit(null);
+      setToEdit(null);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   // "Saved." goes away after 2 s.
   useEffect(() => {
