@@ -80,7 +80,7 @@ jobs:
       - if: steps.has.outputs.run == 'true'
         working-directory: supabase/functions
         run: |
-          if [ -f deno.json ] && deno task 2>&1 | grep -qE '^- test( |$)'; then
+          if [ -f deno.json ] && jq -e '.tasks.test' deno.json >/dev/null 2>&1; then
             deno task test
           else
             deno test --allow-env --allow-net --allow-read
