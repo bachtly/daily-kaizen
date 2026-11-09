@@ -9,6 +9,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const PushOff: Story = {};
+export const PushChecking: Story = { name: 'Push: checking', args: { push: 'checking' } };
 export const PushOn: Story = { args: { push: 'on', saved: true, saveP95: 420, refreshP95: 610 } };
 export const PushDenied: Story = { args: { push: 'denied' } };
 export const NotOnHomeScreen: Story = { name: 'Not on the Home Screen', args: { push: 'not-installed' } };

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { onCopyChanged } from '../data/copyChanged';
 import { browserEnv, openPush, turnOnPush, type PushState } from '../data/push';
 import { readLocalCopy } from '../data/localCopy';
 import { getTimings, p95 } from '../data/timings';
@@ -107,6 +108,10 @@ export function SettingsScreen() {
     const off = () => setOnline(false);
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
+    // The offline banner's time follows every refresh (open, foreground, a save); the fields are read once so an edit isn't overwritten.
+    const readRefreshedAt = () =>
+      readLocalCopy().then((c) => { if (live && c.refreshedAt) setRefreshedAt(clockTime(Date.parse(c.refreshedAt), deviceZone())); }, () => {});
+    const unsub = onCopyChanged(() => void readRefreshedAt());
     Promise.resolve()
       .then(() => readLocalCopy())
       .then((c) => {
@@ -121,6 +126,7 @@ export function SettingsScreen() {
     });
     return () => {
       live = false;
+      unsub();
       window.removeEventListener('online', on);
       window.removeEventListener('offline', off);
     };

@@ -10,6 +10,7 @@ export function ReviewDoneButton({ onMark, online }: { onMark: () => Promise<Res
     setState('saving');
     const r = await onMark();
     if (r.ok) { setState('idle'); return; } // the badge appears when the Local copy is read again
+    if (r.error === 'session_lost') { setState('idle'); return; } // the Signed out banner already says it
     setState(r.error === 'unknown' ? 'needs-connection' : 'failed');
   };
   return (

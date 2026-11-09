@@ -108,6 +108,14 @@ describe('EntryEditor', () => {
     expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('10:00');
   });
 
+  it('saves with the device zone', async () => {
+    const a = actions();
+    view(a, { entries: [entry('a', '09:00', '10:00', { time_zone: 'Asia/Tokyo' })] });
+    openEditor('a');
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => expect(a.editEntry).toHaveBeenCalledWith('a', expect.objectContaining({ time_zone: 'UTC' })));
+  });
+
   it('brings "This Entry was deleted." into view and drops it when the week changes', async () => {
     const scroll = vi.fn();
     HTMLElement.prototype.scrollIntoView = scroll;

@@ -202,6 +202,11 @@ describe('WeekScreen', () => {
     fireEvent.click(screen.getByText('Mark review done'));
     await waitFor(() => expect(reviewDone).toHaveBeenCalledTimes(2));
     expect(screen.queryByText('Needs a connection.')).toBeNull();
+    expect(screen.queryByText("Couldn't save. Try again.")).toBeNull();
+    // a success clears the banner
+    reviewDone.mockResolvedValue({ ok: true, data: undefined });
+    fireEvent.click(screen.getByText('Mark review done'));
+    await waitFor(() => expect(screen.queryByText(/Signed out/)).toBeNull());
   });
 
   it('marks the review done through the Server, then reads the Local copy again', async () => {
