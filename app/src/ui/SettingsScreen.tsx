@@ -81,7 +81,7 @@ export function SettingsView({
       <section className="panel" aria-labelledby="diag-h">
         <h2 id="diag-h">Diagnostics</h2>
         {loading.speed
-          ? <Skeleton height={24} />
+          ? <Skeleton height={38} />
           : <>
               <p className="note">Usually this fast or faster on this device: save {ms(saveP95)} · refresh {ms(refreshP95)}.</p>
             </>}
