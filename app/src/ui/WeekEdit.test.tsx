@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CategoryRow, EntryRow } from '../data/db';
 import type { Result } from '../data/request';
 import { WeekView, type WeekActions } from './WeekScreen';
+import { countMoves } from './weekFormat';
 
 const NOW = Date.parse('2026-11-04T14:00:00Z');
 const cat = (id: string, name: string, status: CategoryRow['status'] = 'active'): CategoryRow => ({ id, name, description: `${name} things`, status });
@@ -41,6 +42,13 @@ function view(a: ReturnType<typeof actions>, props: Partial<React.ComponentProps
 const openEditor = (id: string) => fireEvent.click(screen.getByLabelText(new RegExp(`^Edit Entry ${id},`)));
 
 afterEach(cleanup);
+
+describe('countMoves', () => {
+  it("counts each Suggested category's Entries, leaving out those I tagged myself (AC-4.2)", () => {
+    expect(countMoves(entries)).toEqual({ admin: 2 });
+    expect(countMoves([])).toEqual({});
+  });
+});
 
 describe('EntryEditor', () => {
   it('saves the changed text and times as an edit, then closes (AC-1.3)', async () => {
@@ -80,6 +88,45 @@ describe('EntryEditor', () => {
     expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(false);
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '09:00' } });
     expect(screen.getByText('From must be before To.')).toBeTruthy();
+  });
+
+  it('lets To be the current minute while now is up to a minute stale, but not later', () => {
+    const today = [entry('a', '09:00', '10:00', { started_at: '2026-11-04T09:00:00Z', ended_at: '2026-11-04T10:00:00Z' })];
+    view(actions(), { entries: today, now: NOW - 30_000 });
+    openEditor('a');
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '14:00' } });
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '14:02' } });
+    expect(screen.getByText("To can't be later than now.")).toBeTruthy();
+  });
+
+  it('shows the times in the device zone, as the row does, not the zone the Entry was logged in', () => {
+    const tokyo = [entry('a', '09:00', '10:00', { time_zone: 'Asia/Tokyo' })];
+    view(actions(), { entries: tokyo });
+    openEditor('a');
+    expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('09:00');
+    expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('10:00');
+  });
+
+  it('saves with the device zone', async () => {
+    const a = actions();
+    view(a, { entries: [entry('a', '09:00', '10:00', { time_zone: 'Asia/Tokyo' })] });
+    openEditor('a');
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => expect(a.editEntry).toHaveBeenCalledWith('a', expect.objectContaining({ time_zone: 'UTC' })));
+  });
+
+  it('brings "This Entry was deleted." into view and drops it when the week changes', async () => {
+    const scroll = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scroll;
+    const a = actions({ editEntry: vi.fn(async () => fail('entry_not_found')) });
+    view(a, { onPrev: () => {} });
+    openEditor('a');
+    fireEvent.click(screen.getByText('Save'));
+    await screen.findByText('This Entry was deleted.');
+    expect(scroll).toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Previous week'));
+    expect(screen.queryByText('This Entry was deleted.')).toBeNull();
   });
 
   it('disables Save and Delete offline', () => {

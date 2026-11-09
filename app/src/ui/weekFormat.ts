@@ -1,3 +1,4 @@
+import type { EntryRow } from '../data/db';
 import { zonedParts } from '../data/week';
 
 const MINUTE = 60_000;
@@ -24,3 +25,15 @@ export const withTime = (ms: number, value: string, tz: string) => {
   const p = zonedParts(ms, tz);
   return ms + ((h - p.hour) * 60 + (m - p.minute)) * MINUTE - p.second * 1000;
 };
+
+/**
+ * Entries that approving each Suggested category would move (AC-4.2: not those I tagged myself), by category id.
+ * Counts the Local copy only (this and last week), while approving moves every matching Entry, so an old suggestion can be undercounted: accepted, the card is a hint.
+ */
+export function countMoves(entries: readonly Pick<EntryRow, 'suggested_category_id' | 'tag_source'>[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const e of entries) {
+    if (e.suggested_category_id && e.tag_source !== 'me') counts[e.suggested_category_id] = (counts[e.suggested_category_id] ?? 0) + 1;
+  }
+  return counts;
+}

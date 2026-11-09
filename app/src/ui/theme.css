@@ -127,6 +127,7 @@ input.text[aria-invalid="true"] { border-color: var(--error); }
   min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--bg); color: var(--text); font: inherit; font-size: 15px; cursor: pointer;
 }
+.secondary:disabled { opacity: 0.55; cursor: default; }
 .link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 15px; min-height: 44px; padding: 8px 0; cursor: pointer; }
 .link:disabled { color: var(--muted); cursor: default; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin-top: 12px; }

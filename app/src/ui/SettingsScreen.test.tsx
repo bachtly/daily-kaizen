@@ -14,7 +14,8 @@ const turnOnPush = vi.fn<(e: PushEnv, k: string | undefined, r: unknown) => Prom
 vi.mock('../data/localCopy', () => ({ readLocalCopy }));
 vi.mock('../data/timings', async (orig) => ({ ...(await orig<typeof import('../data/timings')>()), getTimings }));
 vi.mock('../data/push', async (orig) => ({ ...(await orig<typeof import('../data/push')>()), openPush, turnOnPush }));
-vi.mock('./liveWrites', () => ({ writes: { saveSettings, upsertPushSubscription } }));
+vi.mock('./liveWrites', () => ({ writes: { saveSettings, upsertPushSubscription }, deviceZone: () => 'UTC' }));
+const { emitCopyChanged } = await import('../data/copyChanged');
 const { SettingsScreen, SettingsView } = await import('./SettingsScreen');
 
 const copy = (): LocalCopy => ({
@@ -32,6 +33,30 @@ beforeEach(() => {
   turnOnPush.mockReset();
 });
 afterEach(cleanup);
+
+describe('SettingsView', () => {
+  it('shows when the offline data is from, and no Off or button while push is being checked', () => {
+    const { rerender } = render(<MemoryRouter><SettingsView connection="offline" refreshedAt="14:02" push="checking" /></MemoryRouter>);
+    expect(screen.getByText(/Showing data from 14:02/)).toBeTruthy();
+    expect(screen.queryByText('Off')).toBeNull();
+    expect(screen.queryByText('Turn on notifications')).toBeNull();
+    rerender(<MemoryRouter><SettingsView connection="offline" refreshedAt="14:02" push="off" /></MemoryRouter>);
+    expect((screen.getByText('Turn on notifications') as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('SettingsScreen refresh time', () => {
+  it('shows the new offline time after the Local copy changes', async () => {
+    readLocalCopy.mockResolvedValue({ ...copy(), refreshedAt: '2026-11-04T14:02:00Z' });
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    mount();
+    await screen.findByText(/Showing data from 14:02/);
+    readLocalCopy.mockResolvedValue({ ...copy(), refreshedAt: '2026-11-04T15:30:00Z' });
+    emitCopyChanged();
+    await screen.findByText(/Showing data from 15:30/);
+    online.mockRestore();
+  });
+});
 
 describe('SettingsScreen', () => {
   it('shows the saved Quiet hours and the p95 save and refresh times', async () => {

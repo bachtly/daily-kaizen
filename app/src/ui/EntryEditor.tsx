@@ -7,6 +7,9 @@ import { OverlapNote } from './OverlapNote';
 import { TimeChip } from './TimeChip';
 import { hhmm, withTime } from './weekFormat';
 
+/** `now` ticks once a minute and the time fields round down to the minute, so the current minute must not read as the future. */
+const TICK = 60_000;
+
 const messages = {
   entry_text_empty: 'Write what you did.',
   entry_end_not_after_start: 'From must be before To.',
@@ -20,18 +23,20 @@ type Known = keyof typeof messages;
  * The AC-1.2 checks apply; an overlap only warns. No form-open time is sent for an edit.
  * Changing the text re-tags the Entry unless its Tag source is me (the Server clears the Tag).
  */
-export function EntryEditor({ entry, siblings, now, online, onSave, onDelete, onClose }: {
+export function EntryEditor({ entry, siblings, now, timeZone, online, onSave, onDelete, onClose }: {
   entry: EntryRow;
   /** Other Entries of the week, for the overlap warning. */
   siblings: readonly EntryRow[];
   now: number;
+  /** The device zone, as the row shows it, so the row and its editor agree after a zone change. */
+  timeZone: string;
   online: boolean;
   onSave: (fields: EntryFields) => Promise<Result<unknown>>;
   onDelete: () => Promise<Result<unknown>>;
   /** Called after a confirmed save or delete, and on Cancel. */
   onClose: () => void;
 }) {
-  const tz = entry.time_zone;
+  const tz = timeZone;
   const [text, setText] = useState(entry.text);
   const [from, setFrom] = useState(Date.parse(entry.started_at));
   const [to, setTo] = useState(Date.parse(entry.ended_at));
@@ -40,7 +45,7 @@ export function EntryEditor({ entry, siblings, now, online, onSave, onDelete, on
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const timeError =
-    to > now ? messages.entry_end_in_future
+    to > now + TICK ? messages.entry_end_in_future
     : from >= to ? messages.entry_end_not_after_start
     : undefined;
   const textError = !text.trim() ? messages.entry_text_empty : undefined;
