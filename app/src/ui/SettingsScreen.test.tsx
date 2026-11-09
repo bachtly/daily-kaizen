@@ -57,14 +57,14 @@ describe('SettingsScreen loading', () => {
     expect(screen.queryByText('Turn on notifications')).toBeNull();
     expect(screen.queryByLabelText('From')).toBeNull();
     expect(screen.queryByLabelText('Remind me after')).toBeNull();
-    expect(screen.queryByText(/How long saving/)).toBeNull();
+    expect(screen.queryByText(/Usually this fast or faster/)).toBeNull();
     expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
     expect(document.querySelectorAll('.skeleton').length).toBeGreaterThan(0);
     resolveCopy(copy());
     resolvePush({ state: 'on' });
     await loaded();
     await screen.findByText('On');
-    await screen.findByText(/How long saving/);
+    await screen.findByText(/Usually this fast or faster/);
     expect(document.querySelector('main')?.getAttribute('aria-busy')).toBeNull();
     expect(document.querySelector('.skeleton')).toBeNull();
   });
@@ -197,7 +197,7 @@ describe('Nudge gap and Diagnostics', () => {
     await loaded();
     const section = (await screen.findByRole('heading', { name: 'Diagnostics' })).closest('section')!;
     expect(section.textContent).toMatch(/save 500 ms · refresh 800 ms/);
-    expect(section.textContent).toMatch(/19 in 20 were faster/);
+    expect(section.textContent).not.toMatch(/19 in 20/);
     expect(screen.getByRole('heading', { name: 'Notifications' }).closest('section')!.textContent).not.toMatch(/ms/);
   });
 });

@@ -9,7 +9,7 @@ export function NudgeGapField({ hours, loading, error, disabled, onChange }: {
   return (
     <>
       <label className="field-label" htmlFor="nudge-gap">Remind me after</label>
-      {loading ? <Skeleton height={44} radius={12} /> : (
+      {loading ? <Skeleton height={48} radius={12} /> : (
         <select
           id="nudge-gap" className="text" value={hours} disabled={disabled}
           aria-invalid={!!error || undefined} aria-describedby={error ? 'nudge-error' : undefined}

@@ -81,10 +81,9 @@ export function SettingsView({
       <section className="panel" aria-labelledby="diag-h">
         <h2 id="diag-h">Diagnostics</h2>
         {loading.speed
-          ? <Skeleton height={36} />
+          ? <Skeleton height={24} />
           : <>
-              <p className="note">How long saving and refreshing take on this phone: save {ms(saveP95)} · refresh {ms(refreshP95)}.</p>
-              <p className="note">Each is the 95th percentile of the last 50: 19 in 20 were faster.</p>
+              <p className="note">Usually this fast or faster on this device: save {ms(saveP95)} · refresh {ms(refreshP95)}.</p>
             </>}
       </section>
     </Phone>
