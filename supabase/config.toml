@@ -427,3 +427,35 @@ verify_jwt = false
 
 [functions.send-notifications]
 verify_jwt = false
+
+# Hosted project only: `supabase config push` applies these over the local values above.
+[remotes.production]
+project_id = "naiiplbdydablbudaqzr"
+
+[remotes.production.auth]
+site_url = "https://kaizen.bachtly.com"
+additional_redirect_urls = []
+
+[remotes.production.auth.rate_limit]
+email_sent = 30
+
+[remotes.production.auth.email.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "dailykaisen@bachtly.com"
+sender_name = "Daily Kaisen"
+
+[remotes.production.auth.email.template.magic_link]
+subject = "Your daily-kaizen code"
+content_path = "./supabase/templates/magic_link.html"
+
+# Match the hosted plan's current values; the local defaults above differ.
+[remotes.production.db.pooler]
+default_pool_size = 15
+max_client_conn = 200
+
+[remotes.production.storage.vector]
+enabled = false

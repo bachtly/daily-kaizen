@@ -227,6 +227,10 @@ No alerting service: one user reviews `nfr_report` weekly (judgement; fits the c
 
 ## Rollout and rollback
 
+Everything below except creating the project and my user now runs from `.github/workflows/deploy.yml` on each push to `main`: Supabase CLI (migrations, `config.toml`, secrets, functions, Vault, first seed), then Terraform in `infra/` (Pages project, custom domain, CNAME at Vercel), then a Direct Upload of the app. Secrets and first-time steps: `infra/README.md`.
+
+Hosting decision (2026-11-08): Pages Direct Upload. Rejected: a Cloudflare Worker (custom domains need the zone on Cloudflare, and DNS for this domain is at Vercel) and Pages Git builds (a first build can't be ordered after Terraform). Terraform state lives in the Supabase database (schema `terraform_state`): no new account, and it holds no secrets. Rejected: HCP Terraform (another account and token).
+
 1. Create Supabase project; set Resend SMTP with sending domain `mail.<my domain>` before the first sign-in [S13]; disable sign-ups; create my user.
 2. Apply the migration (tables, policies, functions, Vault secret and function URLs), run `seed_account(uid)` once (`settings` and 5 Categories), then deploy Edge Functions and secrets, then enable cron schedules last. Order is safe: the trigger tolerates a missing function (the Tagging check catches up).
 3. Deploy the app to Cloudflare Pages; add to Home Screen; device tests.
