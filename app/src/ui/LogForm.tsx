@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EntryRow } from '../data/db';
-import { onCopyChanged } from '../data/copyChanged';
-import { readLocalCopy } from '../data/localCopy';
 import { findOverlaps, prefill, recentTexts } from '../data/prefill';
 import type { Result } from '../data/request';
 import type { NewEntry } from '../data/writes';
@@ -11,6 +9,7 @@ import { ConnectionBanner, Phone, type Connection } from './Phone';
 import { RecentChips } from './RecentChips';
 import { SaveStatus, type SaveState } from './SaveStatus';
 import { TimeChip } from './TimeChip';
+import { useLocalCopy } from './useLocalCopy';
 import { hhmm, withTime } from './weekFormat';
 
 type LogEntry = Pick<EntryRow, 'id' | 'text' | 'started_at' | 'ended_at' | 'created_at'>;
@@ -24,6 +23,8 @@ export type LogFormViewProps = {
   connection?: Connection;
   /** Time of the last Local copy refresh, for the offline banner. */
   refreshedAt?: string | null;
+  /** The Local copy hasn't been read yet: From and Recent show a Skeleton and Save waits. */
+  loading?: boolean;
   /** Resolves when the Server answers; `unknown` means the result is not known and a resend is safe. */
   onSave: (entry: NewEntry) => Promise<Result<unknown>>;
   /** Freeze the form in a state for review (stories). */
@@ -43,7 +44,7 @@ type FieldKey = keyof typeof fieldMessage;
 const newDraft = () => ({ id: crypto.randomUUID(), openedAt: new Date().toISOString() });
 
 /** Log form: the screen the app opens on. Only the text is required; times are prefilled (AC-1.1). */
-export function LogFormView({ entries, timeZone, now, connection = 'online', refreshedAt, onSave, frozen, initialText = '', initialFrom }: LogFormViewProps) {
+export function LogFormView({ entries, timeZone, now, connection = 'online', refreshedAt, loading, onSave, frozen, initialText = '', initialFrom }: LogFormViewProps) {
   const [text, setText] = useState(initialText);
   const [fromEdit, setFromEdit] = useState<number | null>(initialFrom ?? null);
   const [toEdit, setToEdit] = useState<number | null>(null);
@@ -66,7 +67,7 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', ref
     if (state !== 'saving' && !frozen) setState('idle');
   };
 
-  const timeError: FieldKey | undefined =
+  const timeError: FieldKey | undefined = loading ? undefined :
     fieldError === 'entry_end_in_future' || to > now ? 'entry_end_in_future'
     : fieldError === 'entry_end_not_after_start' || from >= to ? 'entry_end_not_after_start'
     : undefined;
@@ -78,7 +79,7 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', ref
   const recent = useMemo(() => recentTexts(entries), [entries]);
 
   const save = async () => {
-    if (saving || frozen || !text.trim() || timeError) return;
+    if (saving || loading || frozen || !text.trim() || timeError) return;
     setState('saving');
     setFieldError(undefined);
     const r = await onSave({
@@ -129,8 +130,8 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', ref
   }, [state, frozen]);
 
   return (
-    <Phone tab="log">
-      <ConnectionBanner state={sessionLost ? 'signed-out' : connection} refreshedAt={refreshedAt ?? '–'} />
+    <Phone tab="log" busy={loading}>
+      <ConnectionBanner state={sessionLost ? 'signed-out' : connection} refreshedAt={refreshedAt} />
       <h1>What did you do?</h1>
 
       <label className="field-label" htmlFor="entry-text">Activity</label>
@@ -142,11 +143,11 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', ref
       />
       {textError && <p id="text-error" className="error" role="alert">{fieldMessage[textError]}</p>}
 
-      <RecentChips texts={recent} onPick={edit} disabled={saving} />
+      <RecentChips loading={loading} texts={recent} onPick={edit} disabled={saving} />
 
       <div className="times">
         <TimeChip
-          label="From" value={hhmm(from, timeZone)} disabled={saving} describedBy="time-error"
+          label="From" loading={loading} value={hhmm(from, timeZone)} disabled={saving} describedBy="time-error"
           invalid={timeError === 'entry_end_not_after_start'}
           onChange={(v) => setFromEdit(withTime(from, v, timeZone))}
         />
@@ -162,7 +163,7 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', ref
 
       <OverlapNote with={overlapLabel} />
 
-      <button className="primary" onClick={() => void save()} disabled={saving || !text.trim() || !!timeError}>
+      <button className="primary" onClick={() => void save()} disabled={saving || loading || !text.trim() || !!timeError}>
         {saving ? 'Saving…' : 'Save'}
       </button>
 
@@ -179,28 +180,10 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', ref
 
 /** The Log form wired to the Local copy and the Server. */
 export function LogForm() {
-  const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
+  const { copy, ready, reload } = useLocalCopy();
   const [now, setNow] = useState(() => Date.now());
   const [online, setOnline] = useState(() => navigator.onLine);
 
-  const reload = useCallback(async () => {
-    try {
-      const c = await readLocalCopy();
-      setEntries(c.entries);
-      setRefreshedAt(c.refreshedAt);
-    } catch {
-      // Storage unavailable: the form still works without Recent chips and prefill.
-    }
-  }, []);
-  useEffect(() => {
-    let live = true;
-    Promise.resolve()
-      .then(() => readLocalCopy())
-      .then((c) => { if (live) { setEntries(c.entries); setRefreshedAt(c.refreshedAt); } }, () => {});
-    const unsub = onCopyChanged(() => void reload());
-    return () => { live = false; unsub(); };
-  }, [reload]);
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 15_000);
     const on = () => setOnline(true);
@@ -222,8 +205,8 @@ export function LogForm() {
 
   return (
     <LogFormView
-      entries={entries} timeZone={deviceZone()} now={now}
-      connection={online ? 'online' : 'offline'} refreshedAt={refreshedAt && hhmm(Date.parse(refreshedAt), deviceZone())} onSave={onSave}
+      entries={copy.entries} timeZone={deviceZone()} now={now} loading={!ready}
+      connection={online ? 'online' : 'offline'} refreshedAt={copy.refreshedAt && hhmm(Date.parse(copy.refreshedAt), deviceZone())} onSave={onSave}
     />
   );
 }

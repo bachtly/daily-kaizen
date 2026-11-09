@@ -22,6 +22,18 @@ const type = (v: string) => fireEvent.change(screen.getByLabelText('Activity'), 
 
 afterEach(cleanup);
 
+describe('LogFormView loading', () => {
+  it('shows no From, Recent chips or enabled Save until the Local copy is read, but lets me type', () => {
+    mount(vi.fn(), { loading: true });
+    expect(screen.queryByLabelText('From')).toBeNull();
+    expect(screen.queryByText('Standup')).toBeNull();
+    expect(document.querySelector('main')?.getAttribute('aria-busy')).toBe('true');
+    type('Reading');
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByLabelText('To')).toBeTruthy();
+  });
+});
+
 describe('LogFormView', () => {
   it('prefills From with the latest end and To with now (AC-1.1)', () => {
     mount(vi.fn());

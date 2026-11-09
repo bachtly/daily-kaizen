@@ -60,6 +60,7 @@ export const EarlierWeek: Story = {
     entries: entries.map((e) => ({ ...e, id: `o${e.id}`, started_at: weekEarlier(e.started_at), ended_at: weekEarlier(e.ended_at) })),
   },
 };
+export const Loading: Story = { args: { load: 'loading', reviewDone: undefined, refreshedAt: null } };
 export const EarlierWeekLoading: Story = { args: { monday: '2026-10-19', isCurrentWeek: false, reviewDone: undefined, load: 'loading' } };
 export const EarlierWeekOffline: Story = {
   args: { monday: '2026-10-19', isCurrentWeek: false, reviewDone: undefined, load: 'offline-earlier-week', connection: 'offline' },

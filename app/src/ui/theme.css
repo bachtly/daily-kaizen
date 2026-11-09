@@ -86,7 +86,7 @@
 
 h1 { font-size: 28px; margin: 4px 0 16px; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 24px 0 8px; }
-label.field-label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+label.field-label, span.field-label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 
 input.text {
   width: 100%; font: inherit; font-size: 17px; padding: 12px 14px; border-radius: 12px;
@@ -230,3 +230,14 @@ input.text[aria-invalid="true"] { border-color: var(--error); }
 .art-toggle::after { content: ""; position: absolute; top: 2px; right: 2px; width: 19px; height: 19px; border-radius: 10px; background: var(--bg); }
 .art-home { width: max-content; padding: 10px 16px; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 12px; }
 .art-home img { display: block; border-radius: 14px; }
+
+/* Skeleton (see Skeleton.tsx): hidden for 150 ms so a fast read never flashes it; the pulse only runs when motion is welcome. */
+.skeleton { display: block; max-width: 100%; animation: skeleton-in 1ms linear 150ms backwards; }
+.chips .skeleton, .time .skeleton { margin: 0; }
+.chips .skeleton { display: inline-block; }
+.panel .skeleton { background: var(--line); }
+@keyframes skeleton-in { from { opacity: 0; } }
+@keyframes skeleton-pulse { 50% { filter: brightness(0.94); } }
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton { animation: skeleton-in 1ms linear 150ms backwards, skeleton-pulse 1.4s ease-in-out 150ms infinite; }
+}

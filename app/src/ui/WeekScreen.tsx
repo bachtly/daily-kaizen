@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import type { CategoryRow, EntryRow } from '../data/db';
-import { onCopyChanged } from '../data/copyChanged';
-import { fetchWeek, readLocalCopy, refresh, type LocalCopy } from '../data/localCopy';
+import { fetchWeek, refresh } from '../data/localCopy';
 import type { Result } from '../data/request';
 import { mondayOf, weekBounds, weekTotals, zonedParts } from '../data/week';
 import type { EntryFields } from '../data/writes';
@@ -13,8 +12,10 @@ import { deviceZone, liveWindow, writes } from './liveWrites';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
 import { RefreshedAt } from './RefreshedAt';
 import { ReviewDoneButton } from './ReviewDoneButton';
+import { Skeleton } from './Skeleton';
 import { SuggestedCategoryCard } from './SuggestedCategoryCard';
 import { TagPicker } from './TagPicker';
+import { useLocalCopy } from './useLocalCopy';
 import { countMoves, hhmm } from './weekFormat';
 
 /** Phone writes the page can make. Each resolves when the Server answers. */
@@ -120,7 +121,7 @@ export function WeekView({
 
   return (
     <Phone
-      tab="week"
+      tab="week" busy={load === 'loading'}
       overlay={pickerEntry && actions && (
         <TagPicker
           entry={pickerEntry} categories={categories} online={online} returnFocusTo={picker?.opener}
@@ -128,7 +129,7 @@ export function WeekView({
         />
       )}
     >
-      <ConnectionBanner state={connection} refreshedAt={refreshedLabel ?? '–'} />
+      <ConnectionBanner state={connection} refreshedAt={refreshedLabel} />
       <header className="week-header">
         <div className="week-picker" role="group" aria-label="Choose week">
           <button aria-label="Previous week" onClick={() => { setGone(null); onPrev?.(); }}>‹</button>
@@ -136,16 +137,25 @@ export function WeekView({
           <button aria-label="Next week" onClick={() => { setGone(null); onNext?.(); }} disabled={isCurrentWeek}>›</button>
         </div>
         <div className="week-meta">
-          {reviewDone !== undefined && (
-            <span className={reviewDone ? 'badge done' : 'badge'}>{reviewDone ? 'Review done ✓' : 'Not reviewed'}</span>
+          {load === 'loading' ? (
+            <>
+              <Skeleton height={26} width={96} radius={12} style={{ margin: 0 }} />
+              <Skeleton height={18} width={110} style={{ margin: 0 }} />
+            </>
+          ) : (
+            <>
+              {reviewDone !== undefined && (
+                <span className={reviewDone ? 'badge done' : 'badge'}>{reviewDone ? 'Review done ✓' : 'Not reviewed'}</span>
+              )}
+              <RefreshedAt time={refreshedLabel} />
+            </>
           )}
-          <RefreshedAt time={refreshedLabel} />
         </div>
       </header>
 
       {gone === monday && <p ref={noticeRef} className="error notice" role="alert">This Entry was deleted.</p>}
 
-      {load === 'loading' && <>{[1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton" />)}</>}
+      {load === 'loading' && <>{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} style={{ margin: '10px 0' }} />)}</>}
       {load === 'offline-earlier-week' && (
         <div className="empty">
           Earlier weeks need a connection.
@@ -206,7 +216,6 @@ export function WeekView({
 
 // ---- live wiring: Local copy for this and the previous week, a fetch for earlier ones ----
 
-const EMPTY: LocalCopy = { entries: [], categories: [], settings: null, reviews: [], refreshedAt: null };
 const MONDAY = /^\d{4}-\d\d-\d\d$/;
 
 /** The Week screen wired to the Local copy and the Server. `/week` is the current week, `/week/:monday` another one. */
@@ -216,8 +225,7 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
   const tz = deviceZone();
   const [now, setNow] = useState(() => Date.now());
   const [online, setOnline] = useState(() => navigator.onLine);
-  const [copy, setCopy] = useState<LocalCopy>(EMPTY);
-  const [copyReady, setCopyReady] = useState(false);
+  const { copy, ready: copyReady, reload } = useLocalCopy();
   const [fetched, setFetched] = useState<{ monday: string; entries: EntryRow[] } | null>(null);
   // The failure belongs to one week: navigating away leaves it behind.
   const [failure, setFailure] = useState<{ monday: string; kind: 'offline' | 'session-lost' } | null>(null);
@@ -228,29 +236,13 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
   const monday = param && MONDAY.test(param) ? param : currentMonday;
   const inLocalCopy = monday >= shiftMonday(currentMonday, -7);
 
-  const reload = async () => {
-    try {
-      setCopy(await readLocalCopy());
-    } catch {
-      // Storage unavailable: keep showing what we have.
-    }
-    setCopyReady(true);
-  };
   useEffect(() => {
-    let live = true;
-    Promise.resolve()
-      .then(() => readLocalCopy())
-      .then((c) => { if (live) setCopy(c); }, () => {})
-      .then(() => { if (live) setCopyReady(true); });
     const tick = setInterval(() => setNow(Date.now()), 60_000);
     const on = () => setOnline(true);
     const off = () => setOnline(false);
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
-    const unsub = onCopyChanged(() => void reload());
     return () => {
-      live = false;
-      unsub();
       clearInterval(tick);
       window.removeEventListener('online', on);
       window.removeEventListener('offline', off);
@@ -280,7 +272,8 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     ? copy.entries.filter((e) => Date.parse(e.started_at) < bounds.end && Date.parse(e.ended_at) > bounds.start)
     : haveEarlier ? fetched.entries : [];
   const load: WeekViewProps['load'] =
-    inLocalCopy ? (copyReady ? 'ready' : 'loading')
+    !copyReady ? 'loading'
+    : inLocalCopy ? 'ready'
     : haveEarlier ? 'ready'
     : fail?.kind === 'offline' ? 'offline-earlier-week'
     : fail?.kind === 'session-lost' ? 'session-lost-earlier-week' : 'loading';
@@ -310,7 +303,7 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     <WeekView
       monday={monday} timeZone={tz} now={now} isCurrentWeek={monday >= currentMonday}
       entries={entries} categories={copy.categories} refreshedAt={copy.refreshedAt}
-      reviewDone={inLocalCopy ? copy.reviews.some((r) => r.week_start === monday) : undefined}
+      reviewDone={inLocalCopy && copyReady ? copy.reviews.some((r) => r.week_start === monday) : undefined}
       connection={sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
       load={load} actions={actions} moveCounts={moveCounts}
       onPrev={() => goto(shiftMonday(monday, -7))}

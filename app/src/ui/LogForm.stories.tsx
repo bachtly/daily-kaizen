@@ -30,6 +30,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+export const Loading: Story = { args: { loading: true, entries: [], initialText: 'Reading PR reviews' } };
 export const Typing: Story = { args: { initialText: 'Reading PR reviews' } };
 export const EmptyHistory: Story = { name: 'Empty (no Entries yet)', args: { entries: [] } };
 export const Overlap: Story = {
