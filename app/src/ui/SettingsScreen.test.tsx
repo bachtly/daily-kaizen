@@ -56,14 +56,15 @@ describe('SettingsScreen loading', () => {
     expect(screen.queryByText('Off')).toBeNull();
     expect(screen.queryByText('Turn on notifications')).toBeNull();
     expect(screen.queryByLabelText('From')).toBeNull();
-    expect(screen.queryByText(/Typical speed/)).toBeNull();
+    expect(screen.queryByLabelText('Remind me after')).toBeNull();
+    expect(screen.queryByText(/Usually this fast or faster/)).toBeNull();
     expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
     expect(document.querySelectorAll('.skeleton').length).toBeGreaterThan(0);
     resolveCopy(copy());
     resolvePush({ state: 'on' });
     await loaded();
     await screen.findByText('On');
-    await screen.findByText(/Typical speed/);
+    await screen.findByText(/Usually this fast or faster/);
     expect(document.querySelector('main')?.getAttribute('aria-busy')).toBeNull();
     expect(document.querySelector('.skeleton')).toBeNull();
   });
@@ -75,6 +76,7 @@ describe('SettingsScreen with an empty Local copy', () => {
     mount();
     await screen.findByText('Off');
     expect(screen.queryByLabelText('From')).toBeNull();
+    expect(screen.queryByLabelText('Remind me after')).toBeNull();
     expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
     readLocalCopy.mockResolvedValue(copy());
     emitCopyChanged();
@@ -136,7 +138,7 @@ describe('SettingsScreen', () => {
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText('Saving…');
     expect(screen.queryByText('Saved.')).toBeNull();
-    expect(saveSettings).toHaveBeenCalledWith({ quiet_start: '22:00', quiet_end: '07:00' });
+    expect(saveSettings).toHaveBeenCalledWith({ quiet_start: '22:00', quiet_end: '07:00', nudge_gap_hours: 3 });
     done({ ok: true, data: null });
     await screen.findByText('Saved.');
   });
@@ -166,6 +168,37 @@ describe('SettingsScreen', () => {
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText(/Signed out/);
     expect(field('From').value).toBe('22:00');
+  });
+});
+
+describe('Nudge gap and Diagnostics', () => {
+  const gap = () => screen.getByLabelText('Remind me after') as HTMLSelectElement;
+  it('shows the saved gap, offers 1 to 12 whole hours, and saves the choice', async () => {
+    readLocalCopy.mockResolvedValue({ ...copy(), settings: { ...copy().settings!, nudge_gap_hours: 5 } });
+    saveSettings.mockResolvedValue({ ok: true, data: null });
+    mount();
+    await waitFor(() => expect(gap().value).toBe('5'));
+    expect([...gap().options].map((o) => o.value)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']);
+    fireEvent.change(gap(), { target: { value: '8' } });
+    fireEvent.click(screen.getByText('Save'));
+    await screen.findByText('Saved.');
+    expect(saveSettings).toHaveBeenCalledWith({ quiet_start: '22:00', quiet_end: '06:30', nudge_gap_hours: 8 });
+  });
+  it('shows the Server refusal under the field', async () => {
+    mount();
+    await loaded();
+    saveSettings.mockResolvedValue({ ok: false, error: 'nudge_gap_out_of_range' });
+    fireEvent.click(screen.getByText('Save'));
+    await screen.findByText('Choose 1 to 12 hours.');
+    expect(screen.queryByText('Saved.')).toBeNull();
+  });
+  it('puts the p95 times in a Diagnostics section with a plain explanation', async () => {
+    mount();
+    await loaded();
+    const section = (await screen.findByRole('heading', { name: 'Diagnostics' })).closest('section')!;
+    expect(section.textContent).toMatch(/save 500 ms · refresh 800 ms/);
+    expect(section.textContent).not.toMatch(/19 in 20/);
+    expect(screen.getByRole('heading', { name: 'Notifications' }).closest('section')!.textContent).not.toMatch(/ms/);
   });
 });
 

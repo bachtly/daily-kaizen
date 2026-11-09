@@ -88,12 +88,13 @@ h1 { font-size: 28px; margin: 4px 0 16px; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 24px 0 8px; }
 label.field-label, span.field-label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 
-input.text {
+input.text, select.text {
   width: 100%; font: inherit; font-size: 17px; padding: 12px 14px; border-radius: 12px;
   border: 1px solid var(--line); background: var(--surface); color: var(--text);
 }
+select.text { min-height: 48px; max-width: 100%; }
 input.text:read-only { color: var(--muted); }
-input.text[aria-invalid="true"] { border-color: var(--error); }
+input.text[aria-invalid="true"], select.text[aria-invalid="true"] { border-color: var(--error); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
 .chip {
@@ -138,7 +139,7 @@ input.text[aria-invalid="true"] { border-color: var(--error); }
 /* Sections: each block is a panel on a surface colour with space between, so groups read apart. */
 .panel { background: var(--surface); border-radius: 18px; padding: 16px; margin-top: 16px; }
 .panel h2 { margin-top: 0; }
-.panel .secondary, .panel .chip, .panel .time .value, .panel input.text { background: var(--bg); }
+.panel .secondary, .panel .chip, .panel .time .value, .panel input.text, .panel select.text { background: var(--bg); }
 
 .week-header { margin-bottom: 4px; }
 .week-picker {
