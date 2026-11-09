@@ -69,6 +69,20 @@ describe('SettingsScreen loading', () => {
   });
 });
 
+describe('SettingsScreen with an empty Local copy', () => {
+  it('keeps Quiet hours as a skeleton and Save disabled until settings arrive', async () => {
+    readLocalCopy.mockResolvedValue({ ...copy(), settings: null });
+    mount();
+    await screen.findByText('Off');
+    expect(screen.queryByLabelText('From')).toBeNull();
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
+    readLocalCopy.mockResolvedValue(copy());
+    emitCopyChanged();
+    await loaded();
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
 describe('SettingsScreen refresh time', () => {
   it('shows the new offline time after the Local copy changes', async () => {
     readLocalCopy.mockResolvedValue({ ...copy(), refreshedAt: '2026-11-04T14:02:00Z' });
