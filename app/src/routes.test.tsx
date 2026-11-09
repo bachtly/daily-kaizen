@@ -72,7 +72,7 @@ test('refresh window starts at the previous Monday 00:00 in the zone', () => {
 test('a cold open with a session refreshes the Local copy and re-sends the Push subscription', async () => {
   at('/')
   await screen.findByRole('navigation', { name: 'Main' })
-  expect(onOpen).toHaveBeenCalledOnce()
+  await waitFor(() => expect(onOpen).toHaveBeenCalledOnce())
   const [win, tz] = onOpen.mock.calls[0]
   expect(tz).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
   expect(win.sinceDate).toMatch(/^\d{4}-\d\d-\d\d$/)
@@ -82,6 +82,7 @@ test('a cold open with a session refreshes the Local copy and re-sends the Push 
 test('changing tabs does not refresh again', async () => {
   const router = at('/')
   await screen.findByRole('navigation', { name: 'Main' })
+  await waitFor(() => expect(onOpen).toHaveBeenCalledOnce())
   await act(() => router.navigate('/settings'))
   expect(onOpen).toHaveBeenCalledOnce()
 })
@@ -89,6 +90,7 @@ test('changing tabs does not refresh again', async () => {
 test('returning to the foreground refreshes; going to the background does not', async () => {
   at('/')
   await screen.findByRole('navigation', { name: 'Main' })
+  await waitFor(() => expect(onOpen).toHaveBeenCalledOnce())
   const set = (v: string) => Object.defineProperty(document, 'visibilityState', { value: v, configurable: true })
   set('hidden')
   document.dispatchEvent(new Event('visibilitychange'))

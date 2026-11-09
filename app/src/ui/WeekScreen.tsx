@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import type { CategoryRow, EntryRow } from '../data/db';
+import { onCopyChanged } from '../data/copyChanged';
 import { fetchWeek, readLocalCopy, refresh, type LocalCopy } from '../data/localCopy';
 import type { Result } from '../data/request';
 import { mondayOf, weekBounds, weekTotals, zonedParts } from '../data/week';
@@ -243,8 +244,10 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     const off = () => setOnline(false);
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
+    const unsub = onCopyChanged(() => void reload());
     return () => {
       live = false;
+      unsub();
       clearInterval(tick);
       window.removeEventListener('online', on);
       window.removeEventListener('offline', off);

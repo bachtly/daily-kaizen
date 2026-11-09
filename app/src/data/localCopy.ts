@@ -9,6 +9,7 @@ import {
   type ReviewRow,
   type SettingsRow,
 } from './db';
+import { emitCopyChanged } from './copyChanged';
 import type { ErrorKey } from './errors';
 import { request, type Result } from './request';
 import { supabase } from './supabase';
@@ -73,6 +74,7 @@ async function doRefresh({ since, sinceDate }: RefreshWindow): Promise<Result<{ 
     // Storage failed (full, blocked): the old copy stays as it was (transaction rolled back).
     return { ok: false, error: 'unknown' satisfies ErrorKey };
   }
+  emitCopyChanged();
   await recordTiming('refresh', performance.now() - started).catch(() => {});
   return { ok: true, data: { refreshedAt } };
 }
