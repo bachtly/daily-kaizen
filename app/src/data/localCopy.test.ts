@@ -51,7 +51,7 @@ describe('refresh', () => {
   it('reads four tables and replaces the copy with refreshed_at', async () => {
     replies.entries = ok([entry('a'), entry('b')]);
     replies.categories = ok([{ id: 'c', name: 'Work', description: 'd', status: 'active' }]);
-    replies.settings = ok([{ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00' }]);
+    replies.settings = ok([{ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00', nudge_gap_hours: 5 }]);
     replies.weekly_reviews = ok([{ week_start: '2026-11-02' }]);
     const r = await refresh(window);
     expect(r.ok).toBe(true);
@@ -62,7 +62,7 @@ describe('refresh', () => {
     const copy = await readLocalCopy();
     expect(copy.entries.map((e) => e.id)).toEqual(['a', 'b']);
     expect(copy.categories).toHaveLength(1);
-    expect(copy.settings).toEqual({ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00' });
+    expect(copy.settings).toEqual({ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00', nudge_gap_hours: 5 });
     expect(copy.reviews).toEqual([{ week_start: '2026-11-02' }]);
     expect(copy.refreshedAt).toBe(r.ok ? r.data.refreshedAt : '');
   });

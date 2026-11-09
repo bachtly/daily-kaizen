@@ -7,7 +7,7 @@ type Tables = Database['public']['Tables'];
 
 export type EntryFields = Pick<Tables['entries']['Row'], 'text' | 'started_at' | 'ended_at' | 'time_zone'>;
 export type NewEntry = EntryFields & Pick<Tables['entries']['Row'], 'id' | 'form_opened_at'>;
-export type SettingsPatch = Partial<Pick<Tables['settings']['Row'], 'time_zone' | 'quiet_start' | 'quiet_end'>>;
+export type SettingsPatch = Partial<Pick<Tables['settings']['Row'], 'time_zone' | 'quiet_start' | 'quiet_end' | 'nudge_gap_hours'>>;
 export type PushSubscriptionInput = Pick<Tables['push_subscriptions']['Row'], 'endpoint' | 'p256dh' | 'auth'>;
 
 /** Injected so this module does not import the Local copy (the caller wires `refresh` and `recordTiming`). */

@@ -91,7 +91,7 @@ export async function readLocalCopy(): Promise<LocalCopy> {
   return {
     entries,
     categories,
-    settings: settings ? { time_zone: settings.time_zone, quiet_start: settings.quiet_start, quiet_end: settings.quiet_end } : null,
+    settings: settings ? { time_zone: settings.time_zone, quiet_start: settings.quiet_start, quiet_end: settings.quiet_end, nudge_gap_hours: settings.nudge_gap_hours } : null,
     reviews,
     refreshedAt: (refreshedAt?.value as string | undefined) ?? null,
   };

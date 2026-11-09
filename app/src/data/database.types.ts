@@ -154,6 +154,7 @@ export type Database = {
       };
       settings: {
         Row: {
+          nudge_gap_hours: number;
           quiet_end: string;
           quiet_start: string;
           time_zone: string | null;
@@ -161,12 +162,14 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          nudge_gap_hours?: number;
           quiet_end?: string;
           quiet_start?: string;
           time_zone?: string | null;
           user_id?: string;
         };
         Update: {
+          nudge_gap_hours?: number;
           quiet_end?: string;
           quiet_start?: string;
           time_zone?: string | null;
@@ -195,10 +198,53 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      nfr_report: {
+        Row: {
+          created_at: string;
+          gave_up: boolean | null;
+          id: string;
+          save_delay: string | null;
+          tag_delay: string | null;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string | null;
+          gave_up?: never;
+          id?: string | null;
+          save_delay?: never;
+          tag_delay?: never;
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string | null;
+          gave_up?: never;
+          id?: string | null;
+          save_delay?: never;
+          tag_delay?: never;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       approve_category: { Args: { category_id: string }; Returns: Json };
+      claim_due_notifications: {
+        Args: { p_now?: string };
+        Returns: {
+          about: string;
+          kind: Database["public"]["Enums"]["notification_kind"];
+          sent_at: string;
+          user_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "notifications_sent";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      post_job: { Args: { p_url_secret: string }; Returns: undefined };
       record_tag_failure: {
         Args: { p_entry_id: string; p_read_updated_at: string };
         Returns: undefined;

@@ -7,7 +7,7 @@ type Tables = Database['public']['Tables'];
 export const ENTRY_COLUMNS =
   'id, text, started_at, ended_at, time_zone, category_id, tag_source, suggested_category_id, tagging_gave_up_at, created_at' as const;
 export const CATEGORY_COLUMNS = 'id, name, description, status' as const;
-export const SETTINGS_COLUMNS = 'time_zone, quiet_start, quiet_end' as const;
+export const SETTINGS_COLUMNS = 'time_zone, quiet_start, quiet_end, nudge_gap_hours' as const;
 export const REVIEW_COLUMNS = 'week_start' as const;
 
 export type EntryRow = Pick<
@@ -24,7 +24,7 @@ export type EntryRow = Pick<
   | 'created_at'
 >;
 export type CategoryRow = Pick<Tables['categories']['Row'], 'id' | 'name' | 'description' | 'status'>;
-export type SettingsRow = Pick<Tables['settings']['Row'], 'time_zone' | 'quiet_start' | 'quiet_end'>;
+export type SettingsRow = Pick<Tables['settings']['Row'], 'time_zone' | 'quiet_start' | 'quiet_end' | 'nudge_gap_hours'>;
 export type ReviewRow = Pick<Tables['weekly_reviews']['Row'], 'week_start'>;
 
 export type MetaRow = { key: string; value: unknown };

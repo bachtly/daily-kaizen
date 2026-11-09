@@ -196,6 +196,15 @@ describe('reviewDone, settings, push', () => {
     server.failNext = { data: null, error: { message: 'violates check constraint "quiet_hours_equal"' }, status: 400 };
     expect(await w.saveSettings({ quiet_start: '07:00', quiet_end: '07:00' })).toEqual({ ok: false, error: 'quiet_hours_equal' });
   });
+  it('saveSettings sends nudge_gap_hours', async () => {
+    await w.saveSettings({ nudge_gap_hours: 5 });
+    expect(calls[0].args[0]).toEqual({ nudge_gap_hours: 5 });
+    expect(calls[0].filter).toEqual(['user_id', 'u1']);
+  });
+  it('saveSettings maps nudge_gap_out_of_range', async () => {
+    server.failNext = { data: null, error: { message: 'violates check constraint "nudge_gap_out_of_range"' }, status: 400 };
+    expect(await w.saveSettings({ nudge_gap_hours: 13 })).toEqual({ ok: false, error: 'nudge_gap_out_of_range' });
+  });
   it('upserts a push subscription on endpoint, without refreshing', async () => {
     const sub = { endpoint: 'https://push/x', p256dh: 'k', auth: 'a' };
     expect((await w.upsertPushSubscription(sub)).ok).toBe(true);

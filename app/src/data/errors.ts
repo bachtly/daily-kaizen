@@ -5,6 +5,7 @@ export const VALIDATION_KEYS = [
   'entry_end_in_future',
   'time_zone_unknown',
   'quiet_hours_equal',
+  'nudge_gap_out_of_range',
   'week_start_not_monday',
   'entry_not_found',
   'category_not_active',
