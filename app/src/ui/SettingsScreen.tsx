@@ -4,6 +4,7 @@ import { browserEnv, openPush, turnOnPush, type PushState } from '../data/push';
 import { getTimings, p95 } from '../data/timings';
 import { deviceZone, writes } from './liveWrites';
 import { PushStatus } from './PushStatus';
+import { NudgeGapField } from './NudgeGapField';
 import { QuietHoursFields } from './QuietHoursFields';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
 import { Skeleton } from './Skeleton';
@@ -16,7 +17,7 @@ export type SettingsViewProps = {
   connection?: Connection;
   push?: PushState;
   /** Parts still being read: each shows a Skeleton, never a default as if it were real. */
-  loading?: { push?: boolean; hours?: boolean; speed?: boolean };
+  loading?: { push?: boolean; hours?: boolean; nudge?: boolean; speed?: boolean };
   /** Time of the last Local copy refresh, for the offline banner. */
   refreshedAt?: string | null;
   pushBusy?: boolean;
@@ -25,6 +26,9 @@ export type SettingsViewProps = {
   quietEnd?: string;
   /** The Server refused the hours (`quiet_hours_equal`). Equal fields are caught here too. */
   quietError?: boolean;
+  nudgeHours?: number;
+  /** The Server refused the gap (`nudge_gap_out_of_range`). */
+  nudgeError?: boolean;
   saving?: boolean;
   saved?: boolean;
   /** Message under Save after a failed save. */
@@ -35,16 +39,17 @@ export type SettingsViewProps = {
   onTurnOn?: () => void;
   onQuietStart?: (v: string) => void;
   onQuietEnd?: (v: string) => void;
+  onNudgeHours?: (v: number) => void;
   onSave?: () => void;
 };
 
 const EQUAL = 'Start and end must differ.';
 const ms = (v: number | null | undefined) => (v == null ? '–' : `${v} ms`);
 
-/** Settings: push on/off (AC-6.2) and Quiet hours (AC-6.3). */
+/** Settings: push on/off (AC-6.2), Quiet hours (AC-6.3), the Nudge gap (AC-6.1) and Diagnostics. */
 export function SettingsView({
-  connection = 'online', push = 'off', loading = {}, refreshedAt, pushBusy, pushProblem, quietStart = '23:00', quietEnd = '07:00', quietError,
-  saving, saved, saveProblem, saveP95, refreshP95, onTurnOn, onQuietStart = () => {}, onQuietEnd = () => {}, onSave,
+  connection = 'online', push = 'off', loading = {}, refreshedAt, pushBusy, pushProblem, quietStart = '23:00', quietEnd = '07:00', quietError, nudgeHours = 3, nudgeError,
+  saving, saved, saveProblem, saveP95, refreshP95, onTurnOn, onQuietStart = () => {}, onQuietEnd = () => {}, onNudgeHours = () => {}, onSave,
 }: SettingsViewProps) {
   const online = connection !== 'offline';
   const error = quietError || quietStart === quietEnd ? EQUAL : undefined;
@@ -63,14 +68,25 @@ export function SettingsView({
         <QuietHoursFields loading={loading.hours} start={quietStart} end={quietEnd} error={error} disabled={saving} onStart={onQuietStart} onEnd={onQuietEnd} />
       </section>
 
-      <button className="primary" onClick={onSave} disabled={saving || loading.hours || !!error || !online}>{saving ? 'Saving…' : 'Save'}</button>
+      <section className="panel" aria-labelledby="nudge-h">
+        <h2 id="nudge-h">Nudge gap</h2>
+        <NudgeGapField loading={loading.nudge} hours={nudgeHours} error={nudgeError ? 'Choose 1 to 12 hours.' : undefined} disabled={saving} onChange={onNudgeHours} />
+      </section>
+
+      <button className="primary" onClick={onSave} disabled={saving || loading.hours || loading.nudge || !!error || !online}>{saving ? 'Saving…' : 'Save'}</button>
       {!online && <p className="note">Saving needs a connection.</p>}
       {saveProblem && <p className="error" role="alert">{saveProblem}</p>}
       <p className="status" aria-live="polite">{saved ? 'Saved.' : ''}</p>
 
-      {loading.speed
-        ? <Skeleton height={36} />
-        : <p className="note">Typical speed: save {ms(saveP95)} · refresh {ms(refreshP95)} (95th percentile of the last 50)</p>}
+      <section className="panel" aria-labelledby="diag-h">
+        <h2 id="diag-h">Diagnostics</h2>
+        {loading.speed
+          ? <Skeleton height={36} />
+          : <>
+              <p className="note">How long saving and refreshing take on this phone: save {ms(saveP95)} · refresh {ms(refreshP95)}.</p>
+              <p className="note">Each is the 95th percentile of the last 50: 19 in 20 were faster.</p>
+            </>}
+      </section>
     </Phone>
   );
 }
@@ -93,10 +109,13 @@ export function SettingsScreen() {
   const [endEdit, setEndEdit] = useState<string>();
   const start = startEdit ?? (copy.settings ? hhmm(copy.settings.quiet_start) : '23:00');
   const end = endEdit ?? (copy.settings ? hhmm(copy.settings.quiet_end) : '07:00');
+  const [nudgeEdit, setNudgeEdit] = useState<number>();
+  const nudge = nudgeEdit ?? copy.settings?.nudge_gap_hours ?? 3;
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveProblem, setSaveProblem] = useState<string>();
   const [serverRefused, setServerRefused] = useState(false);
+  const [nudgeRefused, setNudgeRefused] = useState(false);
   const [speed, setSpeed] = useState<{ save: number | null; refresh: number | null }>();
 
   const report = async (sub: Parameters<typeof writes.upsertPushSubscription>[0]) => {
@@ -139,24 +158,27 @@ export function SettingsScreen() {
     setSaved(false);
     setSaveProblem(undefined);
     setServerRefused(false);
-    const r = await writes.saveSettings({ quiet_start: start, quiet_end: end });
+    setNudgeRefused(false);
+    const r = await writes.saveSettings({ quiet_start: start, quiet_end: end, nudge_gap_hours: nudge });
     setSaving(false);
     if (r.ok) { setSaved(true); setSignedOut(false); void loadSpeed(); return; }
     if (r.error === 'session_lost') setSignedOut(true);
     else if (r.error === 'quiet_hours_equal') setServerRefused(true);
+    else if (r.error === 'nudge_gap_out_of_range') setNudgeRefused(true);
     else setSaveProblem(r.error === 'unknown' ? 'Needs a connection.' : "Couldn't save. Try again.");
   };
 
   return (
     <SettingsView
       connection={signedOut ? 'signed-out' : online ? 'online' : 'offline'}
-      push={push ?? 'off'} loading={{ push: !push, hours: !ready || !copy.settings, speed: !speed }}
+      push={push ?? 'off'} loading={{ push: !push, hours: !ready || !copy.settings, nudge: !ready || !copy.settings, speed: !speed }}
       refreshedAt={copy.refreshedAt ? clockTime(Date.parse(copy.refreshedAt), deviceZone()) : null} pushBusy={pushBusy} pushProblem={pushProblem}
-      quietStart={start} quietEnd={end} quietError={serverRefused} saving={saving} saved={saved} saveProblem={saveProblem}
+      quietStart={start} quietEnd={end} quietError={serverRefused} nudgeHours={nudge} nudgeError={nudgeRefused} saving={saving} saved={saved} saveProblem={saveProblem}
       saveP95={speed?.save} refreshP95={speed?.refresh}
       onTurnOn={() => void turnOn()}
       onQuietStart={(v) => { setStartEdit(v); setSaved(false); setServerRefused(false); }}
       onQuietEnd={(v) => { setEndEdit(v); setSaved(false); setServerRefused(false); }}
+      onNudgeHours={(v) => { setNudgeEdit(v); setSaved(false); setNudgeRefused(false); }}
       onSave={() => void save()}
     />
   );
