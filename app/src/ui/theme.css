@@ -105,11 +105,13 @@ input.text[aria-invalid="true"] { border-color: var(--error); }
 .time { flex: 1; min-width: 0; }
 .time .value {
   width: 100%; min-height: 44px; border-radius: 12px; border: 1px solid var(--line);
-  background: var(--surface); color: var(--text); font: inherit; font-size: 17px; text-align: left; padding: 0 14px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 17px; text-align: center; padding: 0 14px;
+  /* Centre vertically without flex (unreliable on iOS): fixed 44px box, line-height = 44px minus the 1px borders. */
+  box-sizing: border-box; height: 44px; line-height: 42px;
   /* iOS WebKit gives time inputs an intrinsic width that ignores flex/width; reset it so both fields fit. */
   display: block; min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none;
 }
-.time .value::-webkit-date-and-time-value { text-align: left; min-width: 0; }
+.time .value::-webkit-date-and-time-value { text-align: center; min-width: 0; }
 .time .value[aria-invalid="true"] { border-color: var(--error); }
 .time .hint { display: block; color: var(--muted); font-size: 13px; margin: 4px 0 0 4px; }
 .time button.hint { color: var(--accent); padding: 0; }
