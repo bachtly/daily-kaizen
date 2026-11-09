@@ -146,7 +146,7 @@ local = now() AT TIME ZONE tz
 Review reminder due  if local is Sunday and local.time >= 19:00
                      and no row (review_reminder, about = Monday of local week)
 Nudge due            if a push_subscriptions row exists
-                     and gap_start <= now() - 3 h (no Entries → no Gap → no Nudge)
+                     and gap_start <= now() - settings.nudge_gap_hours hours (no Entries → no Gap → no Nudge)
                      and local.time not in Quiet hours (wrap-aware: start > end means [start,24h) ∪ [0,end))
                      and no row (nudge, about = gap_start)
 ```

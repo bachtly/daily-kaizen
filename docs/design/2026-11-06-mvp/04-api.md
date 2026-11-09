@@ -52,8 +52,8 @@ Repeating the same decision returns `200` and changes nothing.
 **Review done.** Request: `{week_start}` (the Monday of the week shown, my time zone), `Prefer: resolution=ignore-duplicates`.
 Response `201` with the row, or `[]` if already done; both mean done.
 
-**Settings.** Request: any of `{time_zone, quiet_start, quiet_end}` (`HH:MM`). Response `200` with the row. On open the app sends
-`{time_zone}` only; the settings page sends the Quiet hours.
+**Settings.** Request: any of `{time_zone, quiet_start, quiet_end, nudge_gap_hours}` (`HH:MM`; whole hours 1–12). Response `200` with the row. On open the app sends
+`{time_zone}` only; the settings page sends the Quiet hours and the Nudge gap.
 
 **Push subscription.** Request: `{endpoint, p256dh, auth}` with `?on_conflict=endpoint` and `Prefer: resolution=merge-duplicates`.
 Response `201`. Sent on each open when permission is granted, and after "Turn on notifications".
@@ -92,6 +92,7 @@ constraint name, or the `message` of an error raised by a database trigger or fu
 | `entry_end_in_future` | `ended_at` over 5 min after Server now (create and edit) | 400 | No | "End can't be in the future." on end |
 | `time_zone_unknown` | Time zone not a name Postgres knows (Entry or settings) | 400 | No | "Time zone not recognised." |
 | `quiet_hours_equal` | `quiet_start = quiet_end` | 400 | No | "Start and end must differ." |
+| `nudge_gap_out_of_range` | `nudge_gap_hours` not 1–12 | 400 | No | "Choose 1 to 12 hours." |
 | `week_start_not_monday` | `week_start` isn't a Monday | 400 | No | App bug; "Couldn't save." |
 | `entry_not_found` | Edit (`200 []`, mapped by the app) or Tag change (`set_entry_tag`, 400) of an Entry not on the Server | 400 (`set_entry_tag` only) | No | "This Entry was deleted." and refresh |
 | `category_not_active` | Tag change to a Category that isn't active | 400 | No | "Pick another category." and refresh |
@@ -107,7 +108,7 @@ are refused by column grants (403); the app never sends them.
 
 | Operation | Who may call | Check |
 |---|---|---|
-| Entry, settings, Review done, Push subscription writes | Signed-in user | RLS policies for `authenticated` only, `user_id = auth.uid()`. Insert, update, delete revoked on all `public` tables from `anon` and `authenticated`, then granted per table: `entries` select, delete, insert `id, text, started_at, ended_at, time_zone, form_opened_at`, update `text, started_at, ended_at, time_zone`; `categories` select; `settings` select, update `time_zone, quiet_start, quiet_end`; `weekly_reviews` select, insert; `push_subscriptions` select, insert, update; `notifications_sent` none. Backend writes the SQL |
+| Entry, settings, Review done, Push subscription writes | Signed-in user | RLS policies for `authenticated` only, `user_id = auth.uid()`. Insert, update, delete revoked on all `public` tables from `anon` and `authenticated`, then granted per table: `entries` select, delete, insert `id, text, started_at, ended_at, time_zone, form_opened_at`, update `text, started_at, ended_at, time_zone`; `categories` select; `settings` select, update `time_zone, quiet_start, quiet_end, nudge_gap_hours`; `weekly_reviews` select, insert; `push_subscriptions` select, insert, update; `notifications_sent` none. Backend writes the SQL |
 | Reads | Signed-in user | RLS and the grants above |
 | `set_entry_tag`, `approve_category`, `reject_category` | Signed-in user | `security definer`, `set search_path = ''`, execute granted to `authenticated` only; explicit `user_id = auth.uid()` check on the Entry and Category |
 | `tag-entries`, `send-notifications` | pg_cron and the Entry insert trigger only | `x-job-secret` equals a Server secret, which the trigger and pg_cron jobs read from Supabase Vault, never inline; JWT check off; the function uses the service role |

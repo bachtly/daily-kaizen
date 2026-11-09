@@ -43,7 +43,7 @@ Postconditions: corrected Tags have Tag source me; approved Categories are activ
 
 ### UC-5 · Nudge
 Server · scheduled check · a Push subscription exists.
-Main flow: 1. The job finds a Gap of 3 hours. 2. The Server sends one Nudge (AC-6.1).
+Main flow: 1. The job finds a Gap that reached my Nudge gap (default 3 hours). 2. The Server sends one Nudge (AC-6.1).
 Exceptions: 2a. Gap reached inside Quiet hours → Nudge at their end, about 07:00; accepted (user decision). 2b. Push endpoint rejects or drops → no retry; subscription refreshed on next open (R4).
 Postconditions: at most one Nudge per Gap, recorded.
 
@@ -100,9 +100,10 @@ G1 counts a day as logged when at least one Entry starts that day in my time zon
 - AC-5.3 When I tap "Review done", the Server shall record Review done for the week shown, once per week, so a Monday review of last week counts.
 
 ### US-6 · As me, I want a Nudge when I forget to log, but never at night, so that days don't go Unlogged (G1)
-- AC-6.1 When a Gap reaches 3 hours outside Quiet hours, and no Nudge was sent for that Gap, the Server shall send one Nudge and record it; a Gap that reaches 3 hours inside Quiet hours gets its Nudge when Quiet hours end.
+- AC-6.1 When a Gap reaches the Nudge gap (default 3 hours) outside Quiet hours, and no Nudge was sent for that Gap, the Server shall send one Nudge and record it; a Gap that reaches it inside Quiet hours gets its Nudge when Quiet hours end.
 - AC-6.2 When I tap "Turn on notifications", the app shall ask iOS for permission and, if granted, send the Push subscription; if denied, show that push is off and the Review reminder email still arrives (judgement).
 - AC-6.3 When I change Quiet hours in settings (default 23:00–07:00), the Server shall use the new hours for the next Nudge.
+- AC-6.4 When I change the Nudge gap in settings (whole hours 1–12, default 3), the Server shall use it for the next Nudge; a Gap that already got its Nudge gets no second one.
 
 ### US-7 · As me, I want to sign in once with an emailed code, so that my Entries stay mine (G3)
 - AC-7.1 When I enter a valid 6-digit code from my email in the home-screen app, the app shall sign me in and refresh the Local copy.
@@ -169,7 +170,7 @@ flowchart TD
 flowchart TD
   J[Scheduled check] --> SUB{Push subscription?}
   SUB -- no --> NO[Nothing sent]
-  SUB -- yes --> GP{Gap >= 3 h?}
+  SUB -- yes --> GP{Gap >= Nudge gap?}
   GP -- no --> NO
   GP -- yes --> SENT{Nudge sent for this Gap?}
   SENT -- yes --> NO
