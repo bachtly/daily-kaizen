@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
@@ -13,11 +13,15 @@ vi.mock('./data/supabase', () => ({
 }))
 const onOpen = vi.fn()
 vi.mock('./data/localCopy', () => ({ onOpen }))
-const { routes, refreshWindow, refreshAfterSignIn } = await import('./routes')
+const openPush = vi.fn()
+vi.mock('./data/push', () => ({ openPush, browserEnv: () => ({}) }))
+vi.mock('./ui/liveWrites', () => ({ writes: { upsertPushSubscription: () => {} }, deviceZone: () => 'UTC' }))
+const { routes, refreshWindow } = await import('./routes')
 
 beforeEach(() => {
   session = { user: {} }
-  onOpen.mockReset()
+  onOpen.mockReset().mockResolvedValue(undefined)
+  openPush.mockReset().mockResolvedValue({ state: 'off' })
 })
 afterEach(cleanup)
 
@@ -65,16 +69,40 @@ test('refresh window starts at the previous Monday 00:00 in the zone', () => {
   expect(w).toEqual({ since: '2026-10-25T15:00:00.000Z', sinceDate: '2026-10-26' })
 })
 
-test('signing in refreshes the Local copy with the device time zone', () => {
-  refreshAfterSignIn()
+test('a cold open with a session refreshes the Local copy and re-sends the Push subscription', async () => {
+  at('/')
+  await screen.findByRole('navigation', { name: 'Main' })
   expect(onOpen).toHaveBeenCalledOnce()
   const [win, tz] = onOpen.mock.calls[0]
   expect(tz).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
   expect(win.sinceDate).toMatch(/^\d{4}-\d\d-\d\d$/)
+  expect(openPush).toHaveBeenCalledOnce()
 })
 
-test('the /sign-in route hands the refresh to SignInScreen', () => {
-  const route = routes.find((r) => r.path === '/sign-in')
-  const element = route?.element as { props: { onSignedIn?: () => void } }
-  expect(element.props.onSignedIn).toBe(refreshAfterSignIn)
+test('changing tabs does not refresh again', async () => {
+  const router = at('/')
+  await screen.findByRole('navigation', { name: 'Main' })
+  await act(() => router.navigate('/settings'))
+  expect(onOpen).toHaveBeenCalledOnce()
+})
+
+test('returning to the foreground refreshes; going to the background does not', async () => {
+  at('/')
+  await screen.findByRole('navigation', { name: 'Main' })
+  const set = (v: string) => Object.defineProperty(document, 'visibilityState', { value: v, configurable: true })
+  set('hidden')
+  document.dispatchEvent(new Event('visibilitychange'))
+  expect(onOpen).toHaveBeenCalledOnce()
+  set('visible')
+  document.dispatchEvent(new Event('visibilitychange'))
+  expect(onOpen).toHaveBeenCalledTimes(2)
+  expect(openPush).toHaveBeenCalledTimes(2)
+})
+
+test('without a session nothing is refreshed', async () => {
+  session = null
+  const router = at('/')
+  await waitFor(() => expect(router.state.location.pathname).toBe('/sign-in'))
+  expect(onOpen).not.toHaveBeenCalled()
+  expect(openPush).not.toHaveBeenCalled()
 })

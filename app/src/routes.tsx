@@ -1,9 +1,12 @@
-import { createBrowserRouter, type RouteObject } from 'react-router';
+import { useEffect } from 'react';
+import { createBrowserRouter, Outlet, type RouteObject } from 'react-router';
 import { onOpen, type RefreshWindow } from './data/localCopy';
+import { browserEnv, openPush } from './data/push';
 import { mondayOf, weekBounds } from './data/week';
 import { LogForm } from './ui/LogForm';
 import { SettingsScreen } from './ui/SettingsScreen';
 import { SignInScreen } from './ui/SignInScreen';
+import { writes } from './ui/liveWrites';
 import { RequireSession } from './ui/useSession';
 import { WeekScreen } from './ui/WeekScreen';
 
@@ -14,21 +17,44 @@ export function refreshWindow(now: number, tz: string): RefreshWindow {
   return { since: new Date(weekBounds(prev, tz).start).toISOString(), sinceDate: prev };
 }
 
-/** After sign-in: report the time zone and fill the Local copy. */
-export function refreshAfterSignIn() {
+const VAPID = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+
+/** App open or return to foreground, with a session: report the time zone, refresh the Local copy, re-send the Push subscription (AC-2.3, AC-6.2). */
+export function refreshOnOpen() {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  void onOpen(refreshWindow(Date.now(), tz), tz);
+  void onOpen(refreshWindow(Date.now(), tz), tz).catch(() => {});
+  void openPush(browserEnv(), VAPID, writes.upsertPushSubscription).catch(() => {});
 }
 
-const guarded = (element: React.ReactNode) => <RequireSession>{element}</RequireSession>;
+/** Runs the open refresh when the signed-in app mounts and each time it comes back to the foreground. */
+export function OnOpen() {
+  useEffect(() => {
+    refreshOnOpen();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshOnOpen();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+  return <Outlet />;
+}
 
-// All screens but /sign-in need a session. The screens still show mock data until their ui-* tasks wire them to the Local copy.
+// All screens but /sign-in need a session, and share one OnOpen (tab changes do not refresh again). The screens still show mock data until their ui-* tasks wire them to the Local copy.
 export const routes: RouteObject[] = [
-  { path: '/', element: guarded(<LogForm />) },
-  { path: '/week', element: guarded(<WeekScreen />) },
-  { path: '/week/:monday', element: guarded(<WeekScreen isCurrentWeek={false} />) },
-  { path: '/settings', element: guarded(<SettingsScreen />) },
-  { path: '/sign-in', element: <SignInScreen onSignedIn={refreshAfterSignIn} /> },
+  {
+    element: (
+      <RequireSession>
+        <OnOpen />
+      </RequireSession>
+    ),
+    children: [
+      { path: '/', element: <LogForm /> },
+      { path: '/week', element: <WeekScreen /> },
+      { path: '/week/:monday', element: <WeekScreen isCurrentWeek={false} /> },
+      { path: '/settings', element: <SettingsScreen /> },
+    ],
+  },
+  { path: '/sign-in', element: <SignInScreen /> },
 ];
 
 export const router = () => createBrowserRouter(routes);
