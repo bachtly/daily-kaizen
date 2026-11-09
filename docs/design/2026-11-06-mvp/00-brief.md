@@ -70,7 +70,7 @@ The repo has no code yet, so everything is new. These paths are proposals.
 | Local copy | A read-only copy of this week's and last week's data on the phone, for viewing offline; refreshed when online | None yet |
 | Weekly review | My Sunday session using the "This week" page | None yet |
 | Unlogged | Time in a day not covered by any entry | None yet |
-| Nudge | A push notification asking me to log, after 3 hours with no entry | None yet |
+| Nudge | A push notification asking me to log, after the Nudge gap (3 hours by default) with no entry | None yet |
 | Quiet hours | The daily period when nudges aren't sent | None yet |
 | Review reminder | The Sunday 19:00 email and push asking me to do the Weekly review | None yet |
 | Category suggestion | The push sent when the AI proposes a Suggested category | None yet |
