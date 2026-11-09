@@ -67,7 +67,7 @@ Supabase
 | Notification | When |
 | --- | --- |
 | Review reminder | Sunday evening |
-| Nudge to log | 3 hours after the latest entry's end time, at most once per gap, never in quiet hours |
+| Nudge to log | The Nudge gap (3 hours by default) after the latest entry's end time, at most once per gap, never in quiet hours |
 | Category suggestion | The AI proposes a new category |
 
 - Quiet hours are a setting, 23:00–07:00 by default. They prevent overnight nudges.
@@ -92,7 +92,7 @@ Full field list: [03-data-model.md](design/2026-11-06-mvp/03-data-model.md). Fie
 | `entries` | `id` (from the phone), `text`, `started_at`, `ended_at`, `time_zone`, `form_opened_at`, *server:* `category_id`, `tag_source` (AI or me), `tagged_at`, `suggested_category_id`, `tag_attempts`, `tagging_gave_up_at` |
 | `categories` | `id`, `name`, `description`, `status` (active, suggested or rejected) |
 | `push_subscriptions` | `id`, `endpoint`, `p256dh`, `auth` |
-| `settings` | `time_zone`, `quiet_start`, `quiet_end` |
+| `settings` | `time_zone`, `quiet_start`, `quiet_end`, `nudge_gap_hours` |
 | `weekly_reviews` | `week_start`, `done_at` |
 | `notifications_sent` | `kind` (nudge or review reminder), `about`, `sent_at` |
 

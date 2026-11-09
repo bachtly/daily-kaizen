@@ -65,7 +65,7 @@ that touch Server-owned fields. Every phone write returns the saved row and is s
 ### UI → [05-ui.md](05-ui.md)
 
 Four screens: Log form (prefilled start and end, Recent chips, overlap note), This week (Category totals, Untagged, Unlogged,
-Suggested category cards, inline Entry editing, Tag picker, Review done), Settings (push status, Quiet hours) and Sign in
+Suggested category cards, inline Entry editing, Tag picker, Review done), Settings (push status, Quiet hours, Nudge gap) and Sign in
 (email, 6-digit code). One `ConnectionBanner` shows offline and lost-session states; `SaveStatus` shows "saved" only after the
 Server confirms. Storybook mockups of every screen are in `app/src/ui`.
 

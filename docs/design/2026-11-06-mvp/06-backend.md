@@ -146,7 +146,7 @@ local = now() AT TIME ZONE tz
 Review reminder due  if local is Sunday and local.time >= 19:00
                      and no row (review_reminder, about = Monday of local week)
 Nudge due            if a push_subscriptions row exists
-                     and gap_start <= now() - 3 h (no Entries → no Gap → no Nudge)
+                     and gap_start <= now() - settings.nudge_gap_hours hours (no Entries → no Gap → no Nudge)
                      and local.time not in Quiet hours (wrap-aware: start > end means [start,24h) ∪ [0,end))
                      and no row (nudge, about = gap_start)
 ```
@@ -219,7 +219,7 @@ No alerting service: one user reviews `nfr_report` weekly (judgement; fits the c
 
 ## Testing strategy
 
-- **Database (pgTAP via `supabase test db`, fixtures via `seed_account(uid)`):** constraints and error keys (AC-1.2, AC-1.3); RLS, grants, job-helper EXECUTE per role (AC-7.2, NFR-11); Tag cleared on text edit (AC-3.2, AC-3.3); guarded AI update races (AC-3.2, AC-3.4); Suggested category and approve/reject (AC-4.1, AC-4.2, AC-4.3); `claim_due_notifications()` with fixed `now()` across zones, DST, Quiet hours wrapping midnight, no subscription, no Entries, settings changes, double claim (NFR-6, NFR-7, AC-5.2, AC-5.3, AC-6.1, AC-6.2, AC-6.3); insert trigger survives a pg_net error.
+- **Database (pgTAP via `supabase test db`, fixtures via `seed_account(uid)`):** constraints and error keys (AC-1.2, AC-1.3); RLS, grants, job-helper EXECUTE per role (AC-7.2, NFR-11); Tag cleared on text edit (AC-3.2, AC-3.3); guarded AI update races (AC-3.2, AC-3.4); Suggested category and approve/reject (AC-4.1, AC-4.2, AC-4.3); `claim_due_notifications()` with fixed `now()` across zones, DST, Quiet hours wrapping midnight, no subscription, no Entries, a changed Nudge gap, settings changes, double claim (NFR-6, NFR-7, AC-5.2, AC-5.3, AC-6.1, AC-6.2, AC-6.3, AC-6.4); insert trigger survives a pg_net error.
 - **Edge Functions (Deno test, mocked AI/push/Resend):** reply validation, attempt counting, give-up at 3, 503 on missing config, 110 s budget, 404/410 deletes subscription, secret check.
 - **Contract:** phone data layer against local Supabase (`supabase start`): create resend with same id, edit, delete twice, refresh (AC-2.1–2.4, incl. AC-2.3); sign-in with code and expired session (UC-6).
 - **Device (iPhone, iOS 18.4+):** first push (D5), session after 7+ days, Local copy survives a week, offline open from cache, Pages headers.

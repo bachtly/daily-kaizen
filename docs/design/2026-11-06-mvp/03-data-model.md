@@ -14,7 +14,7 @@ so no allowed-email record is stored; the emailed code still works for an existi
 | `entries` | Entries | `supabase/migrations` | New | I save → I edit, Server tags → I delete (hard delete) |
 | `categories` | Active Categories, Suggested and Rejected categories | `supabase/migrations` | New | 5 starting ones with my account; tagging adds Suggested → active or Rejected; never deleted |
 | `push_subscriptions` | Push subscriptions | `supabase/migrations` | New | Sent on each open → deleted when the push service reports it gone |
-| `settings` | Time zone and Quiet hours | `supabase/migrations` | New | Created with my account → updated by the app |
+| `settings` | Time zone, Quiet hours and Nudge gap | `supabase/migrations` | New | Created with my account → updated by the app |
 | `weekly_reviews` | Review done records | `supabase/migrations` | New | Created by "Review done" (AC-5.3); kept |
 | `notifications_sent` | Record of each Nudge and Review reminder, to send once and to measure NFR-6, NFR-7 | `supabase/migrations` | New | Recorded before sending; kept |
 | Local copy (phone storage, OQ-9) | The Local copy | `app/` | New | Replaced whole on each refresh (AC-2.3); disposable, rebuilt from the Server |
@@ -62,6 +62,7 @@ erDiagram
 | settings.user_id | uuid | no | | PK |
 | settings.time_zone | text | yes | null | Latest reported (AC-2.3), an IANA name Postgres knows (`time_zone_unknown`); jobs skip me while null |
 | settings.quiet_start, quiet_end | time | no | 23:00, 07:00 | Local; may wrap midnight; `quiet_start <> quiet_end` (`quiet_hours_equal`) |
+| settings.nudge_gap_hours | smallint | no | 3 | Whole hours, 1–12 (`nudge_gap_out_of_range`); the Gap length that triggers a Nudge (D6) |
 | weekly_reviews.week_start | date | no | | Monday, my time zone, checked (`week_start_not_monday`); PK with `user_id` |
 | weekly_reviews.done_at | timestamptz | no | now() | |
 | notifications_sent.kind | enum `nudge`, `review_reminder` | no | | |
@@ -159,6 +160,20 @@ Entry is ever lost), little code with light edge cases, and G2 (logging stays fa
 Consequences:
 - I can't log, edit or delete without a connection. Missed time is logged later as a backfill, which the form supports.
 - The Local copy can be out of date until the next online open; it is read-only.
+
+### D6 · Make the Nudge gap a setting
+
+I wanted to choose how long a Gap runs before a Nudge instead of the fixed 3 hours. Drivers: G1 (days don't go Unlogged), little code, and NFR-7 (one Nudge per Gap) staying true.
+
+| Option | Outcome | Reason |
+|---|---|---|
+| Whole hours 1–12 in `settings`, default 3, still one Nudge per Gap | **Chosen** | One column and one check; the job already reads `settings`; hours are enough and the form is one number |
+| A fixed 3 hours | Rejected | The first choice; I can't tune it when it nags or comes too late |
+| Minutes or free text | Rejected | Finer control is not worth a unit, parsing and more error cases; the job runs every 5 minutes anyway |
+| A Nudge repeating every gap | Rejected | Breaks "one Nudge per Gap" (NFR-7) and nags |
+
+Consequences:
+- Changing the gap mid-Gap uses the new value at the next job run; a Gap already Nudged stays Nudged (`notifications_sent` key), so lowering it never sends a second Nudge.
 
 ## Open questions
 
