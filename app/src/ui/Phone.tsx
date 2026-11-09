@@ -10,7 +10,8 @@ export function Phone({ children, tab, overlay }: { children: ReactNode; tab?: T
   return (
     <div className="phone" style={{ position: 'relative' }}>
       <div className="phone-status" />
-      <main className="phone-body">{children}</main>
+      {/* Focusable so a long screen can be scrolled from the keyboard. */}
+      <main className="phone-body" tabIndex={0}>{children}</main>
       {tab && <TabBar current={tab} />}
       <div className="phone-home" />
       {overlay}

@@ -15,4 +15,3 @@ export const Code: Story = { args: { step: 'code', email: 'me@example.com', rese
 export const CodeResendReady: Story = { args: { step: 'code', email: 'me@example.com' } };
 export const WrongCode: Story = { args: { step: 'code', email: 'me@example.com', error: 'wrong-code' } };
 export const RateLimited: Story = { args: { step: 'code', email: 'me@example.com', error: 'rate-limited' } };
-export const OpenedInSafari: Story = { args: { inSafari: true } };

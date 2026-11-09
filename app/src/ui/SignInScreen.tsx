@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { sendCode, verifyCode } from '../data/auth';
+import { InstallHelp } from './InstallHelp';
+import { detectInstallBrowser, type InstallBrowser } from './installBrowser';
 import { Phone } from './Phone';
 
 const RESEND_WAIT_SECONDS = 60;
@@ -12,8 +14,8 @@ export type SignInViewProps = {
   email?: string;
   busy?: boolean;
   error?: SignInError;
-  /** Opened in Safari instead of the home-screen app. */
-  inSafari?: boolean;
+  /** Set when opened in a browser instead of the home-screen app: which steps to show. */
+  installHelp?: InstallBrowser;
   resendWaitSeconds?: number;
   onEmailChange?: (email: string) => void;
   onCodeChange?: (code: string) => void;
@@ -30,17 +32,10 @@ const ERROR_TEXT: Record<SignInError, string> = {
 
 /** The Sign in screen, props only (UC-6). Same message for any email, so it reveals nothing (AC-7.2). */
 export function SignInView({
-  step = 'email', email = '', busy, error, inSafari, resendWaitSeconds = 0,
+  step = 'email', email = '', busy, error, installHelp, resendWaitSeconds = 0,
   onEmailChange, onCodeChange, onSendCode, onVerify,
 }: SignInViewProps) {
-  if (inSafari) {
-    return (
-      <Phone>
-        <h1>daily-kaizen</h1>
-        <p className="note">Open daily-kaizen from your Home Screen to sign in. To add it: Share → Add to Home Screen.</p>
-      </Phone>
-    );
-  }
+  if (installHelp) return <InstallHelp browser={installHelp} />;
   const submit = (action?: () => void) => (e: FormEvent) => {
     e.preventDefault();
     action?.();
@@ -138,7 +133,8 @@ export function SignInScreen({ onSignedIn }: { onSignedIn?: () => void } = {}) {
 
   return (
     <SignInView
-      step={step} email={email} busy={busy} error={error} inSafari={!isStandalone()} resendWaitSeconds={wait}
+      step={step} email={email} busy={busy} error={error} resendWaitSeconds={wait}
+      installHelp={isStandalone() ? undefined : detectInstallBrowser(navigator.userAgent, navigator.platform, navigator.maxTouchPoints)}
       onEmailChange={setEmail} onCodeChange={setCode} onSendCode={() => void send()} onVerify={() => void verify()}
     />
   );
