@@ -83,7 +83,7 @@ jobs:
             | jq -e '.mailer_templates_magic_link_content | contains("{{ .Token }}")'
       - name: Function secrets
         run: |
-          supabase secrets set \
+          supabase secrets set --yes \
             "JOB_SECRET=$JOB_SECRET" \
             "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" \
             "RESEND_API_KEY=$RESEND_API_KEY" \
@@ -94,7 +94,7 @@ jobs:
       - name: Functions
         run: |
           for f in tag-entries send-notifications; do
-            supabase functions deploy "$f" --no-verify-jwt --use-api --import-map supabase/functions/deno.json
+            supabase functions deploy "$f" --yes --no-verify-jwt --use-api --import-map supabase/functions/deno.json
           done
       - name: Vault and account seed
         run: |
