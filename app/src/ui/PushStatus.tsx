@@ -1,21 +1,23 @@
 import type { PushState } from '../data/push';
+import { Skeleton } from './Skeleton';
 
 /** Push on/off and what to do about it (AC-6.2). */
-export function PushStatus({ state, online = true, busy, problem, onTurnOn }: {
-  /** `checking` until the browser and Server have answered, so "Off" doesn't flash first. */
-  state: PushState | 'checking';
+export function PushStatus({ state, loading, online = true, busy, problem, onTurnOn }: {
+  state: PushState;
+  /** The browser and Server haven't answered yet: a Skeleton instead of any state. */
+  loading?: boolean;
   online?: boolean;
   busy?: boolean;
   problem?: string;
   onTurnOn?: () => void;
 }) {
+  if (loading) return <><Skeleton height={24} width="40%" /><Skeleton height={44} radius={12} /></>;
   if (state === 'not-installed') {
     return <p className="note">Add daily-kaizen to your Home Screen first: Share → Add to Home Screen. The Sunday email arrives either way.</p>;
   }
   if (state === 'denied') {
     return <p className="note">Push is off. Turn it on in iOS Settings → Notifications → daily-kaizen. The Sunday email still arrives.</p>;
   }
-  if (state === 'checking') return <p>Push: <strong>…</strong></p>;
   return (
     <>
       <p>Push: <strong>{state === 'on' ? 'On' : 'Off'}</strong></p>

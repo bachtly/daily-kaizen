@@ -141,6 +141,21 @@ describe('WeekScreen', () => {
     expect(screen.getByText('Week of 12 Oct')).toBeTruthy();
   });
 
+  it('shows a skeleton, not Not reviewed or Not updated yet, until the Local copy is read', async () => {
+    let resolve!: (c: LocalCopy) => void;
+    readLocalCopy.mockReturnValue(new Promise((r) => { resolve = r; }));
+    render(<MemoryRouter><WeekScreen /></MemoryRouter>);
+    expect(document.querySelector('main')?.getAttribute('aria-busy')).toBe('true');
+    expect(screen.queryByText('Not reviewed')).toBeNull();
+    expect(screen.queryByText('Not updated yet')).toBeNull();
+    expect(screen.queryByText('Nothing logged this week yet.')).toBeNull();
+    expect(document.querySelectorAll('.skeleton').length).toBeGreaterThan(0);
+    resolve({ entries: [], categories: [], settings: null, reviews: [], refreshedAt: null });
+    await screen.findByText('Nothing logged this week yet.');
+    expect(screen.getByText('Not updated yet')).toBeTruthy();
+    expect(document.querySelector('.skeleton')).toBeNull();
+  });
+
   it('shows the signed-out banner instead of a skeleton when the earlier-week fetch loses the session', async () => {
     readLocalCopy.mockResolvedValue(copy());
     fetchWeek.mockResolvedValueOnce({ ok: false, error: 'session_lost' });

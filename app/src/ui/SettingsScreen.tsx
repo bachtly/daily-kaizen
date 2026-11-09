@@ -1,22 +1,22 @@
 import { useEffect, useState } from 'react';
 
-import { onCopyChanged } from '../data/copyChanged';
 import { browserEnv, openPush, turnOnPush, type PushState } from '../data/push';
-import { readLocalCopy } from '../data/localCopy';
 import { getTimings, p95 } from '../data/timings';
 import { deviceZone, writes } from './liveWrites';
 import { PushStatus } from './PushStatus';
 import { QuietHoursFields } from './QuietHoursFields';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
+import { Skeleton } from './Skeleton';
+import { useLocalCopy } from './useLocalCopy';
 import { hhmm as clockTime } from './weekFormat';
 
 export type { PushState };
 
-type ShownPush = PushState | 'checking';
-
 export type SettingsViewProps = {
   connection?: Connection;
-  push?: ShownPush;
+  push?: PushState;
+  /** Parts still being read: each shows a Skeleton, never a default as if it were real. */
+  loading?: { push?: boolean; hours?: boolean; speed?: boolean };
   /** Time of the last Local copy refresh, for the offline banner. */
   refreshedAt?: string | null;
   pushBusy?: boolean;
@@ -43,32 +43,34 @@ const ms = (v: number | null | undefined) => (v == null ? '–' : `${v} ms`);
 
 /** Settings: push on/off (AC-6.2) and Quiet hours (AC-6.3). */
 export function SettingsView({
-  connection = 'online', push = 'off', refreshedAt, pushBusy, pushProblem, quietStart = '23:00', quietEnd = '07:00', quietError,
+  connection = 'online', push = 'off', loading = {}, refreshedAt, pushBusy, pushProblem, quietStart = '23:00', quietEnd = '07:00', quietError,
   saving, saved, saveProblem, saveP95, refreshP95, onTurnOn, onQuietStart = () => {}, onQuietEnd = () => {}, onSave,
 }: SettingsViewProps) {
   const online = connection !== 'offline';
   const error = quietError || quietStart === quietEnd ? EQUAL : undefined;
   return (
-    <Phone tab="settings">
-      <ConnectionBanner state={connection} refreshedAt={refreshedAt ?? '–'} />
+    <Phone tab="settings" busy={Object.values(loading).some(Boolean)}>
+      <ConnectionBanner state={connection} refreshedAt={refreshedAt} />
       <h1>Settings</h1>
 
       <section className="panel" aria-labelledby="notif-h">
         <h2 id="notif-h">Notifications</h2>
-        <PushStatus state={push} online={online} busy={pushBusy} problem={pushProblem} onTurnOn={onTurnOn} />
+        <PushStatus state={push} loading={loading.push} online={online} busy={pushBusy} problem={pushProblem} onTurnOn={onTurnOn} />
       </section>
 
       <section className="panel" aria-labelledby="quiet-h">
         <h2 id="quiet-h">Quiet hours (no Nudges)</h2>
-        <QuietHoursFields start={quietStart} end={quietEnd} error={error} disabled={saving} onStart={onQuietStart} onEnd={onQuietEnd} />
+        <QuietHoursFields loading={loading.hours} start={quietStart} end={quietEnd} error={error} disabled={saving} onStart={onQuietStart} onEnd={onQuietEnd} />
       </section>
 
-      <button className="primary" onClick={onSave} disabled={saving || !!error || !online}>{saving ? 'Saving…' : 'Save'}</button>
+      <button className="primary" onClick={onSave} disabled={saving || loading.hours || !!error || !online}>{saving ? 'Saving…' : 'Save'}</button>
       {!online && <p className="note">Saving needs a connection.</p>}
       {saveProblem && <p className="error" role="alert">{saveProblem}</p>}
       <p className="status" aria-live="polite">{saved ? 'Saved.' : ''}</p>
 
-      <p className="note">Typical speed: save {ms(saveP95)} · refresh {ms(refreshP95)} (95th percentile of the last 50)</p>
+      {loading.speed
+        ? <Skeleton height={36} />
+        : <p className="note">Typical speed: save {ms(saveP95)} · refresh {ms(refreshP95)} (95th percentile of the last 50)</p>}
     </Phone>
   );
 }
@@ -82,17 +84,20 @@ const pushProblemText = (e?: string) =>
 export function SettingsScreen() {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [signedOut, setSignedOut] = useState(false);
-  const [push, setPush] = useState<ShownPush>('checking');
-  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
+  const { copy, ready } = useLocalCopy();
+  const [push, setPush] = useState<PushState>();
   const [pushBusy, setPushBusy] = useState(false);
   const [pushProblem, setPushProblem] = useState<string>();
-  const [start, setStart] = useState('23:00');
-  const [end, setEnd] = useState('07:00');
+  // The fields show what the Local copy says; once edited, the edit wins and a later refresh doesn't overwrite it.
+  const [startEdit, setStartEdit] = useState<string>();
+  const [endEdit, setEndEdit] = useState<string>();
+  const start = startEdit ?? (copy.settings ? hhmm(copy.settings.quiet_start) : '23:00');
+  const end = endEdit ?? (copy.settings ? hhmm(copy.settings.quiet_end) : '07:00');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveProblem, setSaveProblem] = useState<string>();
   const [serverRefused, setServerRefused] = useState(false);
-  const [speed, setSpeed] = useState<{ save: number | null; refresh: number | null }>({ save: null, refresh: null });
+  const [speed, setSpeed] = useState<{ save: number | null; refresh: number | null }>();
 
   const report = async (sub: Parameters<typeof writes.upsertPushSubscription>[0]) => {
     const r = await writes.upsertPushSubscription(sub);
@@ -100,7 +105,7 @@ export function SettingsScreen() {
     return r;
   };
   const loadSpeed = () =>
-    Promise.all([getTimings('save'), getTimings('refresh')]).then(([s, r]) => setSpeed({ save: p95(s), refresh: p95(r) }), () => {});
+    Promise.all([getTimings('save'), getTimings('refresh')]).then(([s, r]) => setSpeed({ save: p95(s), refresh: p95(r) }), () => setSpeed({ save: null, refresh: null }));
 
   useEffect(() => {
     let live = true;
@@ -108,16 +113,6 @@ export function SettingsScreen() {
     const off = () => setOnline(false);
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
-    // The offline banner's time follows every refresh (open, foreground, a save); the fields are read once so an edit isn't overwritten.
-    const readRefreshedAt = () =>
-      readLocalCopy().then((c) => { if (live && c.refreshedAt) setRefreshedAt(clockTime(Date.parse(c.refreshedAt), deviceZone())); }, () => {});
-    const unsub = onCopyChanged(() => void readRefreshedAt());
-    Promise.resolve()
-      .then(() => readLocalCopy())
-      .then((c) => {
-        if (live && c.refreshedAt) setRefreshedAt(clockTime(Date.parse(c.refreshedAt), deviceZone()));
-        if (live && c.settings) { setStart(hhmm(c.settings.quiet_start)); setEnd(hhmm(c.settings.quiet_end)); }
-      }, () => {});
     void loadSpeed();
     // Opening the page sends the subscription again when permission is already granted.
     void openPush(browserEnv(), VAPID, report).then((o) => {
@@ -126,7 +121,6 @@ export function SettingsScreen() {
     });
     return () => {
       live = false;
-      unsub();
       window.removeEventListener('online', on);
       window.removeEventListener('offline', off);
     };
@@ -156,12 +150,13 @@ export function SettingsScreen() {
   return (
     <SettingsView
       connection={signedOut ? 'signed-out' : online ? 'online' : 'offline'}
-      push={push} refreshedAt={refreshedAt} pushBusy={pushBusy} pushProblem={pushProblem}
+      push={push ?? 'off'} loading={{ push: !push, hours: !ready, speed: !speed }}
+      refreshedAt={copy.refreshedAt ? clockTime(Date.parse(copy.refreshedAt), deviceZone()) : null} pushBusy={pushBusy} pushProblem={pushProblem}
       quietStart={start} quietEnd={end} quietError={serverRefused} saving={saving} saved={saved} saveProblem={saveProblem}
-      saveP95={speed.save} refreshP95={speed.refresh}
+      saveP95={speed?.save} refreshP95={speed?.refresh}
       onTurnOn={() => void turnOn()}
-      onQuietStart={(v) => { setStart(v); setSaved(false); setServerRefused(false); }}
-      onQuietEnd={(v) => { setEnd(v); setSaved(false); setServerRefused(false); }}
+      onQuietStart={(v) => { setStartEdit(v); setSaved(false); setServerRefused(false); }}
+      onQuietEnd={(v) => { setEndEdit(v); setSaved(false); setServerRefused(false); }}
       onSave={() => void save()}
     />
   );

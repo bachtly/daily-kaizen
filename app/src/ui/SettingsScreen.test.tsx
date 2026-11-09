@@ -36,12 +36,36 @@ afterEach(cleanup);
 
 describe('SettingsView', () => {
   it('shows when the offline data is from, and no Off or button while push is being checked', () => {
-    const { rerender } = render(<MemoryRouter><SettingsView connection="offline" refreshedAt="14:02" push="checking" /></MemoryRouter>);
+    const { rerender } = render(<MemoryRouter><SettingsView connection="offline" refreshedAt="14:02" loading={{ push: true }} /></MemoryRouter>);
     expect(screen.getByText(/Showing data from 14:02/)).toBeTruthy();
     expect(screen.queryByText('Off')).toBeNull();
     expect(screen.queryByText('Turn on notifications')).toBeNull();
     rerender(<MemoryRouter><SettingsView connection="offline" refreshedAt="14:02" push="off" /></MemoryRouter>);
     expect((screen.getByText('Turn on notifications') as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('SettingsScreen loading', () => {
+  it('shows no default (Push: Off, 23:00, speed dashes) before the reads resolve, then the real values', async () => {
+    let resolveCopy!: (c: LocalCopy) => void;
+    let resolvePush!: (o: PushOutcome) => void;
+    readLocalCopy.mockReturnValue(new Promise((r) => { resolveCopy = r; }));
+    openPush.mockReturnValue(new Promise((r) => { resolvePush = r; }));
+    mount();
+    expect(document.querySelector('main')?.getAttribute('aria-busy')).toBe('true');
+    expect(screen.queryByText('Off')).toBeNull();
+    expect(screen.queryByText('Turn on notifications')).toBeNull();
+    expect(screen.queryByLabelText('From')).toBeNull();
+    expect(screen.queryByText(/Typical speed/)).toBeNull();
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
+    expect(document.querySelectorAll('.skeleton').length).toBeGreaterThan(0);
+    resolveCopy(copy());
+    resolvePush({ state: 'on' });
+    await loaded();
+    await screen.findByText('On');
+    await screen.findByText(/Typical speed/);
+    expect(document.querySelector('main')?.getAttribute('aria-busy')).toBeNull();
+    expect(document.querySelector('.skeleton')).toBeNull();
   });
 });
 
