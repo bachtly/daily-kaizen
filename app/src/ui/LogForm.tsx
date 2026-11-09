@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EntryRow } from '../data/db';
+import { onCopyChanged } from '../data/copyChanged';
 import { readLocalCopy } from '../data/localCopy';
 import { findOverlaps, prefill, recentTexts } from '../data/prefill';
 import type { Result } from '../data/request';
@@ -192,8 +193,9 @@ export function LogForm() {
     Promise.resolve()
       .then(() => readLocalCopy())
       .then((c) => live && setEntries(c.entries), () => {});
-    return () => { live = false; };
-  }, []);
+    const unsub = onCopyChanged(() => void reload());
+    return () => { live = false; unsub(); };
+  }, [reload]);
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 15_000);
     const on = () => setOnline(true);
