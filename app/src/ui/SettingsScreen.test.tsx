@@ -20,7 +20,7 @@ const { SettingsScreen, SettingsView } = await import('./SettingsScreen');
 
 const copy = (): LocalCopy => ({
   entries: [], categories: [], reviews: [], refreshedAt: null,
-  settings: { time_zone: 'UTC', quiet_start: '22:00:00', quiet_end: '06:30:00' },
+  settings: { time_zone: 'UTC', quiet_start: '22:00:00', quiet_end: '06:30:00', nudge_gap_hours: 3 },
 });
 const mount = () => render(<MemoryRouter><SettingsScreen /></MemoryRouter>);
 const field = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
