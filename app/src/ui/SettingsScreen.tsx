@@ -150,7 +150,7 @@ export function SettingsScreen() {
   return (
     <SettingsView
       connection={signedOut ? 'signed-out' : online ? 'online' : 'offline'}
-      push={push ?? 'off'} loading={{ push: !push, hours: !ready, speed: !speed }}
+      push={push ?? 'off'} loading={{ push: !push, hours: !ready || !copy.settings, speed: !speed }}
       refreshedAt={copy.refreshedAt ? clockTime(Date.parse(copy.refreshedAt), deviceZone()) : null} pushBusy={pushBusy} pushProblem={pushProblem}
       quietStart={start} quietEnd={end} quietError={serverRefused} saving={saving} saved={saved} saveProblem={saveProblem}
       saveP95={speed?.save} refreshP95={speed?.refresh}
