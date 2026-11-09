@@ -47,6 +47,24 @@ jobs:
         run: npm run build
       - if: steps.has_test.outputs.run == 'true'
         run: npm test
+      # Storybook checks (Viewport widths overflow, axe) run in headless Chromium.
+      # The browser is cached by Playwright version; the OS libraries are installed every run.
+      - name: Get Playwright version
+        id: pw
+        if: steps.has_test.outputs.run == 'true'
+        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        id: pw_cache
+        if: steps.has_test.outputs.run == 'true'
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - if: steps.has_test.outputs.run == 'true' && steps.pw_cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.has_test.outputs.run == 'true' && steps.pw_cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - if: steps.has_test.outputs.run == 'true'
+        run: npx vitest run --project storybook
 
   db:
     runs-on: ubuntu-latest
