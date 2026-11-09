@@ -22,6 +22,8 @@ export type LogFormViewProps = {
   /** Current time in ms; the live wrapper ticks it. */
   now: number;
   connection?: Connection;
+  /** Time of the last Local copy refresh, for the offline banner. */
+  refreshedAt?: string | null;
   /** Resolves when the Server answers; `unknown` means the result is not known and a resend is safe. */
   onSave: (entry: NewEntry) => Promise<Result<unknown>>;
   /** Freeze the form in a state for review (stories). */
@@ -41,7 +43,7 @@ type FieldKey = keyof typeof fieldMessage;
 const newDraft = () => ({ id: crypto.randomUUID(), openedAt: new Date().toISOString() });
 
 /** Log form: the screen the app opens on. Only the text is required; times are prefilled (AC-1.1). */
-export function LogFormView({ entries, timeZone, now, connection = 'online', onSave, frozen, initialText = '', initialFrom }: LogFormViewProps) {
+export function LogFormView({ entries, timeZone, now, connection = 'online', refreshedAt, onSave, frozen, initialText = '', initialFrom }: LogFormViewProps) {
   const [text, setText] = useState(initialText);
   const [fromEdit, setFromEdit] = useState<number | null>(initialFrom ?? null);
   const [toEdit, setToEdit] = useState<number | null>(null);
@@ -128,7 +130,7 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', onS
 
   return (
     <Phone tab="log">
-      <ConnectionBanner state={sessionLost ? 'signed-out' : connection} />
+      <ConnectionBanner state={sessionLost ? 'signed-out' : connection} refreshedAt={refreshedAt ?? '–'} />
       <h1>What did you do?</h1>
 
       <label className="field-label" htmlFor="entry-text">Activity</label>
@@ -178,12 +180,15 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', onS
 /** The Log form wired to the Local copy and the Server. */
 export function LogForm() {
   const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [online, setOnline] = useState(() => navigator.onLine);
 
   const reload = useCallback(async () => {
     try {
-      setEntries((await readLocalCopy()).entries);
+      const c = await readLocalCopy();
+      setEntries(c.entries);
+      setRefreshedAt(c.refreshedAt);
     } catch {
       // Storage unavailable: the form still works without Recent chips and prefill.
     }
@@ -192,7 +197,7 @@ export function LogForm() {
     let live = true;
     Promise.resolve()
       .then(() => readLocalCopy())
-      .then((c) => live && setEntries(c.entries), () => {});
+      .then((c) => { if (live) { setEntries(c.entries); setRefreshedAt(c.refreshedAt); } }, () => {});
     const unsub = onCopyChanged(() => void reload());
     return () => { live = false; unsub(); };
   }, [reload]);
@@ -218,7 +223,7 @@ export function LogForm() {
   return (
     <LogFormView
       entries={entries} timeZone={deviceZone()} now={now}
-      connection={online ? 'online' : 'offline'} onSave={onSave}
+      connection={online ? 'online' : 'offline'} refreshedAt={refreshedAt && hhmm(Date.parse(refreshedAt), deviceZone())} onSave={onSave}
     />
   );
 }

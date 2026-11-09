@@ -3,16 +3,21 @@ import { useEffect, useState } from 'react';
 import { browserEnv, openPush, turnOnPush, type PushState } from '../data/push';
 import { readLocalCopy } from '../data/localCopy';
 import { getTimings, p95 } from '../data/timings';
-import { writes } from './liveWrites';
+import { deviceZone, writes } from './liveWrites';
 import { PushStatus } from './PushStatus';
 import { QuietHoursFields } from './QuietHoursFields';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
+import { hhmm as clockTime } from './weekFormat';
 
 export type { PushState };
 
+type ShownPush = PushState | 'checking';
+
 export type SettingsViewProps = {
   connection?: Connection;
-  push?: PushState;
+  push?: ShownPush;
+  /** Time of the last Local copy refresh, for the offline banner. */
+  refreshedAt?: string | null;
   pushBusy?: boolean;
   pushProblem?: string;
   quietStart?: string;
@@ -37,14 +42,14 @@ const ms = (v: number | null | undefined) => (v == null ? '–' : `${v} ms`);
 
 /** Settings: push on/off (AC-6.2) and Quiet hours (AC-6.3). */
 export function SettingsView({
-  connection = 'online', push = 'off', pushBusy, pushProblem, quietStart = '23:00', quietEnd = '07:00', quietError,
+  connection = 'online', push = 'off', refreshedAt, pushBusy, pushProblem, quietStart = '23:00', quietEnd = '07:00', quietError,
   saving, saved, saveProblem, saveP95, refreshP95, onTurnOn, onQuietStart = () => {}, onQuietEnd = () => {}, onSave,
 }: SettingsViewProps) {
   const online = connection !== 'offline';
   const error = quietError || quietStart === quietEnd ? EQUAL : undefined;
   return (
     <Phone tab="settings">
-      <ConnectionBanner state={connection} />
+      <ConnectionBanner state={connection} refreshedAt={refreshedAt ?? '–'} />
       <h1>Settings</h1>
 
       <section className="panel" aria-labelledby="notif-h">
@@ -76,7 +81,8 @@ const pushProblemText = (e?: string) =>
 export function SettingsScreen() {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [signedOut, setSignedOut] = useState(false);
-  const [push, setPush] = useState<PushState>('off');
+  const [push, setPush] = useState<ShownPush>('checking');
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushProblem, setPushProblem] = useState<string>();
   const [start, setStart] = useState('23:00');
@@ -104,6 +110,7 @@ export function SettingsScreen() {
     Promise.resolve()
       .then(() => readLocalCopy())
       .then((c) => {
+        if (live && c.refreshedAt) setRefreshedAt(clockTime(Date.parse(c.refreshedAt), deviceZone()));
         if (live && c.settings) { setStart(hhmm(c.settings.quiet_start)); setEnd(hhmm(c.settings.quiet_end)); }
       }, () => {});
     void loadSpeed();
@@ -143,7 +150,7 @@ export function SettingsScreen() {
   return (
     <SettingsView
       connection={signedOut ? 'signed-out' : online ? 'online' : 'offline'}
-      push={push} pushBusy={pushBusy} pushProblem={pushProblem}
+      push={push} refreshedAt={refreshedAt} pushBusy={pushBusy} pushProblem={pushProblem}
       quietStart={start} quietEnd={end} quietError={serverRefused} saving={saving} saved={saved} saveProblem={saveProblem}
       saveP95={speed.save} refreshP95={speed.refresh}
       onTurnOn={() => void turnOn()}

@@ -50,5 +50,5 @@ export const SessionLostOnSave: Story = {
   name: 'Save fails: session lost',
   args: { initialText: 'Reading PR reviews', onSave: after({ ok: false, error: 'session_lost' }) },
 };
-export const Offline: Story = { args: { connection: 'offline' } };
+export const Offline: Story = { args: { connection: 'offline', refreshedAt: '14:02' } };
 export const SignedOut: Story = { args: { connection: 'signed-out', initialText: 'Reading PR reviews' } };

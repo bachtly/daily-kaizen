@@ -191,6 +191,19 @@ describe('WeekScreen', () => {
     expect(screen.queryByText('Sign in to see earlier weeks.')).toBeNull();
   });
 
+  it('shows the signed-out banner when Review done loses the session, and still tries the Server while signed out', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    readLocalCopy.mockResolvedValue(copy({ entries }));
+    reviewDone.mockResolvedValue({ ok: false, error: 'session_lost' });
+    mount('/week');
+    fireEvent.click(await screen.findByText('Mark review done'));
+    await screen.findByText(/Signed out/);
+    fireEvent.click(screen.getByText('Mark review done'));
+    await waitFor(() => expect(reviewDone).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('Needs a connection.')).toBeNull();
+  });
+
   it('marks the review done through the Server, then reads the Local copy again', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);

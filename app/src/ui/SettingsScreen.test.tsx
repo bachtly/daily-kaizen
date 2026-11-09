@@ -33,6 +33,17 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+describe('SettingsView', () => {
+  it('shows when the offline data is from, and no Off or button while push is being checked', () => {
+    const { rerender } = render(<MemoryRouter><SettingsView connection="offline" refreshedAt="14:02" push="checking" /></MemoryRouter>);
+    expect(screen.getByText(/Showing data from 14:02/)).toBeTruthy();
+    expect(screen.queryByText('Off')).toBeNull();
+    expect(screen.queryByText('Turn on notifications')).toBeNull();
+    rerender(<MemoryRouter><SettingsView connection="offline" refreshedAt="14:02" push="off" /></MemoryRouter>);
+    expect((screen.getByText('Turn on notifications') as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
 describe('SettingsScreen', () => {
   it('shows the saved Quiet hours and the p95 save and refresh times', async () => {
     mount();

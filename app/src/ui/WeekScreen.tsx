@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import type { CategoryRow, EntryRow } from '../data/db';
 import { onCopyChanged } from '../data/copyChanged';
@@ -15,7 +15,7 @@ import { RefreshedAt } from './RefreshedAt';
 import { ReviewDoneButton } from './ReviewDoneButton';
 import { SuggestedCategoryCard } from './SuggestedCategoryCard';
 import { TagPicker } from './TagPicker';
-import { hhmm } from './weekFormat';
+import { countMoves, hhmm } from './weekFormat';
 
 /** Phone writes the page can make. Each resolves when the Server answers. */
 export type WeekActions = {
@@ -93,6 +93,9 @@ export function WeekView({
       rejectCategory: liveActions.rejectCategory,
     };
   }, [liveActions, monday]);
+  const noticeRef = useRef<HTMLParagraphElement>(null);
+  // The notice may be raised while the page is scrolled down to the row: bring it into view.
+  useEffect(() => { if (gone) noticeRef.current?.scrollIntoView?.({ block: 'nearest' }); }, [gone]);
   const [editId, setEditId] = useState(initialEditId);
   const [picker, setPicker] = useState<{ id: string; opener: HTMLElement | null } | undefined>(
     initialPickerId ? { id: initialPickerId, opener: null } : undefined,
@@ -128,9 +131,9 @@ export function WeekView({
       <ConnectionBanner state={connection} refreshedAt={refreshedLabel ?? '–'} />
       <header className="week-header">
         <div className="week-picker" role="group" aria-label="Choose week">
-          <button aria-label="Previous week" onClick={onPrev}>‹</button>
+          <button aria-label="Previous week" onClick={() => { setGone(null); onPrev?.(); }}>‹</button>
           <h1>{weekLabel(monday)}</h1>
-          <button aria-label="Next week" onClick={onNext} disabled={isCurrentWeek}>›</button>
+          <button aria-label="Next week" onClick={() => { setGone(null); onNext?.(); }} disabled={isCurrentWeek}>›</button>
         </div>
         <div className="week-meta">
           {reviewDone !== undefined && (
@@ -140,7 +143,7 @@ export function WeekView({
         </div>
       </header>
 
-      {gone === monday && <p className="error notice" role="alert">This Entry was deleted.</p>}
+      {gone === monday && <p ref={noticeRef} className="error notice" role="alert">This Entry was deleted.</p>}
 
       {load === 'loading' && <>{[1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton" />)}</>}
       {load === 'offline-earlier-week' && (
@@ -178,7 +181,7 @@ export function WeekView({
               {day.entries.map((e) =>
                 actions && e.id === editId ? (
                   <EntryEditor
-                    key={e.id} entry={e} siblings={entries} now={now} online={online}
+                    key={e.id} entry={e} siblings={entries} now={now} timeZone={timeZone} online={online}
                     onSave={(fields) => actions.editEntry(e.id, fields)} onDelete={() => actions.deleteEntry(e.id)}
                     onClose={() => setEditId(undefined)}
                   />
@@ -193,7 +196,7 @@ export function WeekView({
           ))}
 
           {entries.length > 0 && reviewDone === false && onReviewDone && (
-            <ReviewDoneButton onMark={onReviewDone} online={connection === 'online'} />
+            <ReviewDoneButton onMark={onReviewDone} online={online} />
           )}
         </>
       )}
@@ -300,10 +303,7 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     approveCategory: async (id) => afterWrite(await writes.approveCategory(id)),
     rejectCategory: async (id) => afterWrite(await writes.rejectCategory(id)),
   };
-  const moveCounts: Record<string, number> = {};
-  for (const e of copy.entries) {
-    if (e.suggested_category_id && e.tag_source !== 'me') moveCounts[e.suggested_category_id] = (moveCounts[e.suggested_category_id] ?? 0) + 1;
-  }
+  const moveCounts = countMoves(copy.entries);
   const goto = (m: string) => void navigate(m === currentMonday ? '/week' : `/week/${m}`);
 
   return (
@@ -319,7 +319,8 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
       onLogSomething={() => void navigate('/')}
       onReviewDone={async () => {
         const r = await writes.reviewDone(monday); // refreshes the Local copy after the Server confirms
-        if (r.ok) await reload();
+        if (r.ok) { await reload(); setSessionLost(false); }
+        else if (r.error === 'session_lost') setSessionLost(true);
         return r;
       }}
     />
