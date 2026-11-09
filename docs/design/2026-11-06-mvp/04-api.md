@@ -21,7 +21,7 @@ Resend → Edge Function. Every phone write sends `Prefer: return=representation
 | Change an Entry's Tag | `rpc/set_entry_tag` | Phone | AC-4.1 | New |
 | Approve / reject Suggested category | `rpc/approve_category`, `rpc/reject_category` | Phone | AC-4.2, AC-4.3 | New |
 | Review done | `POST /weekly_reviews` | Phone | AC-5.3 | New |
-| Settings and time zone report | `PATCH /settings?user_id=eq.<my id>` | Phone | AC-2.3, AC-6.3 | New |
+| Settings and time zone report | `PATCH /settings?user_id=eq.<my id>` | Phone | AC-2.3, AC-6.3, AC-6.4 | New |
 | Push subscription report | `POST /push_subscriptions` (upsert) | Phone | AC-2.3, AC-6.2 | New |
 | Local copy refresh, earlier week | `GET /entries`, `/categories`, `/settings`, `/weekly_reviews` | Phone | AC-2.3, AC-2.4, AC-5.1 | New |
 | Sign in | Supabase Auth email code (`signInWithOtp`, `verifyOtp`) | Phone | AC-7.1, AC-7.2 | Existing, configured |
@@ -61,7 +61,7 @@ Response `201`. Sent on each open when permission is granted, and after "Turn on
 **Local copy refresh.** Four reads, run together; the app replaces the Local copy only when all four succeed:
 - `GET /entries?ended_at=gt.<previous Monday 00:00>&order=started_at` with `id, text, started_at, ended_at, time_zone,
   category_id, tag_source, suggested_category_id, tagging_gave_up_at, created_at` (`created_at` orders overlaps, AC-5.1);
-- `GET /categories` (`id, name, description, status`); `GET /settings` (`time_zone, quiet_start, quiet_end`);
+- `GET /categories` (`id, name, description, status`); `GET /settings` (`time_zone, quiet_start, quiet_end, nudge_gap_hours`);
 - `GET /weekly_reviews?week_start=gte.<previous Monday>` (`week_start`), so the This week page shows Review done offline too.
 
 An earlier week is the same Entry read with `ended_at=gt.<week start>&started_at=lt.<week end>`, shown but not stored.
@@ -144,7 +144,7 @@ rebuild the Local copy. `docs/mvp-design.md` (Outbox sync) is superseded here by
 | Log form | UC-1 create, edit, delete, resend | Yes |
 | App open | UC-2 refresh, time zone, Push subscription | Yes |
 | This week page | UC-4 weeks, Tag change, approve/reject, Review done | Yes |
-| Settings page | AC-6.2, AC-6.3 | Yes |
+| Settings page | AC-6.2, AC-6.3, AC-6.4 | Yes |
 | Service worker / iOS | Push payloads | Yes |
 | pg_cron, Entry insert trigger | UC-3, UC-5, AC-5.2 | Yes |
 
