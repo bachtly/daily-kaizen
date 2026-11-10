@@ -42,8 +42,13 @@ export const dayHint = (ms: number, now: number, tz: string) => {
   const key = (t: number) => { const p = zonedParts(t, tz); return `${p.year}-${p.month}-${p.day}`; };
   if (key(ms) === key(now)) return undefined;
   if (key(ms) === key(now - DAY)) return 'yesterday';
-  return new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', day: 'numeric' }).format(ms);
+  return shortDate(ms, tz);
 };
+
+/** "Mon 9", or with the month "Mon 9 Nov". */
+export const shortDate = (ms: number, tz: string, withMonth = false) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', day: 'numeric', ...(withMonth ? { month: 'short' } : {}) })
+    .format(ms).replace(',', '');
 
 /**
  * Entries that approving each Suggested category would move (AC-4.2: not those I tagged myself), by category id.

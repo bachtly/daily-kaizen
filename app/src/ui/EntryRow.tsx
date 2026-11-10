@@ -2,7 +2,7 @@ import type { CategoryRow, EntryRow as Entry } from '../data/db';
 import { categoryColour, hhmm } from './weekFormat';
 
 /**
- * One Entry in the This week list. Tap the text or times to edit it in place; tap the Tag to change it.
+ * One Entry in the Day view list. Tap the text or times to edit it in place; tap the Tag to change it.
  * The "couldn't tag" note shows only when tagging gave up and the Entry has no Tag (AC-3.2).
  */
 export function EntryRow({ entry, category, timeZone, onEdit, onTag }: {

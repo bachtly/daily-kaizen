@@ -184,7 +184,7 @@ input.text[aria-invalid="true"], select.text[aria-invalid="true"] { border-color
 .tag.neutral { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
 .entry .gaveup { grid-column: 1 / 3; grid-row: 2; font-size: 13px; color: var(--muted); padding-bottom: 10px; }
 
-.sheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.35); display: flex; align-items: flex-end; }
+.sheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.35); display: flex; align-items: flex-end; z-index: 2; }
 .sheet { width: 100%; background: var(--bg); border-radius: 20px 20px 0 0; padding: 16px 20px max(34px, calc(env(safe-area-inset-bottom) + 16px)); max-height: 80%; overflow-y: auto; }
 .sheet ul { list-style: none; padding: 0; margin: 8px 0 0; }
 .sheet li button { width: 100%; min-height: 48px; display: flex; align-items: center; gap: 10px; background: none; border: 0; border-bottom: 1px solid var(--line); font: inherit; font-size: 17px; color: var(--text); cursor: pointer; }
@@ -244,3 +244,69 @@ input.text[aria-invalid="true"], select.text[aria-invalid="true"] { border-color
 @media (prefers-reduced-motion: no-preference) {
   .skeleton { animation: skeleton-in 1ms linear 150ms backwards, skeleton-pulse 1.4s ease-in-out 150ms infinite; }
 }
+
+/* Floating + (05-ui D5): docked just above the TabBar, on every screen. The body gets room so it never covers the last control. */
+.phone-body.with-fab { padding-bottom: 96px; }
+.fab-dock { position: relative; height: 0; flex: none; }
+.fab {
+  position: absolute; right: max(20px, env(safe-area-inset-right)); bottom: 16px; width: 60px; height: 60px; border-radius: 30px;
+  border: 0; background: var(--accent); color: var(--accent-text); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); cursor: pointer; z-index: 1;
+}
+.log-sheet { max-height: 92%; padding-top: 8px; }
+.grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 12px; }
+.sheet-title { font-size: 22px; text-transform: none; letter-spacing: 0; color: var(--text); margin: 0 0 4px; }
+.sheet-sub { font-size: 14px; color: var(--muted); margin: 0 0 12px; }
+
+/* Day view */
+.day-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.day-head h1 { margin: 4px 0 2px; }
+.day-head .sub { font-size: 14px; color: var(--muted); margin: 0; }
+.wnav { display: flex; gap: 8px; align-items: center; flex: none; margin-top: 4px; }
+.icon-btn {
+  width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.icon-btn:disabled { color: var(--neutral-bar); background: transparent; cursor: default; }
+.today-btn { min-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--accent); background: var(--bg); color: var(--accent); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 14px 0 12px; }
+.strip button {
+  min-height: 64px; border: 0; border-radius: 12px; background: none; color: var(--muted); font: inherit; font-size: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; cursor: pointer;
+}
+.strip button b { font-size: 17px; font-weight: 600; color: var(--text); }
+.strip button.today b { color: var(--accent); }
+.strip button[aria-current="date"] { background: var(--accent); color: var(--accent-text); }
+.strip button[aria-current="date"] b { color: var(--accent-text); }
+.strip button:disabled { cursor: default; opacity: 0.45; }
+.strip .fill { width: 26px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.strip .fill > span { display: block; height: 100%; background: var(--accent); }
+.strip button[aria-current="date"] .fill { background: rgba(255, 255, 255, 0.35); }
+.strip button[aria-current="date"] .fill > span { background: var(--accent-text); }
+.cover { position: relative; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface); }
+.cover span { position: absolute; top: 0; bottom: 0; }
+.axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 4px 0 10px; }
+.day-status { margin: 0; min-height: 0; }
+.day-status:not(:empty) { margin: 0 0 8px; }
+.day-sum { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+.day-list .entry:last-child { border-bottom: 1px solid var(--line); }
+.slot {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; margin: 6px 0; padding: 0 4px 0 12px;
+  border: 1.5px dashed var(--neutral-bar); border-radius: 12px; font-size: 14px; color: var(--muted);
+}
+.slot .when { font-variant-numeric: tabular-nums; flex: none; }
+.slot .what { flex: 1; min-width: 0; }
+.slot .link { font-weight: 600; padding: 8px 12px; }
+
+/* Week: one row per day */
+.day-rows { list-style: none; padding: 0; margin: 0; }
+.day-rows a, .day-rows .off {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr) 64px 12px; align-items: center; gap: 10px; min-height: 44px;
+  color: var(--text); text-decoration: none; font-size: 15px; border-bottom: 1px solid var(--line);
+}
+.day-rows li:last-child a, .day-rows li:last-child .off { border-bottom: 0; }
+.day-rows .off { color: var(--muted); }
+.day-rows .bar { height: 8px; border-radius: 4px; background: var(--bg); overflow: hidden; }
+.day-rows .bar > span { display: block; height: 100%; background: var(--accent); }
+.day-rows .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

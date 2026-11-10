@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { LogFab } from './LogFab';
 import { SettingsView } from './SettingsScreen';
 
 const meta = {
   title: 'Screens/3 Settings',
   component: SettingsView,
+  args: { fab: <LogFab onOpen={() => {}} /> },
 } satisfies Meta<typeof SettingsView>;
 export default meta;
 type Story = StoryObj<typeof meta>;

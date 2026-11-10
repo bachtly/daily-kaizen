@@ -1,28 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Link, useInRouterContext, useNavigate, useParams } from 'react-router';
+import { dateOf, dayBounds, loggedMs, shiftDate } from '../data/day';
 import type { CategoryRow, EntryRow } from '../data/db';
-import { fetchWeek, refresh } from '../data/localCopy';
 import type { Result } from '../data/request';
-import { mondayOf, weekBounds, weekTotals, zonedParts } from '../data/week';
-import type { EntryFields } from '../data/writes';
+import { mondayOf, weekBounds, weekTotals } from '../data/week';
 import { CategoryTotals } from './CategoryTotals';
-import { EntryEditor } from './EntryEditor';
-import { EntryRow as EntryLine } from './EntryRow';
-import { deviceZone, liveWindow, writes } from './liveWrites';
+import { deviceZone, writes } from './liveWrites';
+import { useLogNow } from './LogNow';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
 import { RefreshedAt } from './RefreshedAt';
 import { ReviewDoneButton } from './ReviewDoneButton';
 import { Skeleton } from './Skeleton';
 import { SuggestedCategoryCard } from './SuggestedCategoryCard';
-import { TagPicker } from './TagPicker';
 import { useLocalCopy } from './useLocalCopy';
-import { countMoves, hhmm } from './weekFormat';
+import { shiftMonday, useWeekEntries, type WeekLoad } from './useWeekEntries';
+import { countMoves, formatDuration, hhmm, shortDate } from './weekFormat';
 
 /** Phone writes the page can make. Each resolves when the Server answers. */
 export type WeekActions = {
-  editEntry: (id: string, fields: EntryFields) => Promise<Result<unknown>>;
-  deleteEntry: (id: string) => Promise<Result<unknown>>;
-  setEntryTag: (entryId: string, categoryId: string) => Promise<Result<unknown>>;
   approveCategory: (categoryId: string) => Promise<Result<unknown>>;
   rejectCategory: (categoryId: string) => Promise<Result<unknown>>;
 };
@@ -41,119 +36,103 @@ export type WeekViewProps = {
   /** ISO time of the last Local copy refresh; null = never. */
   refreshedAt: string | null;
   connection?: Connection;
-  load?: 'ready' | 'loading' | 'offline-earlier-week' | 'session-lost-earlier-week';
+  load?: WeekLoad;
   onPrev?: () => void;
   onNext?: () => void;
   onRetry?: () => void;
-  onLogSomething?: () => void;
   onReviewDone?: () => Promise<Result<unknown>>;
   actions?: WeekActions;
   /** Entries that approving each Suggested category would move, by category id. */
   moveCounts?: Record<string, number>;
-  /** Start with a row expanded or the Tag picker open (stories). */
-  initialEditId?: string;
-  initialPickerId?: string;
+  /** The floating + and its sheet (live: `useLogNow`). */
+  fab?: ReactNode;
+  sheet?: ReactNode;
 };
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const weekLabel = (monday: string) => {
-  const [, m, d] = monday.split('-').map(Number);
-  return `Week of ${d} ${MONTHS[m - 1]}`;
-};
-const dayLabel = (ms: number, tz: string) => {
-  const p = zonedParts(ms, tz);
-  return `${DAYS[p.weekday]} ${p.day} ${MONTHS[p.month - 1]}`;
-};
-const shiftMonday = (monday: string, days: number) => {
-  const [y, m, d] = monday.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+const Chevron = ({ left }: { left?: boolean }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={left ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} />
+  </svg>
+);
+
+const weekRange = (monday: string, tz: string) => {
+  const a = dayBounds(monday, tz).start;
+  const b = dayBounds(shiftDate(monday, 6), tz).start;
+  const f = (ms: number) => new Intl.DateTimeFormat('en-GB', { timeZone: tz, day: 'numeric', month: 'short' }).format(ms);
+  return `${f(a)} – ${f(b)}`;
 };
 
-/** This week page: time per Category, Suggested categories, Entries by day with inline edit and Tag, Review done (UC-4). */
+/** One row per day with time logged; a tap opens that day (AC-5.1). Days after today are plain text. */
+function DayTotals({ monday, entries, timeZone: tz, now }: { monday: string; entries: readonly EntryRow[]; timeZone: string; now: number }) {
+  const inRouter = useInRouterContext();
+  const today = dateOf(now, tz);
+  const rows = useMemo(() => [0, 1, 2, 3, 4, 5, 6].map((i) => {
+    const d = shiftDate(monday, i);
+    const b = dayBounds(d, tz);
+    return { date: d, start: b.start, logged: loggedMs(entries, b, now), span: b.end - b.start };
+  }), [monday, tz, entries, now]);
+  return (
+    <section className="panel" aria-labelledby="days-h">
+      <h2 id="days-h">Days</h2>
+      <ul className="day-rows">
+        {rows.map((r) => {
+          const label = shortDate(r.start, tz);
+          if (r.date > today) return <li key={r.date}><span className="off"><span>{label}</span><span /><span className="val">–</span><span /></span></li>;
+          const to = r.date === today ? '/' : `/day/${r.date}`;
+          const body = (
+            <>
+              <span>{label}</span>{' '}
+              <span className="bar"><span style={{ width: `${Math.min(r.logged / r.span, 1) * 100}%` }} /></span>{' '}
+              <span className="val">{formatDuration(r.logged)}{' '}<span className="sr-only">logged</span></span>
+              <span aria-hidden="true">›</span>
+            </>
+          );
+          return <li key={r.date}>{inRouter ? <Link to={to}>{body}</Link> : <a href={to}>{body}</a>}</li>;
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** Week page: time per Category and per day, Suggested categories, Review done (UC-4). Entries are edited on the Day view. */
 export function WeekView({
   monday, timeZone, now, isCurrentWeek, entries, categories, reviewDone, refreshedAt,
-  connection = 'online', load = 'ready', onPrev, onNext, onRetry, onLogSomething, onReviewDone,
-  actions: liveActions, moveCounts = {}, initialEditId, initialPickerId,
+  connection = 'online', load = 'ready', onPrev, onNext, onRetry, onReviewDone, actions, moveCounts = {}, fab, sheet,
 }: WeekViewProps) {
-  // "This Entry was deleted." outlives the row: the refresh that follows removes the editor that would hold it.
-  const [gone, setGone] = useState<string | null>(null); // the Monday it was raised on
-  const actions = useMemo<WeekActions | undefined>(() => {
-    if (!liveActions) return undefined;
-    const watch = (call: (...a: never[]) => Promise<Result<unknown>>) => async (...a: never[]) => {
-      setGone(null);
-      const r = await call(...a);
-      if (!r.ok && r.error === 'entry_not_found') setGone(monday);
-      return r;
-    };
-    return {
-      editEntry: watch(liveActions.editEntry as never) as WeekActions['editEntry'],
-      deleteEntry: watch(liveActions.deleteEntry as never) as WeekActions['deleteEntry'],
-      setEntryTag: watch(liveActions.setEntryTag as never) as WeekActions['setEntryTag'],
-      approveCategory: liveActions.approveCategory,
-      rejectCategory: liveActions.rejectCategory,
-    };
-  }, [liveActions, monday]);
-  const noticeRef = useRef<HTMLParagraphElement>(null);
-  // The notice may be raised while the page is scrolled down to the row: bring it into view.
-  useEffect(() => { if (gone) noticeRef.current?.scrollIntoView?.({ block: 'nearest' }); }, [gone]);
-  const [editId, setEditId] = useState(initialEditId);
-  const [picker, setPicker] = useState<{ id: string; opener: HTMLElement | null } | undefined>(
-    initialPickerId ? { id: initialPickerId, opener: null } : undefined,
-  );
   const online = connection !== 'offline';
   const bounds = useMemo(() => weekBounds(monday, timeZone), [monday, timeZone]);
   const totals = useMemo(() => weekTotals(entries, bounds, now), [entries, bounds, now]);
   const refreshedLabel = refreshedAt ? hhmm(Date.parse(refreshedAt), timeZone) : null;
-  const days = useMemo(() => {
-    const out: { label: string; entries: EntryRow[] }[] = [];
-    for (const e of [...entries].sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at))) {
-      const label = dayLabel(Math.max(Date.parse(e.started_at), bounds.start), timeZone);
-      const last = out[out.length - 1];
-      if (last?.label === label) last.entries.push(e);
-      else out.push({ label, entries: [e] });
-    }
-    return out;
-  }, [entries, bounds, timeZone]);
   const suggested = categories.filter((c) => c.status === 'suggested');
-  const pickerEntry = picker && entries.find((e) => e.id === picker.id);
-  const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   return (
-    <Phone
-      tab="week" busy={load === 'loading'}
-      overlay={pickerEntry && actions && (
-        <TagPicker
-          entry={pickerEntry} categories={categories} online={online} returnFocusTo={picker?.opener}
-          onPick={(categoryId) => actions.setEntryTag(pickerEntry.id, categoryId)} onClose={() => setPicker(undefined)}
-        />
-      )}
-    >
+    <Phone tab="week" busy={load === 'loading'} fab={fab} overlay={sheet}>
       <ConnectionBanner state={connection} refreshedAt={refreshedLabel} />
-      <header className="week-header">
-        <div className="week-picker" role="group" aria-label="Choose week">
-          <button aria-label="Previous week" onClick={() => { setGone(null); onPrev?.(); }}>‹</button>
-          <h1>{weekLabel(monday)}</h1>
-          <button aria-label="Next week" onClick={() => { setGone(null); onNext?.(); }} disabled={isCurrentWeek}>›</button>
+      <header className="day-head">
+        <div>
+          <h1>Week</h1>
+          <p className="sub">{weekRange(monday, timeZone)}</p>
         </div>
-        <div className="week-meta">
-          {load === 'loading' ? (
-            <>
-              <Skeleton height={26} width={96} radius={12} style={{ margin: 0 }} />
-              <Skeleton height={18} width={110} style={{ margin: 0 }} />
-            </>
-          ) : (
-            <>
-              {reviewDone !== undefined && (
-                <span className={reviewDone ? 'badge done' : 'badge'}>{reviewDone ? 'Review done ✓' : 'Not reviewed'}</span>
-              )}
-              <RefreshedAt time={refreshedLabel} />
-            </>
-          )}
+        <div className="wnav" role="group" aria-label="Choose week">
+          <button className="icon-btn" aria-label="Previous week" onClick={onPrev}><Chevron left /></button>
+          <button className="icon-btn" aria-label="Next week" onClick={onNext} disabled={isCurrentWeek}><Chevron /></button>
         </div>
       </header>
-
-      {gone === monday && <p ref={noticeRef} className="error notice" role="alert">This Entry was deleted.</p>}
+      <div className="week-meta">
+        {load === 'loading' ? (
+          <>
+            <Skeleton height={26} width={96} radius={12} style={{ margin: 0 }} />
+            <Skeleton height={18} width={110} style={{ margin: 0 }} />
+          </>
+        ) : (
+          <>
+            {reviewDone !== undefined ? (
+              <span className={reviewDone ? 'badge done' : 'badge'}>{reviewDone ? 'Review done ✓' : 'Not reviewed'}</span>
+            ) : <span />}
+            <RefreshedAt time={refreshedLabel} />
+          </>
+        )}
+      </div>
 
       {load === 'loading' && <>{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} style={{ margin: '10px 0' }} />)}</>}
       {load === 'offline-earlier-week' && (
@@ -162,47 +141,19 @@ export function WeekView({
           <div><button className="secondary" style={{ marginTop: 12 }} onClick={onRetry}>Retry</button></div>
         </div>
       )}
-
       {load === 'session-lost-earlier-week' && <div className="empty">Sign in to see earlier weeks.</div>}
 
       {load === 'ready' && (
         <>
+          {entries.length === 0 && <div className="empty">Nothing logged this week yet.</div>}
           <CategoryTotals totals={totals} categories={categories} hasEntries={entries.length > 0} />
+          <DayTotals monday={monday} entries={entries} timeZone={timeZone} now={now} />
 
           {actions && suggested.map((c) => (
             <SuggestedCategoryCard
               key={c.id} category={c} moveCount={moveCounts[c.id] ?? 0} online={online}
               onApprove={() => actions.approveCategory(c.id)} onReject={() => actions.rejectCategory(c.id)}
             />
-          ))}
-
-          {entries.length === 0 && (
-            <div className="empty">
-              Nothing logged this week yet.
-              {isCurrentWeek && (
-                <div><button className="secondary" style={{ marginTop: 12 }} onClick={onLogSomething}>Log something</button></div>
-              )}
-            </div>
-          )}
-
-          {days.map((day) => (
-            <section key={day.label} className="panel" aria-label={day.label}>
-              <h2 className="day">{day.label}</h2>
-              {day.entries.map((e) =>
-                actions && e.id === editId ? (
-                  <EntryEditor
-                    key={e.id} entry={e} siblings={entries} now={now} timeZone={timeZone} online={online}
-                    onSave={(fields) => actions.editEntry(e.id, fields)} onDelete={() => actions.deleteEntry(e.id)}
-                    onClose={() => setEditId(undefined)}
-                  />
-                ) : (
-                  <EntryLine
-                    key={e.id} entry={e} category={e.category_id ? catById.get(e.category_id) : undefined} timeZone={timeZone}
-                    onEdit={() => setEditId(e.id)} onTag={(opener) => setPicker({ id: e.id, opener })}
-                  />
-                ),
-              )}
-            </section>
           ))}
 
           {entries.length > 0 && reviewDone === false && onReviewDone && (
@@ -214,7 +165,7 @@ export function WeekView({
   );
 }
 
-// ---- live wiring: Local copy for this and the previous week, a fetch for earlier ones ----
+// ---- live wiring ----
 
 const MONDAY = /^\d{4}-\d\d-\d\d$/;
 
@@ -226,15 +177,7 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
   const [now, setNow] = useState(() => Date.now());
   const [online, setOnline] = useState(() => navigator.onLine);
   const { copy, ready: copyReady, reload } = useLocalCopy();
-  const [fetched, setFetched] = useState<{ monday: string; entries: EntryRow[] } | null>(null);
-  // The failure belongs to one week: navigating away leaves it behind.
-  const [failure, setFailure] = useState<{ monday: string; kind: 'offline' | 'session-lost' } | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const [sessionLost, setSessionLost] = useState(false);
-
-  const currentMonday = mondayOf(now, tz);
-  const monday = param && MONDAY.test(param) ? param : currentMonday;
-  const inLocalCopy = monday >= shiftMonday(currentMonday, -7);
+  const logNow = useLogNow();
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 60_000);
@@ -249,73 +192,33 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     };
   }, []);
 
-  // Earlier weeks are fetched for that week and not stored.
-  useEffect(() => {
-    if (inLocalCopy) return;
-    const ctl = new AbortController();
-    const b = weekBounds(monday, tz);
-    void fetchWeek({ start: new Date(b.start).toISOString(), end: new Date(b.end).toISOString() }).then((r) => {
-      if (ctl.signal.aborted) return;
-      if (r.ok) { setFetched({ monday, entries: r.data }); setFailure(null); setSessionLost(false); }
-      else {
-        setFailure({ monday, kind: r.error === 'session_lost' ? 'session-lost' : 'offline' });
-        if (r.error === 'session_lost') setSessionLost(true); // stays up when moving to another week
-      }
-    });
-    return () => ctl.abort();
-  }, [inLocalCopy, monday, tz, attempt]);
+  const currentMonday = mondayOf(now, tz);
+  const monday = param && MONDAY.test(param) ? param : currentMonday;
+  const w = useWeekEntries({ monday, now, tz, copy, copyReady, reload });
 
-  const bounds = weekBounds(monday, tz);
-  const fail = failure?.monday === monday ? failure : null;
-  const haveEarlier = !inLocalCopy && fetched?.monday === monday;
-  const entries = inLocalCopy
-    ? copy.entries.filter((e) => Date.parse(e.started_at) < bounds.end && Date.parse(e.ended_at) > bounds.start)
-    : haveEarlier ? fetched.entries : [];
-  const load: WeekViewProps['load'] =
-    !copyReady ? 'loading'
-    : inLocalCopy ? 'ready'
-    : haveEarlier ? 'ready'
-    : fail?.kind === 'offline' ? 'offline-earlier-week'
-    : fail?.kind === 'session-lost' ? 'session-lost-earlier-week' : 'loading';
-  // After a write: a confirmed one already refreshed the Local copy; a refusal that means "your view is stale" refreshes it here.
-  const STALE = ['entry_not_found', 'category_not_active', 'category_already_decided'];
-  const afterWrite = async (r: Result<unknown>) => {
-    if (!r.ok && STALE.includes(r.error)) await refresh(liveWindow(Date.now(), tz));
-    if (r.ok || STALE.includes(r.error)) {
-      await reload();
-      if (!inLocalCopy) setAttempt((a) => a + 1); // an earlier week is read again with the same GET
-    }
-    if (r.ok) setSessionLost(false);
-    else if (r.error === 'session_lost') setSessionLost(true);
-    return r;
-  };
   const actions: WeekActions = {
-    editEntry: async (id, fields) => afterWrite(await writes.editEntry(id, fields)),
-    deleteEntry: async (id) => afterWrite(await writes.deleteEntry(id)),
-    setEntryTag: async (entryId, categoryId) => afterWrite(await writes.setEntryTag(entryId, categoryId)),
-    approveCategory: async (id) => afterWrite(await writes.approveCategory(id)),
-    rejectCategory: async (id) => afterWrite(await writes.rejectCategory(id)),
+    approveCategory: async (id) => w.afterWrite(await writes.approveCategory(id)),
+    rejectCategory: async (id) => w.afterWrite(await writes.rejectCategory(id)),
   };
-  const moveCounts = countMoves(copy.entries);
   const goto = (m: string) => void navigate(m === currentMonday ? '/week' : `/week/${m}`);
 
   return (
     <WeekView
       monday={monday} timeZone={tz} now={now} isCurrentWeek={monday >= currentMonday}
-      entries={entries} categories={copy.categories} refreshedAt={copy.refreshedAt}
-      reviewDone={inLocalCopy && copyReady ? copy.reviews.some((r) => r.week_start === monday) : undefined}
-      connection={sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
-      load={load} actions={actions} moveCounts={moveCounts}
+      entries={w.entries} categories={copy.categories} refreshedAt={copy.refreshedAt}
+      reviewDone={w.inLocalCopy && copyReady ? copy.reviews.some((r) => r.week_start === monday) : undefined}
+      connection={w.sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
+      load={w.load} actions={actions} moveCounts={countMoves(copy.entries)}
       onPrev={() => goto(shiftMonday(monday, -7))}
       onNext={() => goto(shiftMonday(monday, 7))}
-      onRetry={() => { setFailure(null); setAttempt((a) => a + 1); }}
-      onLogSomething={() => void navigate('/')}
+      onRetry={w.retry}
       onReviewDone={async () => {
         const r = await writes.reviewDone(monday); // refreshes the Local copy after the Server confirms
-        if (r.ok) { await reload(); setSessionLost(false); }
-        else if (r.error === 'session_lost') setSessionLost(true);
+        if (r.ok) { await reload(); w.setSessionLost(false); }
+        else if (r.error === 'session_lost') w.setSessionLost(true);
         return r;
       }}
+      fab={logNow.fab} sheet={logNow.sheet}
     />
   );
 }

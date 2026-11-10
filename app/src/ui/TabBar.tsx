@@ -1,18 +1,18 @@
 import type React from 'react';
 import { Link, useInRouterContext } from 'react-router';
 
-export type Tab = 'log' | 'week' | 'settings';
+export type Tab = 'day' | 'week' | 'settings';
 
 /** Simple stroke icons (24x24, currentColor) so they follow the active/inactive colour. */
 const icons: Record<Tab, React.ReactNode> = {
-  log: <path d="M12 5v14M5 12h14" />,
+  day: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>,
   week: <><rect x="4" y="5" width="16" height="15" rx="3" /><path d="M4 10h16M9 3v4M15 3v4" /></>,
   settings: <><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></>,
 };
 
 const tabs: { id: Tab; label: string; to: string }[] = [
-  { id: 'log', label: 'Log', to: '/' },
-  { id: 'week', label: 'This week', to: '/week' },
+  { id: 'day', label: 'Day', to: '/' },
+  { id: 'week', label: 'Week', to: '/week' },
   { id: 'settings', label: 'Settings', to: '/settings' },
 ];
 

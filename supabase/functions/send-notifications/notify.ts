@@ -42,7 +42,7 @@ function nudgeMessage(time: string | null): PushMessage {
     body: time
       ? `Your last Entry ended at ${time}. What have you been doing?`
       : "What have you been doing?",
-    path: "/",
+    path: "/?log=now",
   };
 }
 

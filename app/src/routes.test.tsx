@@ -32,9 +32,10 @@ const at = (path: string) => {
 }
 
 test.each([
-  ['/', 'Log'],
-  ['/week', 'This week'],
-  ['/week/2026-11-02', 'This week'],
+  ['/', 'Day'],
+  ['/day/2026-11-02', 'Day'],
+  ['/week', 'Week'],
+  ['/week/2026-11-02', 'Week'],
   ['/settings', 'Settings'],
 ])('%s renders with the tab bar and marks the current tab', async (path, tab) => {
   at(path)
@@ -42,7 +43,7 @@ test.each([
   expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(tab)
 })
 
-test.each(['/', '/week', '/week/2026-11-02', '/settings'])('%s without a session goes to /sign-in', async (path) => {
+test.each(['/', '/day/2026-11-02', '/week', '/week/2026-11-02', '/settings'])('%s without a session goes to /sign-in', async (path) => {
   session = null
   const router = at(path)
   await waitFor(() => expect(router.state.location.pathname).toBe('/sign-in'))
