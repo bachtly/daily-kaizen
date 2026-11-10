@@ -83,8 +83,10 @@ The repo has no code yet, so everything is new. These paths are proposals.
 | Tagging check | The 15-minute job that retries Untagged entries ([D2](02-requirements.md#decisions)) | None yet |
 | Push subscription | The phone's Web Push address the Server sends notifications to | None yet |
 | Gap | The time since the latest end time of my saved Entries; a new or edited Entry with a later end time starts a new Gap | None yet |
+| Unlogged slot | On one day, at least 10 minutes between two Entries, or, today only, from the last Entry to now. Shown on the Day view with a Fill button (#46) | None yet |
 | Review done | The record that a week's Weekly review is complete | None yet |
 | Starting Category | One of the five Categories from README §Categories that my account starts with | None yet |
-| This week page | The page showing a week's time per Category, defaulting to the current week, with earlier weeks browsable | None yet |
+| Week page | The page showing a week's time per Category and per day, defaulting to the current week, with earlier weeks browsable | None yet |
+| Day view | The home screen: one day's Entries and Unlogged slots, with a week strip to pick the day | None yet |
 | Entry's Suggested category | The Suggested category the AI proposed for an Entry; approving it moves the Entry's Tag to it | None yet (`entries.suggested_category_id` proposed) |
 | Notification check | The 5-minute job that sends due Nudges and Review reminders | None yet |

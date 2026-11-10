@@ -62,7 +62,7 @@ Response `201`. Sent on each open when permission is granted, and after "Turn on
 - `GET /entries?ended_at=gt.<previous Monday 00:00>&order=started_at` with `id, text, started_at, ended_at, time_zone,
   category_id, tag_source, suggested_category_id, tagging_gave_up_at, created_at` (`created_at` orders overlaps, AC-5.1);
 - `GET /categories` (`id, name, description, status`); `GET /settings` (`time_zone, quiet_start, quiet_end, nudge_gap_hours`);
-- `GET /weekly_reviews?week_start=gte.<previous Monday>` (`week_start`), so the This week page shows Review done offline too.
+- `GET /weekly_reviews?week_start=gte.<previous Monday>` (`week_start`), so the Week page shows Review done offline too.
 
 An earlier week is the same Entry read with `ended_at=gt.<week start>&started_at=lt.<week end>`, shown but not stored.
 
@@ -77,7 +77,7 @@ email and push (AC-5.2), recording each in `notifications_sent` first. Response 
 5 minutes so the reminder lands within 5 minutes of 19:00 (NFR-6); skipped while `settings.time_zone` is null.
 
 **Push payloads** (Declarative Web Push, iOS 18.4+, R4): `{web_push: 8030, notification: {title, body, navigate}}`.
-Nudge → log form; Review reminder and Category suggestion → This week page. Paths and wording: ui stage. A push service
+Nudge → Day view (today) with the Log sheet open; Review reminder and Category suggestion → Week page. Paths and wording: ui stage. A push service
 answer of 404 or 410 deletes that Push subscription; nothing is retried.
 
 ## Errors
@@ -141,9 +141,9 @@ rebuild the Local copy. `docs/mvp-design.md` (Outbox sync) is superseded here by
 
 | Consumer | Flow | Buildable? |
 |---|---|---|
-| Log form | UC-1 create, edit, delete, resend | Yes |
+| Day view and Log sheet | UC-1 create, edit, delete, resend, backfill (earlier days: the same `GET /entries` as earlier weeks) | Yes |
 | App open | UC-2 refresh, time zone, Push subscription | Yes |
-| This week page | UC-4 weeks, Tag change, approve/reject, Review done | Yes |
+| Week page | UC-4 weeks, Tag change, approve/reject, Review done | Yes |
 | Settings page | AC-6.2, AC-6.3, AC-6.4 | Yes |
 | Service worker / iOS | Push payloads | Yes |
 | pg_cron, Entry insert trigger | UC-3, UC-5, AC-5.2 | Yes |
