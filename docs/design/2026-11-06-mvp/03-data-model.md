@@ -4,17 +4,17 @@ All new; extends [`docs/mvp-design.md`](../../mvp-design.md) §Data under [D3](#
 (writes online, read-only Local copy) and [D2](02-requirements.md#decisions) (Tagging check).
 Conventions (Supabase defaults; no repo schema yet): snake_case plural tables, `uuid` keys, `timestamptz` times, and on every Server
 table a `user_id` to the login user with row-level security limiting rows to the signed-in user (AC-7.2, NFR-11).
-Only my account exists: sign-ups are disabled in the Supabase Auth settings and I create my login user once from the dashboard,
-so no allowed-email record is stored; the emailed code still works for an existing user (AC-7.2).
+Sign-ups are on: the first emailed code for a new email creates its login user, and a trigger on `auth.users` seeds it,
+so no allowed-email record is stored (AC-7.2). Rejected: sign-ups off with one login user made from the dashboard (#48).
 
 ## Entities
 
 | Entity | Purpose | Owning module | New / changed | Lifecycle (created → … → deleted) |
 |---|---|---|---|---|
 | `entries` | Entries | `supabase/migrations` | New | I save → I edit, Server tags → I delete (hard delete) |
-| `categories` | Active Categories, Suggested and Rejected categories | `supabase/migrations` | New | 5 starting ones with my account; tagging adds Suggested → active or Rejected; never deleted |
+| `categories` | Active Categories, Suggested and Rejected categories | `supabase/migrations` | New | 5 starting ones with each account; tagging adds Suggested → active or Rejected; never deleted |
 | `push_subscriptions` | Push subscriptions | `supabase/migrations` | New | Sent on each open → deleted when the push service reports it gone |
-| `settings` | Time zone, Quiet hours and Nudge gap | `supabase/migrations` | New | Created with my account → updated by the app |
+| `settings` | Time zone, Quiet hours and Nudge gap | `supabase/migrations` | New | Created with each account → updated by the app |
 | `weekly_reviews` | Review done records | `supabase/migrations` | New | Created by "Review done" (AC-5.3); kept |
 | `notifications_sent` | Record of each Nudge and Review reminder, to send once and to measure NFR-6, NFR-7 | `supabase/migrations` | New | Recorded before sending; kept |
 | Local copy (phone storage, OQ-9) | The Local copy | `app/` | New | Replaced whole on each refresh (AC-2.3); disposable, rebuilt from the Server |
@@ -128,7 +128,7 @@ Examples from README §Categories.
 ## Migration and backfill
 
 Greenfield: one migration creates tables, indexes and policies; no running code or data, so no expand/contract or backfill.
-Rollback drops the tables. Creating my account adds my `settings` row and the 5 starting Categories (mechanism: backend stage).
+Rollback drops the tables. Creating an account adds its `settings` row and the 5 starting Categories (trigger `on_auth_user_created` → `seed_account`).
 The Local copy has no migration: a new app version may discard and rebuild it. Update `docs/mvp-design.md` §Data to match at approval.
 
 ## Retention and privacy

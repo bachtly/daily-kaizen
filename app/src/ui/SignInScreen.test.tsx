@@ -32,7 +32,7 @@ describe('SignInScreen', () => {
     sendCode.mockResolvedValue({ ok: true });
     mount();
     await toCodeStep();
-    expect(screen.getByText('If this is your account, a 6-digit code is on its way.')).toBeTruthy();
+    expect(screen.getByText('A 6-digit code is on its way.')).toBeTruthy();
     expect(sendCode).toHaveBeenCalledWith('me@example.com');
   });
 

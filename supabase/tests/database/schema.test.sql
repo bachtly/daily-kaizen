@@ -1,22 +1,27 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(32);
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-0000000000a1'), ('00000000-0000-0000-0000-0000000000a2');
+
+-- A new auth user is seeded by the on_auth_user_created trigger
+select is((select count(*)::int from categories where user_id = '00000000-0000-0000-0000-0000000000a2'), 5, 'new user gets 5 Categories');
+select is((select count(*)::int from settings where user_id = '00000000-0000-0000-0000-0000000000a2'), 1, 'new user gets settings');
 
 -- seed_account
 select seed_account('00000000-0000-0000-0000-0000000000a1');
 select seed_account('00000000-0000-0000-0000-0000000000a1');
 select is((select count(*)::int from categories where user_id = '00000000-0000-0000-0000-0000000000a1'), 5, 'seed adds 5 Categories, repeat is a no-op');
 select is((select count(*)::int from settings where user_id = '00000000-0000-0000-0000-0000000000a1'), 1, 'seed adds settings once');
-select is((select quiet_start::text || '-' || quiet_end::text from settings), '23:00:00-07:00:00', 'default Quiet hours');
-select is((select description from categories where name = 'Recovery'), 'Deliberate rest that restores energy, such as sleep, a workout or walk, or a relaxed meal with friends. Entertainment chosen on purpose counts here; the same done aimlessly is Waste.', 'exact Recovery description');
-select is((select status::text from categories where name = 'Deep'), 'active', 'seeded Categories are active');
+select is((select quiet_start::text || '-' || quiet_end::text from settings where user_id = '00000000-0000-0000-0000-0000000000a1'), '23:00:00-07:00:00', 'default Quiet hours');
+select is((select description from categories where name = 'Recovery' and user_id = '00000000-0000-0000-0000-0000000000a1'), 'Deliberate rest that restores energy, such as sleep, a workout or walk, or a relaxed meal with friends. Entertainment chosen on purpose counts here; the same done aimlessly is Waste.', 'exact Recovery description');
+select is((select status::text from categories where name = 'Deep' and user_id = '00000000-0000-0000-0000-0000000000a1'), 'active', 'seeded Categories are active');
 
 -- Category names unique per user, case-insensitive
 select throws_ok($$insert into categories (user_id, name, description) values ('00000000-0000-0000-0000-0000000000a1', 'deep', 'x')$$, '23505', null, 'category name unique ignoring case');
-select lives_ok($$insert into categories (user_id, name, description) values ('00000000-0000-0000-0000-0000000000a2', 'deep', 'x')$$, 'same name allowed for another user');
+select lives_ok($$insert into categories (user_id, name, description) values ('00000000-0000-0000-0000-0000000000a1', 'Hobby', 'x')$$, 'new name allowed');
+select lives_ok($$insert into categories (user_id, name, description) values ('00000000-0000-0000-0000-0000000000a2', 'hobby', 'x')$$, 'same name allowed for another user');
 
 -- Entry checks
 prepare ins(uuid, text, timestamptz, timestamptz, text) as

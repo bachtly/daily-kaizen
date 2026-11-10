@@ -112,7 +112,7 @@ are refused by column grants (403); the app never sends them.
 | Reads | Signed-in user | RLS and the grants above |
 | `set_entry_tag`, `approve_category`, `reject_category` | Signed-in user | `security definer`, `set search_path = ''`, execute granted to `authenticated` only; explicit `user_id = auth.uid()` check on the Entry and Category |
 | `tag-entries`, `send-notifications` | pg_cron and the Entry insert trigger only | `x-job-secret` equals a Server secret, which the trigger and pg_cron jobs read from Supabase Vault, never inline; JWT check off; the function uses the service role |
-| Sign in | My email only | Sign-ups disabled; code sent only to the existing user (AC-7.2) |
+| Sign in | Any email | Sign-ups on; a new email gets a new, seeded account; same message either way (AC-7.2) |
 
 ## Behaviour
 

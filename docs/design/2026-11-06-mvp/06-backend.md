@@ -16,7 +16,7 @@ flowchart LR
   end
   CF["Cloudflare Pages: static PWA (new)"] --> Phone
   subgraph Server["Supabase (new)"]
-    AUTH[Auth: email code, sign-ups off]
+    AUTH[Auth: email code, sign-ups on]
     PGR[PostgREST: tables + rpc]
     DB[("Postgres + RLS: tables, rpc functions, triggers")]
     CRON["pg_cron: Tagging check 15 min, Notification check 5 min"]
@@ -106,7 +106,7 @@ Repo layering is new; this follows Supabase defaults (`supabase/migrations`, `su
 
 | Module | Responsibility | Main types / interfaces | Depends on |
 |---|---|---|---|
-| `supabase/migrations/` | Tables, checks, indexes, RLS, grants, triggers (`updated_at`, clear the Tag on a text edit, insert → pg_net), phone rpcs from 04-api.md, internal job helpers `untagged_due()`, `save_ai_tag()`, `claim_due_notifications()`, cron schedules, `seed_account(uid)`, Vault secret + function URLs | Enums as in 03-data-model.md | Postgres, pg_net, pg_cron, Vault |
+| `supabase/migrations/` | Tables, checks, indexes, RLS, grants, triggers (`updated_at`, clear the Tag on a text edit, insert → pg_net), phone rpcs from 04-api.md, internal job helpers `untagged_due()`, `save_ai_tag()`, `claim_due_notifications()`, cron schedules, `seed_account(uid)` and the `on_auth_user_created` trigger that runs it, Vault secret + function URLs | Enums as in 03-data-model.md | Postgres, pg_net, pg_cron, Vault |
 | `supabase/functions/_shared/` | Job-secret check, config check (503), service-role client, `sendPush()`, `sendEmail()` | `PushPayload`, `JobRequest` (implementation names) | `@pushforge/builder` (D5), Resend HTTP API |
 | `supabase/functions/tag-entries/` | Build prompt, call AI, validate reply, call `save_ai_tag()` | `TagReply {category_name, proposed}` | `_shared`, Anthropic API |
 | `supabase/functions/send-notifications/` | Call `claim_due_notifications()`, send claimed rows | `ClaimedNotification {kind, about}` | `_shared` |
@@ -211,7 +211,7 @@ No alerting service: one user reviews `nfr_report` weekly (judgement; fits the c
 
 ## Security and privacy
 
-- **Spoofing:** sign-ups off, email code to my address only [S16]. Job endpoints check `x-job-secret` from Vault with a constant-time compare; JWT check off for them only.
+- **Spoofing:** sign-ups on; a session only reaches its own rows (RLS), and email codes are rate limited [S16]. Job endpoints check `x-job-secret` from Vault with a constant-time compare; JWT check off for them only.
 - **Tampering:** RLS on every table, column grants block SO fields, `security definer` rpc with `search_path = ''` and explicit `auth.uid()` checks (04-api.md Auth). pgTAP asserts every `public` table has RLS on and job helpers are service-role only.
 - **Disclosure:** the anon key and VAPID public key are the only keys in the app (NFR-11). Entry text goes to Anthropic only; Edge Function logs never print Entry text. Push payloads carry no Entry text except the Suggested category name.
 - **Abuse:** Supabase auth rate limits [S12]; job endpoints reject without the secret; Tagging check capped at 20/run.
@@ -231,7 +231,7 @@ Everything below except creating the project and my user now runs from `.github/
 
 Hosting decision (2026-11-08): Pages Direct Upload. Rejected: a Cloudflare Worker (custom domains need the zone on Cloudflare, and DNS for this domain is at Vercel) and Pages Git builds (a first build can't be ordered after Terraform). Terraform state lives in the Supabase database (schema `terraform_state`): no new account, and it holds no secrets. Rejected: HCP Terraform (another account and token).
 
-1. Create Supabase project; set Resend SMTP with sending domain `mail.<my domain>` before the first sign-in [S13]; disable sign-ups; create my user.
+1. Create Supabase project; set Resend SMTP with sending domain `mail.<my domain>` before the first sign-in [S13]. Sign-ups stay on (`config.toml`); each new user is seeded by trigger.
 2. Apply the migration (tables, policies, functions, Vault secret and function URLs), run `seed_account(uid)` once (`settings` and 5 Categories), then deploy Edge Functions and secrets, then enable cron schedules last. Order is safe: the trigger tolerates a missing function (the Tagging check catches up).
 3. Deploy the app to Cloudflare Pages; add to Home Screen; device tests.
 4. Start the 14-day run.

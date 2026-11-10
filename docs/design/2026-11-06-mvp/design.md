@@ -89,7 +89,7 @@ Rollout: Supabase project and Resend SMTP, migration and seed, functions, cron l
 
 ## Cross-cutting concerns
 
-- **Security:** sign-ups off, sign-in by emailed code to my address only; RLS on every table, column grants on Server-owned fields; job endpoints need a secret; AI, Resend and VAPID private keys only in Server secrets (NFR-11).
+- **Security:** sign-ups on, sign-in by emailed code; each account seeded on creation; RLS on every table, column grants on Server-owned fields; job endpoints need a secret; AI, Resend and VAPID private keys only in Server secrets (NFR-11).
 - **Privacy:** Entry text goes only to Anthropic; function logs and push payloads never include Entry text (except a Suggested category name).
 - **Observability:** an `nfr_report` SQL view, cron and pg_net run tables, function logs and on-phone save and refresh timings, reviewed weekly by me; no alerting service ([06-backend.md#observability](06-backend.md#observability)).
 - **Accessibility:** WCAG 2.2 AA contrast, 44 pt touch targets (NFR-10).
