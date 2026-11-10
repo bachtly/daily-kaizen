@@ -1,3 +1,4 @@
+import { db } from './db';
 import { supabase } from './supabase';
 import type { ErrorKey } from './errors';
 
@@ -48,4 +49,21 @@ export async function verifyCode(email: string, token: string): Promise<AuthResu
   } catch {
     return { ok: false, error: 'unknown' };
   }
+}
+
+/**
+ * Sign this device out (other devices keep their sessions) and clear the Local copy.
+ * Needs the Server: on failure the session and the Local copy are kept.
+ */
+export async function signOut(): Promise<{ ok: true } | { ok: false; error: ErrorKey }> {
+  try {
+    const { error } = await withTimeout(supabase.auth.signOut({ scope: 'local' }));
+    if (error) return { ok: false, error: transport(error) ?? 'server' };
+  } catch {
+    return { ok: false, error: 'unknown' };
+  }
+  await db.transaction('rw', [db.entries, db.categories, db.settings, db.weekly_reviews, db.meta], () =>
+    Promise.all([db.entries.clear(), db.categories.clear(), db.settings.clear(), db.weekly_reviews.clear(), db.meta.clear()]),
+  ).catch(() => {}); // the Local copy is disposable; the next sign-in's refresh replaces it anyway
+  return { ok: true };
 }

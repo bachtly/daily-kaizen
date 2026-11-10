@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LocalCopy } from '../data/localCopy';
 import type { Result } from '../data/request';
@@ -9,9 +9,11 @@ const readLocalCopy = vi.fn<() => Promise<LocalCopy>>();
 const saveSettings = vi.fn<(p: unknown) => Promise<Result<unknown>>>();
 const upsertPushSubscription = vi.fn<(s: unknown) => Promise<Result<unknown>>>();
 const getTimings = vi.fn(async (kind: string) => (kind === 'save' ? [300, 500] : [800]));
+const signOut = vi.fn<() => Promise<{ ok: true } | { ok: false; error: string }>>();
 const openPush = vi.fn<(e: PushEnv, k: string | undefined, r: unknown) => Promise<PushOutcome>>();
 const turnOnPush = vi.fn<(e: PushEnv, k: string | undefined, r: unknown) => Promise<PushOutcome>>();
 vi.mock('../data/localCopy', () => ({ readLocalCopy }));
+vi.mock('../data/auth', () => ({ signOut }));
 vi.mock('../data/timings', async (orig) => ({ ...(await orig<typeof import('../data/timings')>()), getTimings }));
 vi.mock('../data/push', async (orig) => ({ ...(await orig<typeof import('../data/push')>()), openPush, turnOnPush }));
 vi.mock('./liveWrites', () => ({ writes: { saveSettings, upsertPushSubscription }, deviceZone: () => 'UTC' }));
@@ -31,6 +33,7 @@ beforeEach(() => {
   saveSettings.mockReset();
   openPush.mockReset().mockResolvedValue({ state: 'off' });
   turnOnPush.mockReset();
+  signOut.mockReset();
 });
 afterEach(cleanup);
 
@@ -212,5 +215,43 @@ describe('SettingsView', () => {
     render(<MemoryRouter><SettingsView push="not-installed" /></MemoryRouter>);
     expect(screen.queryByText('Turn on notifications')).toBeNull();
     expect(screen.getByText(/Add daily-kaizen to your Home Screen first/)).toBeTruthy();
+  });
+});
+
+describe('Sign out', () => {
+  const mountRoutes = () => render(
+    <MemoryRouter initialEntries={['/settings']}>
+      <Routes>
+        <Route path="/settings" element={<SettingsScreen />} />
+        <Route path="/sign-in" element={<p>Sign-in page</p>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  it('signs out and goes to Sign in', async () => {
+    let done!: (r: { ok: true }) => void;
+    signOut.mockReturnValue(new Promise((r) => { done = r; }));
+    mountRoutes();
+    await loaded();
+    fireEvent.click(screen.getByText('Sign out'));
+    expect((await screen.findByText('Signing out…') as HTMLButtonElement).disabled).toBe(true);
+    done({ ok: true });
+    await screen.findByText('Sign-in page');
+    expect(signOut).toHaveBeenCalledOnce();
+  });
+  it('stays on Settings and says so when sign-out fails', async () => {
+    signOut.mockResolvedValue({ ok: false, error: 'server' });
+    mountRoutes();
+    await loaded();
+    fireEvent.click(screen.getByText('Sign out'));
+    await screen.findByText("Couldn't sign out. Try again.");
+    expect((screen.getByText('Sign out') as HTMLButtonElement).disabled).toBe(false);
+  });
+  it('is disabled offline', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    mountRoutes();
+    await loaded();
+    expect((screen.getByText('Sign out') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Signing out needs a connection.')).toBeTruthy();
+    online.mockRestore();
   });
 });
