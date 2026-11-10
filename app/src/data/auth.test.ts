@@ -21,7 +21,7 @@ describe('sendCode', () => {
     expect(await sendCode('a@b.c')).toEqual({ ok: true });
     expect(signInWithOtp).toHaveBeenCalledWith({
       email: 'a@b.c',
-      options: { shouldCreateUser: false },
+      options: { shouldCreateUser: true },
     });
   });
   it('gives the same result for an unknown email (4xx)', async () => {

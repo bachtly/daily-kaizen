@@ -24,13 +24,13 @@ function transport(error: AuthErr): 'server' | 'unknown' | null {
 }
 
 /**
- * Email a sign-in code. Sign-ups are off (shouldCreateUser false). Any answer from the server
+ * Email a sign-in code. A new email gets a new account (shouldCreateUser true). Any answer from the server
  * other than a 5xx counts as sent, so the screen shows the same message for every email (AC-7.2).
  */
 export async function sendCode(email: string): Promise<AuthResult> {
   try {
     const { error } = await withTimeout(
-      supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } }),
+      supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } }),
     );
     if (!error) return { ok: true };
     const t = transport(error);

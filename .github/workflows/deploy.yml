@@ -75,12 +75,13 @@ jobs:
         run: supabase db push --remote --yes
       - name: Auth and project config
         run: supabase config push --yes
-      # `config diff` doesn't compare templates, and sign-in breaks if this one still sends a link.
+      # `config diff` doesn't compare templates, and sign-in breaks if either one still sends a link.
       - name: Check the sign-in email sends a code
         run: |
           curl -fsS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             https://api.supabase.com/v1/projects/naiiplbdydablbudaqzr/config/auth \
-            | jq -e '.mailer_templates_magic_link_content | contains("{{ .Token }}")'
+            | jq -e '(.mailer_templates_magic_link_content | contains("{{ .Token }}"))
+              and (.mailer_templates_confirmation_content | contains("{{ .Token }}"))'
       - name: Function secrets
         run: |
           supabase secrets set --yes \

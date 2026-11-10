@@ -30,7 +30,7 @@ const ERROR_TEXT: Record<SignInError, string> = {
   server: "Couldn't sign in. Try again.",
 };
 
-/** The Sign in screen, props only (UC-6). Same message for any email, so it reveals nothing (AC-7.2). */
+/** The Sign in screen, props only (UC-6). Any email gets a code; a new one gets a new account (AC-7.2). */
 export function SignInView({
   step = 'email', email = '', busy, error, installHelp, resendWaitSeconds = 0,
   onEmailChange, onCodeChange, onSendCode, onVerify,
@@ -59,7 +59,7 @@ export function SignInView({
 
         {step === 'code' && (
           <>
-            <p className="note" role="status">If this is your account, a 6-digit code is on its way.</p>
+            <p className="note" role="status">A 6-digit code is on its way.</p>
             <label className="field-label" htmlFor="code" style={{ marginTop: 16 }}>Code</label>
             <input
               id="code" className="text code" inputMode="numeric" autoComplete="one-time-code" maxLength={6}

@@ -80,7 +80,7 @@ Supabase
 ### Login and security
 
 - Login is by email and a 6-digit code. Email links open in Safari rather than the home-screen app on iPhone, so the app wouldn't stay signed in.
-- Sign-ups are off, so only my email can sign in. Database row-level security limits all data to the signed-in user.
+- Anyone can sign up with an email code; a new account starts with the 5 Categories. Database row-level security limits all data to the signed-in user.
 - API keys stay in Edge Function secrets. Scheduled jobs call functions with a shared secret.
 
 ## Data

@@ -174,7 +174,7 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project. Existing users can still sign in.
-enable_signup = false
+enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -449,6 +449,11 @@ admin_email = "dailykaisen@bachtly.com"
 sender_name = "Daily Kaisen"
 
 [remotes.production.auth.email.template.magic_link]
+subject = "Your daily-kaizen code"
+content_path = "./supabase/templates/magic_link.html"
+
+# A new email gets this one instead of magic_link, so it sends the same code.
+[remotes.production.auth.email.template.confirmation]
 subject = "Your daily-kaizen code"
 content_path = "./supabase/templates/magic_link.html"
 

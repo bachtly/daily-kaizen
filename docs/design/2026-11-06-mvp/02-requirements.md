@@ -10,7 +10,7 @@ AC; use cases refer to it.
 
 | Actor | Description | Permissions |
 |---|---|---|
-| Me | The only user, on an iPhone (iOS 18.4+) home-screen web app, writing in English (brief Constraints) | Only my own rows (AC-7.2) |
+| Me | A user (me or anyone who signs up), on an iPhone (iOS 18.4+) home-screen web app, writing in English (brief Constraints) | Only my own rows (AC-7.2) |
 | Server | Supabase database, Edge Functions and pg_cron jobs | Service role; jobs call functions with a shared secret |
 | AI | Claude Haiku 5.5, called only by the Server to pick Tags | Sees an Entry's text and the Active Categories |
 
@@ -50,7 +50,7 @@ Postconditions: at most one Nudge per Gap, recorded.
 ### UC-6 · Sign in
 Me · first launch or session lost.
 Main flow: 1. I enter my email. 2. The Server emails a 6-digit code (Resend SMTP, R6). 3. I enter it (AC-7.1). 4. UC-2 runs.
-Exceptions: 1a. Email isn't mine → no account is created (AC-7.2). 2a. Email not received or rate-limited → I request a new code after a wait (OQ-1). 3a. Wrong or expired code → error, retry.
+Exceptions: 1a. New email → an account is created and seeded (AC-7.2). 2a. Email not received or rate-limited → I request a new code after a wait (OQ-1). 3a. Wrong or expired code → error, retry.
 Postconditions: the app holds a login session.
 
 ## User stories
@@ -107,7 +107,7 @@ G1 counts a day as logged when at least one Entry starts that day in my time zon
 
 ### US-7 · As me, I want to sign in once with an emailed code, so that my Entries stay mine (G3)
 - AC-7.1 When I enter a valid 6-digit code from my email in the home-screen app, the app shall sign me in and refresh the Local copy.
-- AC-7.2 The Server shall limit all data access to my account with row-level security, and shall refuse sign-ups from any other email (judgement).
+- AC-7.2 The Server shall limit all data access to the signed-in account with row-level security, and shall create and seed an account for a new email (judgement). Rejected: refuse sign-ups from any other email; replaced to let other people use the app (#48).
 
 ## User flows
 
@@ -186,9 +186,9 @@ flowchart TD
 ```mermaid
 flowchart TD
   I[First launch or session lost] --> EM[Enter email]
-  EM --> MINE{My email?}
-  MINE -- no --> REF[No account created]
-  MINE -- yes --> CODE[Server emails 6-digit code]
+  EM --> NEW{Existing account?}
+  NEW -- no --> ACC[Create account, 5 Categories, settings] --> CODE
+  NEW -- yes --> CODE[Server emails 6-digit code]
   CODE -- not received / rate-limited --> RS[Request new code after wait: OQ-1] --> CODE
   CODE --> ENT[Enter code in home-screen app]
   ENT -- wrong or expired --> ERR[Show error] --> ENT
