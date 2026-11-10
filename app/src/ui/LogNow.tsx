@@ -36,5 +36,5 @@ export function useLogNow() {
       onSaved={() => setOpen(false)} onClose={() => setOpen(false)}
     />
   );
-  return { fab, sheet };
+  return { fab: open === false ? fab : undefined, sheet };
 }

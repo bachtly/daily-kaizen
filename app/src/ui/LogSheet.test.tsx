@@ -244,3 +244,39 @@ describe('LogSheet: closing', () => {
     expect(closed).toHaveBeenCalled();
   });
 });
+
+describe('LogSheet: any day', () => {
+  // NOW is Wed 4 Nov 10:52. Entries: Standup 09:25–09:40 on the 4th.
+  const monday = [{ id: 'm', text: 'Planning', started_at: '2026-11-02T16:00:00Z', ended_at: '2026-11-02T18:00:00Z', created_at: '2026-11-02T18:00:00Z' }];
+
+  it("starts Log now on the day shown, with that day's latest Unlogged slot", () => {
+    mount(vi.fn(), { day: '2026-11-02', entries: monday });
+    expect((screen.getByLabelText('Day') as HTMLInputElement).value).toBe('2026-11-02');
+    expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('18:00');
+    expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('00:00'); // 24:00, end of the day
+    expect(screen.getByText('midnight')).toBeTruthy();
+    expect(screen.queryByText('now')).toBeNull();
+  });
+
+  it('moves to another day when the Day changes, keeps To on that day, and ignores a future day', async () => {
+    const onSave = vi.fn<(e: NewEntry) => Promise<Result<unknown>>>(async () => ok);
+    mount(onSave, { entries: monday });
+    expect(screen.getByText('today')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: '2026-11-02' } });
+    expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('18:00');
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '21:00' } });
+    type('Reading');
+    fireEvent.click(screen.getByText('Save'));
+    await savedOk();
+    expect(onSave.mock.calls[0][0]).toMatchObject({ started_at: '2026-11-02T18:00:00.000Z', ended_at: '2026-11-02T21:00:00.000Z' });
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: '2026-11-09' } });
+    expect((screen.getByLabelText('Day') as HTMLInputElement).value).toBe('2026-11-02');
+  });
+
+  it('back on today, prefills by AC-1.1 again', () => {
+    mount(vi.fn(), { day: '2026-11-02', entries });
+    fireEvent.change(screen.getByLabelText('Day'), { target: { value: '2026-11-04' } });
+    expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('09:40');
+    expect(screen.getByText('now')).toBeTruthy();
+  });
+});

@@ -45,6 +45,7 @@ export const PastDay: Story = { name: 'Past day (Mon 9)', args: { date: '2026-11
 export const EmptyDay: Story = { name: 'Nothing logged', args: { date: '2026-11-09', entries: entries.filter((e) => !e.id.startsWith('m')) } };
 export const LogNow: Story = { name: 'Log now (+)', args: { initialSheet: { kind: 'now' } } };
 export const LogNowTyping: Story = { name: 'Log now: typing', args: { initialSheet: { kind: 'now' }, initialText: 'Reading PR reviews' } };
+export const LogNowPastDay: Story = { name: 'Log now on a past day (Mon 9)', args: { date: '2026-11-09', initialSheet: { kind: 'now' } } };
 export const Fill: Story = {
   name: 'Fill a slot (Mon 9, 19:00–23:30)',
   args: { date: '2026-11-09', entries: [...entries, entry('m3', '09', 'Late call', '23:30', '23:50', 'shallow')], initialSheet: { kind: 'fill', start: at('2026-11-09T19:00:00Z'), end: at('2026-11-09T23:30:00Z'), day: '2026-11-09' }, initialText: 'Reading' },
