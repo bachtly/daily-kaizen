@@ -26,6 +26,25 @@ export const withTime = (ms: number, value: string, tz: string) => {
   return ms + ((h - p.hour) * 60 + (m - p.minute)) * MINUTE - p.second * 1000;
 };
 
+const DAY = 24 * 60 * MINUTE;
+
+/**
+ * The most recent wall-clock time `value` (HH:MM) at or before `limit` (strictly before it if `strict`):
+ * that day's if it is not later, else the day before's. Lets the Log form backfill last night (#46).
+ */
+export const latestAt = (limit: number, value: string, tz: string, strict = false) => {
+  const t = withTime(limit, value, tz);
+  return t > limit || (strict && t === limit) ? withTime(limit - DAY, value, tz) : t;
+};
+
+/** Which day `ms` is on, when it isn't today: "yesterday", else a short date like "Mon 9". */
+export const dayHint = (ms: number, now: number, tz: string) => {
+  const key = (t: number) => { const p = zonedParts(t, tz); return `${p.year}-${p.month}-${p.day}`; };
+  if (key(ms) === key(now)) return undefined;
+  if (key(ms) === key(now - DAY)) return 'yesterday';
+  return new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', day: 'numeric' }).format(ms);
+};
+
 /**
  * Entries that approving each Suggested category would move (AC-4.2: not those I tagged myself), by category id.
  * Counts the Local copy only (this and last week), while approving moves every matching Entry, so an old suggestion can be undercounted: accepted, the card is a hint.

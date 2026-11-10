@@ -10,7 +10,7 @@ import { RecentChips } from './RecentChips';
 import { SaveStatus, type SaveState } from './SaveStatus';
 import { TimeChip } from './TimeChip';
 import { useLocalCopy } from './useLocalCopy';
-import { hhmm, withTime } from './weekFormat';
+import { dayHint, hhmm, latestAt } from './weekFormat';
 
 type LogEntry = Pick<EntryRow, 'id' | 'text' | 'started_at' | 'ended_at' | 'created_at'>;
 
@@ -32,6 +32,8 @@ export type LogFormViewProps = {
   initialText?: string;
   /** Start the form with From already changed (ms), for stories. */
   initialFrom?: number;
+  /** Start the form with To already changed (ms), for stories. */
+  initialTo?: number;
 };
 
 const fieldMessage = {
@@ -44,10 +46,10 @@ type FieldKey = keyof typeof fieldMessage;
 const newDraft = () => ({ id: crypto.randomUUID(), openedAt: new Date().toISOString() });
 
 /** Log form: the screen the app opens on. Only the text is required; times are prefilled (AC-1.1). */
-export function LogFormView({ entries, timeZone, now, connection = 'online', refreshedAt, loading, onSave, frozen, initialText = '', initialFrom }: LogFormViewProps) {
+export function LogFormView({ entries, timeZone, now, connection = 'online', refreshedAt, loading, onSave, frozen, initialText = '', initialFrom, initialTo }: LogFormViewProps) {
   const [text, setText] = useState(initialText);
   const [fromEdit, setFromEdit] = useState<number | null>(initialFrom ?? null);
-  const [toEdit, setToEdit] = useState<number | null>(null);
+  const [toEdit, setToEdit] = useState<number | null>(initialTo ?? null);
   const [state, setState] = useState<SaveState>(frozen ?? 'idle');
   const [fieldError, setFieldError] = useState<FieldKey>();
   const [sessionLost, setSessionLost] = useState(false);
@@ -149,14 +151,15 @@ export function LogFormView({ entries, timeZone, now, connection = 'online', ref
         <TimeChip
           label="From" loading={loading} value={hhmm(from, timeZone)} disabled={saving} describedBy="time-error"
           invalid={timeError === 'entry_end_not_after_start'}
-          onChange={(v) => setFromEdit(withTime(from, v, timeZone))}
+          hint={dayHint(from, now, timeZone)}
+          onChange={(v) => setFromEdit(latestAt(to, v, timeZone, true))}
         />
         <TimeChip
           label="To" value={hhmm(to, timeZone)} disabled={saving} describedBy="time-error"
           invalid={timeError === 'entry_end_in_future'}
-          hint={toEdit === null ? 'now' : undefined}
+          hint={toEdit === null ? 'now' : dayHint(to, now, timeZone)}
           onReset={toEdit === null ? undefined : () => setToEdit(null)}
-          onChange={(v) => setToEdit(withTime(to, v, timeZone))}
+          onChange={(v) => setToEdit(latestAt(now, v, timeZone))}
         />
       </div>
       {timeError && <p id="time-error" className="error" role="alert">{fieldMessage[timeError]}</p>}

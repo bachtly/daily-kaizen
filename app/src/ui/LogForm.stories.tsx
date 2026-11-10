@@ -36,6 +36,14 @@ export const EmptyHistory: Story = { name: 'Empty (no Entries yet)', args: { ent
 export const Overlap: Story = {
   args: { initialText: 'Team sync', initialFrom: Date.parse(at('09:30')) },
 };
+export const BackfillLastNight: Story = {
+  name: 'Backfilling last night',
+  args: {
+    entries: [{ id: '9', text: 'Dinner', started_at: '2026-11-03T18:00:00Z', ended_at: '2026-11-03T19:00:00Z', created_at: '2026-11-03T19:00:00Z' }],
+    initialText: 'Reading', initialTo: Date.parse('2026-11-03T21:30:00Z'),
+  },
+  parameters: { docs: { description: { story: 'A To later than now means yesterday, so last night can be logged one Entry at a time (#46).' } } },
+};
 export const Saving: Story = { args: { initialText: 'Reading PR reviews', frozen: 'saving', onSave: never } };
 export const Saved: Story = { args: { frozen: 'saved' } };
 export const NoConnectionOnSave: Story = {

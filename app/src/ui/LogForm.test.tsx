@@ -135,14 +135,37 @@ describe('LogFormView', () => {
     await screen.findByText('Write what you did.');
   });
 
-  it('blocks Save and explains when To is later than now or From is not before To', () => {
+  it('blocks Save and explains when From is not before To', () => {
     mount(vi.fn());
     type('Reading');
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '23:00' } });
-    expect(screen.getByText("To can't be later than now.")).toBeTruthy();
-    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '09:00' } });
     expect(screen.getByText('From must be before To.')).toBeTruthy();
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('reads a To later than now as yesterday, so last night can be backfilled (#46)', async () => {
+    const onSave = vi.fn<(e: NewEntry) => Promise<Result<unknown>>>(async () => ok);
+    const lastNight = [{ id: '1', text: 'Dinner', started_at: '2026-11-03T18:00:00Z', ended_at: '2026-11-03T19:00:00Z', created_at: '2026-11-03T19:00:00Z' }];
+    mount(onSave, { entries: lastNight });
+    expect(screen.getAllByText('yesterday')).toHaveLength(1); // From, prefilled from last night
+    type('Reading');
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '21:30' } });
+    expect(screen.getAllByText('yesterday')).toHaveLength(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByText('Save'));
+    await screen.findByText('Saved.');
+    expect(onSave.mock.calls[0][0]).toMatchObject({ started_at: '2026-11-03T19:00:00.000Z', ended_at: '2026-11-03T21:30:00.000Z' });
+  });
+
+  it('puts From on the day before To when it is not before To, for an Entry across midnight', () => {
+    const onSave = vi.fn<(e: NewEntry) => Promise<Result<unknown>>>(async () => ok);
+    mount(onSave, { entries: [] });
+    type('Sleep');
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '07:00' } });
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '23:00' } });
+    expect(screen.getByText('yesterday')).toBeTruthy();
+    fireEvent.click(screen.getByText('Save'));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ started_at: '2026-11-03T23:00:00.000Z', ended_at: '2026-11-04T07:00:00.000Z' });
   });
 
   it('warns about an overlap but still saves (AC-1.2)', async () => {
