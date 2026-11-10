@@ -3,7 +3,7 @@ import { createBrowserRouter, Outlet, type RouteObject } from 'react-router';
 import { onOpen, type RefreshWindow } from './data/localCopy';
 import { browserEnv, openPush } from './data/push';
 import { mondayOf, weekBounds } from './data/week';
-import { LogForm } from './ui/LogForm';
+import { DayScreen } from './ui/DayScreen';
 import { SettingsScreen } from './ui/SettingsScreen';
 import { SignInScreen } from './ui/SignInScreen';
 import { writes } from './ui/liveWrites';
@@ -48,7 +48,8 @@ export const routes: RouteObject[] = [
       </RequireSession>
     ),
     children: [
-      { path: '/', element: <LogForm /> },
+      { path: '/', element: <DayScreen /> },
+      { path: '/day/:date', element: <DayScreen /> },
       { path: '/week', element: <WeekScreen /> },
       { path: '/week/:monday', element: <WeekScreen isCurrentWeek={false} /> },
       { path: '/settings', element: <SettingsScreen /> },

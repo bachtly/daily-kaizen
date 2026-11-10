@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CategoryRow, EntryRow } from '../data/db';
 import type { Result } from '../data/request';
+import { DayView, type DayActions } from './DayScreen';
 import { WeekView, type WeekActions } from './WeekScreen';
 import { countMoves } from './weekFormat';
 
@@ -23,13 +24,25 @@ const entries = [
 
 const ok: Result<unknown> = { ok: true, data: null };
 const fail = (error: string) => ({ ok: false, error }) as Result<unknown>;
-function actions(over: Partial<{ [K in keyof WeekActions]: ReturnType<typeof vi.fn> }> = {}) {
+function actions(over: Partial<{ [K in keyof (DayActions & WeekActions)]: ReturnType<typeof vi.fn> }> = {}) {
   return {
-    editEntry: vi.fn(async () => ok), deleteEntry: vi.fn(async () => ok), setEntryTag: vi.fn(async () => ok),
+    createEntry: vi.fn(async () => ok), editEntry: vi.fn(async () => ok), deleteEntry: vi.fn(async () => ok), setEntryTag: vi.fn(async () => ok),
     approveCategory: vi.fn(async () => ok), rejectCategory: vi.fn(async () => ok), ...over,
   };
 }
-function view(a: ReturnType<typeof actions>, props: Partial<React.ComponentProps<typeof WeekView>> = {}) {
+/** The Day view of Monday 2 Nov, where the Entries are edited. */
+function view(a: ReturnType<typeof actions>, props: Partial<React.ComponentProps<typeof DayView>> = {}) {
+  return render(
+    <MemoryRouter>
+      <DayView
+        date="2026-11-02" timeZone="UTC" now={NOW} entries={entries} categories={categories}
+        refreshedAt="2026-11-04T13:55:00Z" actions={a as unknown as DayActions} onPickDay={() => {}} {...props}
+      />
+    </MemoryRouter>,
+  );
+}
+/** The Week page, where Suggested categories are decided. */
+function weekView(a: ReturnType<typeof actions>, props: Partial<React.ComponentProps<typeof WeekView>> = {}) {
   return render(
     <MemoryRouter>
       <WeekView
@@ -92,7 +105,7 @@ describe('EntryEditor', () => {
 
   it('lets To be the current minute while now is up to a minute stale, but not later', () => {
     const today = [entry('a', '09:00', '10:00', { started_at: '2026-11-04T09:00:00Z', ended_at: '2026-11-04T10:00:00Z' })];
-    view(actions(), { entries: today, now: NOW - 30_000 });
+    view(actions(), { entries: today, now: NOW - 30_000, date: '2026-11-04' });
     openEditor('a');
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '14:00' } });
     expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(false);
@@ -116,11 +129,11 @@ describe('EntryEditor', () => {
     await waitFor(() => expect(a.editEntry).toHaveBeenCalledWith('a', expect.objectContaining({ time_zone: 'UTC' })));
   });
 
-  it('brings "This Entry was deleted." into view and drops it when the week changes', async () => {
+  it('brings "This Entry was deleted." into view and drops it when the day changes', async () => {
     const scroll = vi.fn();
     HTMLElement.prototype.scrollIntoView = scroll;
     const a = actions({ editEntry: vi.fn(async () => fail('entry_not_found')) });
-    view(a, { onPrev: () => {} });
+    view(a);
     openEditor('a');
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText('This Entry was deleted.');
@@ -219,7 +232,7 @@ describe('EntryRow', () => {
 describe('SuggestedCategoryCard', () => {
   it('shows how many Entries would move and approves or rejects (AC-4.2, AC-4.3)', async () => {
     const a = actions();
-    view(a);
+    weekView(a);
     expect(screen.getByText('Suggested category: Admin')).toBeTruthy();
     expect(screen.getByText('2 Entries would move.')).toBeTruthy();
     fireEvent.click(screen.getByText('Approve'));
@@ -233,7 +246,7 @@ describe('SuggestedCategoryCard', () => {
       approveCategory: vi.fn(async () => fail('category_already_decided')),
       rejectCategory: vi.fn(async () => fail('category_not_active')),
     });
-    view(a);
+    weekView(a);
     fireEvent.click(screen.getByText('Approve'));
     await waitFor(() => expect(a.approveCategory).toHaveBeenCalled());
     fireEvent.click(screen.getByText('Reject'));
@@ -244,14 +257,14 @@ describe('SuggestedCategoryCard', () => {
 
   it('says Needs a connection. offline', () => {
     const a = actions();
-    view(a, { connection: 'offline' });
+    weekView(a, { connection: 'offline' });
     fireEvent.click(screen.getByText('Approve'));
     expect(screen.getByText('Needs a connection.')).toBeTruthy();
     expect(a.approveCategory).not.toHaveBeenCalled();
   });
 
   it('is hidden when no Category is suggested', () => {
-    view(actions(), { categories: categories.filter((c) => c.status !== 'suggested') });
+    weekView(actions(), { categories: categories.filter((c) => c.status !== 'suggested') });
     expect(screen.queryByText(/Suggested category/)).toBeNull();
   });
 });

@@ -94,6 +94,13 @@ describe('WeekView', () => {
     expect(screen.getByText('Mark review done')).toBeTruthy();
   });
 
+  it('shows time logged per day, each opening that day; days after today are plain (AC-5.1)', () => {
+    view();
+    expect(screen.getByRole('link', { name: /^Mon 2\s*2h 00m logged/ }).getAttribute('href')).toBe('/day/2026-11-02');
+    expect(screen.getByRole('link', { name: /^Wed 4\s*0h 00m logged/ }).getAttribute('href')).toBe('/');
+    expect(screen.queryByRole('link', { name: /Thu 5/ })).toBeNull();
+  });
+
   it('offers Retry for an earlier week that needs a connection', () => {
     const onRetry = vi.fn();
     view({ isCurrentWeek: false, load: 'offline-earlier-week', onRetry });
@@ -138,7 +145,7 @@ describe('WeekScreen', () => {
     fetchWeek.mockReturnValueOnce(new Promise(() => {}));
     fireEvent.click(screen.getByLabelText('Next week'));
     await waitFor(() => expect(screen.queryByText('Earlier weeks need a connection.')).toBeNull());
-    expect(screen.getByText('Week of 12 Oct')).toBeTruthy();
+    expect(screen.getByText('12 Oct – 18 Oct')).toBeTruthy();
   });
 
   it('shows a skeleton, not Not reviewed or Not updated yet, until the Local copy is read', async () => {
@@ -165,35 +172,6 @@ describe('WeekScreen', () => {
     expect(screen.getByText('Sign in to see earlier weeks.')).toBeTruthy();
   });
 
-  it('refreshes the Local copy when an edit says the Entry is gone', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(NOW);
-    readLocalCopy.mockResolvedValueOnce(copy({ entries }));
-    // After the refresh the Entry is really gone, so its editor unmounts.
-    readLocalCopy.mockResolvedValue(copy({ entries: entries.filter((e) => e.id !== 'a') }));
-    editEntry.mockResolvedValue({ ok: false, error: 'entry_not_found' });
-    mount('/week');
-    fireEvent.click(await screen.findByLabelText(/^Edit Entry a,/));
-    fireEvent.click(screen.getByText('Save'));
-    await screen.findByText('This Entry was deleted.');
-    expect(screen.queryByLabelText('Activity')).toBeNull();
-    expect(screen.queryByLabelText(/^Edit Entry a,/)).toBeNull();
-    expect(refresh).toHaveBeenCalledOnce();
-    expect(readLocalCopy.mock.calls.length).toBeGreaterThan(1);
-  });
-
-  it('reads an earlier week again after a confirmed write', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(NOW);
-    readLocalCopy.mockResolvedValue(copy());
-    fetchWeek.mockResolvedValue({ ok: true, data: [entry('x', '02', '09:00', '10:00', 'deep')] });
-    editEntry.mockResolvedValue({ ok: true, data: null });
-    mount('/week/2026-10-05');
-    fireEvent.click(await screen.findByLabelText(/^Edit Entry x,/));
-    fireEvent.click(screen.getByText('Save'));
-    await waitFor(() => expect(fetchWeek).toHaveBeenCalledTimes(2));
-  });
-
   it('keeps the signed-out banner when moving to another week while the session is still lost', async () => {
     readLocalCopy.mockResolvedValue(copy());
     fetchWeek.mockResolvedValueOnce({ ok: false, error: 'session_lost' });
@@ -201,7 +179,7 @@ describe('WeekScreen', () => {
     await screen.findByText(/Signed out/);
     fetchWeek.mockReturnValueOnce(new Promise(() => {}));
     fireEvent.click(screen.getByLabelText('Next week'));
-    await screen.findByText('Week of 12 Oct');
+    await screen.findByText('12 Oct – 18 Oct');
     expect(screen.getByText(/Signed out/)).toBeTruthy();
     expect(screen.queryByText('Sign in to see earlier weeks.')).toBeNull();
   });

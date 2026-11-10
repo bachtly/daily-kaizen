@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { expect } from 'storybook/test';
 import '../index.css';
-import * as log from './LogForm.stories';
+import * as day from './DayScreen.stories';
 import * as settings from './Settings.stories';
 import * as signIn from './SignIn.stories';
 import * as week from './WeekScreen.stories';
@@ -13,7 +13,7 @@ import * as week from './WeekScreen.stories';
  * Narrow-screen check (NFR-10): every screen state at the iPhone widths must fit with no sideways scroll.
  * `../index.css` is loaded so `.phone` fills the screen like the real app does (the 393 px frame is only for desktop mocks).
  */
-const screens = [log, week, settings, signIn].flatMap((m) => Object.entries(composeStories(m as never) as Record<string, React.ComponentType>));
+const screens = [day, week, settings, signIn].flatMap((m) => Object.entries(composeStories(m as never) as Record<string, React.ComponentType>));
 
 const meta = { title: 'Checks/Viewport', parameters: { layout: 'fullscreen', docs: { disable: true }, a11y: { test: 'off' } } } satisfies Meta;
 export default meta;

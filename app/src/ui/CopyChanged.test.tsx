@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { emitCopyChanged } from '../data/copyChanged'
 import type { CategoryRow, EntryRow } from '../data/db'
@@ -12,8 +12,8 @@ vi.mock('./liveWrites', () => ({
   liveWindow: () => ({ since: '', sinceDate: '' }),
   writes: { reviewDone: vi.fn(), editEntry: vi.fn(), createEntry: vi.fn() },
 }))
-const { WeekScreen } = await import('./WeekScreen')
-const { LogForm } = await import('./LogForm')
+const { DayScreen } = await import('./DayScreen')
+const { clearDrafts } = await import('./logDrafts')
 
 const categories: CategoryRow[] = [{ id: 'deep', name: 'Deep', description: '', status: 'active' }]
 const entry = (id: string, text: string): EntryRow => ({
@@ -28,23 +28,28 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  clearDrafts()
   vi.useRealTimers()
 })
 
-it('a mounted Week screen shows new data after a refresh', async () => {
-  render(<MemoryRouter><WeekScreen /></MemoryRouter>)
+const day = () =>
+  render(<MemoryRouter initialEntries={['/day/2026-11-03']}><Routes><Route path="/day/:date" element={<DayScreen />} /></Routes></MemoryRouter>)
+
+it('a mounted Day screen shows new data after a refresh', async () => {
+  day()
   await screen.findByText('Old entry')
   readLocalCopy.mockResolvedValue(copy([entry('a', 'Old entry'), entry('b', 'Fresh entry')]))
   await act(async () => emitCopyChanged())
   expect(await screen.findByText('Fresh entry')).toBeTruthy()
 })
 
-it('a mounted Log form shows new Recent chips after a refresh and keeps the typed text', async () => {
-  render(<MemoryRouter><LogForm /></MemoryRouter>)
+it('an open Log sheet shows new Recent chips after a refresh and keeps the typed text', async () => {
+  day()
   await screen.findByText('Old entry')
+  fireEvent.click(screen.getByLabelText('Log now'))
   fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'Half typed' } })
   readLocalCopy.mockResolvedValue(copy([entry('a', 'Old entry'), entry('b', 'Fresh entry')]))
   await act(async () => emitCopyChanged())
-  expect(await screen.findByText('Fresh entry')).toBeTruthy()
+  expect(await screen.findByRole('button', { name: 'Fresh entry' })).toBeTruthy()
   expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('Half typed')
 })

@@ -1,3 +1,4 @@
+import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -8,6 +9,7 @@ import { deviceZone, writes } from './liveWrites';
 import { PushStatus } from './PushStatus';
 import { NudgeGapField } from './NudgeGapField';
 import { QuietHoursFields } from './QuietHoursFields';
+import { useLogNow } from './LogNow';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
 import { Skeleton } from './Skeleton';
 import { useLocalCopy } from './useLocalCopy';
@@ -47,6 +49,9 @@ export type SettingsViewProps = {
   onNudgeHours?: (v: number) => void;
   onSave?: () => void;
   onSignOut?: () => void;
+  /** The floating + and its sheet (live: `useLogNow`). */
+  fab?: React.ReactNode;
+  sheet?: React.ReactNode;
 };
 
 const EQUAL = 'Start and end must differ.';
@@ -56,11 +61,12 @@ const ms = (v: number | null | undefined) => (v == null ? '–' : `${v} ms`);
 export function SettingsView({
   connection = 'online', push = 'off', loading = {}, refreshedAt, pushBusy, pushProblem, quietStart = '23:00', quietEnd = '07:00', quietError, nudgeHours = 3, nudgeError,
   saving, saved, saveProblem, saveP95, refreshP95, signingOut, signOutProblem, onTurnOn, onQuietStart = () => {}, onQuietEnd = () => {}, onNudgeHours = () => {}, onSave, onSignOut,
+  fab, sheet,
 }: SettingsViewProps) {
   const online = connection !== 'offline';
   const error = quietError || quietStart === quietEnd ? EQUAL : undefined;
   return (
-    <Phone tab="settings" busy={Object.values(loading).some(Boolean)}>
+    <Phone tab="settings" busy={Object.values(loading).some(Boolean)} fab={fab} overlay={sheet}>
       <ConnectionBanner state={connection} refreshedAt={refreshedAt} />
       <h1>Settings</h1>
 
@@ -114,6 +120,7 @@ export function SettingsScreen() {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [signedOut, setSignedOut] = useState(false);
   const { copy, ready } = useLocalCopy();
+  const logNow = useLogNow();
   const [push, setPush] = useState<PushState>();
   const [pushBusy, setPushBusy] = useState(false);
   const [pushProblem, setPushProblem] = useState<string>();
@@ -205,6 +212,7 @@ export function SettingsScreen() {
       onNudgeHours={(v) => { setNudgeEdit(v); setSaved(false); setNudgeRefused(false); }}
       onSave={() => void save()}
       onSignOut={() => void leave()}
+      fab={logNow.fab} sheet={logNow.sheet}
     />
   );
 }

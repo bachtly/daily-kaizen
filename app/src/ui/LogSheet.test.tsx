@@ -3,7 +3,8 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Result } from '../data/request';
 import type { NewEntry } from '../data/writes';
-import { LogFormView } from './LogForm';
+import { clearDrafts } from './logDrafts';
+import { LogSheet } from './LogSheet';
 
 const NOW = Date.parse('2026-11-04T10:52:00Z');
 const entries = [
@@ -14,27 +15,30 @@ const ok: Result<unknown> = { ok: true, data: null };
 function mount(onSave: (e: NewEntry) => Promise<Result<unknown>>, extra = {}) {
   return render(
     <MemoryRouter>
-      <LogFormView entries={entries} timeZone="UTC" now={NOW} onSave={onSave} {...extra} />
+      <LogSheet mode={{ kind: 'now' }} entries={entries} timeZone="UTC" now={NOW} onSave={onSave} onSaved={saved} onClose={closed} {...extra} />
     </MemoryRouter>,
   );
 }
 const type = (v: string) => fireEvent.change(screen.getByLabelText('Activity'), { target: { value: v } });
 
-afterEach(cleanup);
+const saved = vi.fn();
+const closed = vi.fn();
+const savedOk = () => waitFor(() => expect(saved).toHaveBeenCalled());
+afterEach(() => { cleanup(); clearDrafts(); saved.mockReset(); closed.mockReset(); });
 
-describe('LogFormView loading', () => {
+describe('LogSheet loading', () => {
   it('shows no From, Recent chips or enabled Save until the Local copy is read, but lets me type', () => {
     mount(vi.fn(), { loading: true });
     expect(screen.queryByLabelText('From')).toBeNull();
     expect(screen.queryByText('Standup')).toBeNull();
-    expect(document.querySelector('main')?.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('dialog').getAttribute('aria-busy')).toBe('true');
     type('Reading');
     expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByLabelText('To')).toBeTruthy();
   });
 });
 
-describe('LogFormView', () => {
+describe('LogSheet: Log now', () => {
   it('prefills From with the latest end and To with now (AC-1.1)', () => {
     mount(vi.fn());
     expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('09:40');
@@ -42,16 +46,16 @@ describe('LogFormView', () => {
     expect(screen.getByText('now')).toBeTruthy();
   });
 
-  it('saves with the prefilled times and shows Saved only after the Server confirms (AC-2.1)', async () => {
+  it('saves with the prefilled times and calls onSaved only after the Server confirms (AC-2.1)', async () => {
     let resolve!: (r: Result<unknown>) => void;
     const onSave = vi.fn<(e: NewEntry) => Promise<Result<unknown>>>(() => new Promise((r) => (resolve = r)));
     mount(onSave);
     type('Reading');
     fireEvent.click(screen.getByText('Save'));
     expect(screen.getByText('Saving…')).toBeTruthy();
-    expect(screen.queryByText('Saved.')).toBeNull();
+    expect(saved).not.toHaveBeenCalled();
     resolve(ok);
-    await screen.findByText('Saved.');
+    await savedOk();
     const sent = onSave.mock.calls[0][0];
     expect(sent).toMatchObject({ text: 'Reading', started_at: '2026-11-04T09:40:00.000Z', ended_at: '2026-11-04T10:52:00.000Z', time_zone: 'UTC' });
     expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('');
@@ -67,7 +71,7 @@ describe('LogFormView', () => {
     await screen.findByText(/Needs a connection/);
     expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('Reading');
     fireEvent.click(screen.getByText('Save'));
-    await screen.findByText('Saved.');
+    await savedOk();
     expect(onSave.mock.calls[1][0].id).toBe(onSave.mock.calls[0][0].id);
   });
 
@@ -76,7 +80,7 @@ describe('LogFormView', () => {
     mount(onSave);
     type('One');
     fireEvent.click(screen.getByText('Save'));
-    await screen.findByText('Saved.');
+    await savedOk();
     type('Two');
     fireEvent.click(screen.getByText('Save'));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
@@ -110,7 +114,7 @@ describe('LogFormView', () => {
     const onSave = vi.fn<(e: NewEntry) => Promise<Result<unknown>>>(async () => ok);
     mount(onSave, { initialText: 'draft' });
     fireEvent.click(screen.getByText('Save'));
-    await screen.findByText('Saved.');
+    await savedOk();
     const first = onSave.mock.calls[0][0];
     type('again');
     type('');
@@ -153,7 +157,7 @@ describe('LogFormView', () => {
     expect(screen.getAllByText('yesterday')).toHaveLength(2);
     expect(screen.queryByRole('alert')).toBeNull();
     fireEvent.click(screen.getByText('Save'));
-    await screen.findByText('Saved.');
+    await savedOk();
     expect(onSave.mock.calls[0][0]).toMatchObject({ started_at: '2026-11-03T19:00:00.000Z', ended_at: '2026-11-03T21:30:00.000Z' });
   });
 
@@ -175,7 +179,7 @@ describe('LogFormView', () => {
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '09:30' } });
     expect(screen.getByText(/Overlaps "Standup 09:25–09:40"/)).toBeTruthy();
     fireEvent.click(screen.getByText('Save'));
-    await screen.findByText('Saved.');
+    await savedOk();
   });
 
   it('hides Recent when there are no Entries and fills the text from a chip', () => {
@@ -185,5 +189,58 @@ describe('LogFormView', () => {
     mount(vi.fn());
     fireEvent.click(screen.getByRole('button', { name: 'Standup' }));
     expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('Standup');
+  });
+});
+
+describe('LogSheet: Fill (AC-1.4)', () => {
+  // A slot on Monday 2 Nov, 19:00–23:30; now is Wednesday 4 Nov.
+  const fill = { kind: 'fill' as const, start: Date.parse('2026-11-02T19:00:00Z'), end: Date.parse('2026-11-02T23:30:00Z'), day: '2026-11-02' };
+
+  it('opens with the slot as From and To and saves on that day', async () => {
+    const onSave = vi.fn<(e: NewEntry) => Promise<Result<unknown>>>(async () => ok);
+    mount(onSave, { mode: fill });
+    expect(screen.getByText('Fill the gap')).toBeTruthy();
+    expect(screen.getByText(/Mon 2 Nov · 19:00–23:30/)).toBeTruthy();
+    expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('19:00');
+    expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('23:30');
+    expect(screen.queryByText('now')).toBeNull();
+    type('Reading');
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '21:30' } });
+    fireEvent.click(screen.getByText('Save'));
+    await savedOk();
+    expect(onSave.mock.calls[0][0]).toMatchObject({ started_at: '2026-11-02T19:00:00.000Z', ended_at: '2026-11-02T21:30:00.000Z' });
+  });
+
+  it('keeps To on the slot day and moves From to the day before only when it is not before To', () => {
+    mount(vi.fn(), { mode: fill, entries: [] });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '01:00' } });
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '23:00' } });
+    expect(screen.getByText('Sun 1')).toBeTruthy(); // From is the evening before; To stays on Mon 2
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('LogSheet: closing', () => {
+  it('keeps unsaved text and its id for the next open of the same sheet', async () => {
+    const onSave = vi.fn<(e: NewEntry) => Promise<Result<unknown>>>(async () => ({ ok: false, error: 'unknown' }) as Result<unknown>);
+    mount(onSave);
+    type('Half typed');
+    fireEvent.click(screen.getByText('Save'));
+    await screen.findByText(/Needs a connection/);
+    fireEvent.click(screen.getByText('Close'));
+    expect(closed).toHaveBeenCalled();
+    cleanup();
+    onSave.mockResolvedValueOnce(ok);
+    mount(onSave);
+    expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('Half typed');
+    fireEvent.click(screen.getByText('Save'));
+    await savedOk();
+    expect(onSave.mock.calls[1][0].id).toBe(onSave.mock.calls[0][0].id);
+  });
+
+  it('closes on Escape', () => {
+    mount(vi.fn());
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(closed).toHaveBeenCalled();
   });
 });
