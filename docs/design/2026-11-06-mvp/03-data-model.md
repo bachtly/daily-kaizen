@@ -73,7 +73,7 @@ Push is on when I have at least one `push_subscriptions` row; there is no separa
 **Gap start**: the latest `ended_at` among my Entries; the Gap runs from it to now. With no Entries there is no Gap and no Nudge; deleting the latest Entry moves the Gap start back, and one Nudge per Gap still applies (user decision).
 
 **Local copy** (phone, read-only, AC-2.4): copies of my Entries that end after the previous Monday 00:00 (this week and last week, including sleep crossing into Monday, and given-up Entries),
-all my Categories, my settings, my `weekly_reviews` from the previous Monday on (Review done shown offline), and `refreshed_at`, the time of the last refresh shown on the This week page.
+all my Categories, my settings, my `weekly_reviews` from the previous Monday on (Review done shown offline), and `refreshed_at`, the time of the last refresh shown on the Week page.
 
 ### Starting Category descriptions (resolves OQ-2)
 
@@ -151,11 +151,11 @@ Entry is ever lost), little code with light edge cases, and G2 (logging stays fa
 
 | Option | Outcome | Reason |
 |---|---|---|
-| Every write needs a connection; the phone keeps a read-only Local copy of this week and last week | **Chosen** | No sync rules; a saved Entry is on the Server the moment it is saved, so G3 holds without exceptions; the This week page and form defaults still work offline |
+| Every write needs a connection; the phone keeps a read-only Local copy of this week and last week | **Chosen** | No sync rules; a saved Entry is on the Server the moment it is saved, so G3 holds without exceptions; the Week page and form defaults still work offline |
 | Outbox for new Entries only; edits and deletes online | Rejected | Unsynced Entries sit in best-effort browser storage; a wrong time can't be fixed offline |
 | Outbox for new Entries, edits and deletes; Tag and Category decisions online | Rejected | Sync must also carry updates and deletes, with ordering and phone-clock versioning, on top of the storage risk |
 | Outbox for every write, including Tag corrections | Rejected | Offline Tag corrections conflict with AI tagging and need more rules |
-| Fully online, with no local copy | Rejected | The This week page and the form defaults wouldn't work offline at all |
+| Fully online, with no local copy | Rejected | The Week page and the form defaults wouldn't work offline at all |
 
 Consequences:
 - I can't log, edit or delete without a connection. Missed time is logged later as a backfill, which the form supports.

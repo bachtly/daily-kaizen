@@ -33,7 +33,7 @@ flowchart LR
 
 I log an Entry (text, start, end) on the phone; it saves only when the Server confirms. A database trigger asks the AI to
 pick a Tag; a 15-minute Tagging check retries failures. A 5-minute Notification check sends Nudges and the Sunday Review
-reminder. The phone keeps a read-only Local copy of this week and last week so the This week page and the form defaults
+reminder. The phone keeps a read-only Local copy of this week and last week so the Week page and the form defaults
 work offline. Business rules live in Postgres; Edge Functions only call the AI, Web Push and Resend
 ([D4](04-api.md#decisions)).
 
@@ -64,8 +64,9 @@ that touch Server-owned fields. Every phone write returns the saved row and is s
 
 ### UI → [05-ui.md](05-ui.md)
 
-Four screens: Log form (prefilled start and end, Recent chips, overlap note), This week (Category totals, Untagged, Unlogged,
-Suggested category cards, inline Entry editing, Tag picker, Review done), Settings (push status, Quiet hours, Nudge gap) and Sign in
+Four screens: Day (week strip, a day's Entries with Unlogged slots to Fill, inline Entry editing, Tag picker; a floating + opens the
+Log sheet with prefilled start and end, Recent chips, overlap note), Week (Category totals, Untagged, Unlogged, time per day,
+Suggested category cards, Review done), Settings (push status, Quiet hours, Nudge gap) and Sign in
 (email, 6-digit code). One `ConnectionBanner` shows offline and lost-session states; `SaveStatus` shows "saved" only after the
 Server confirms. Storybook mockups of every screen are in `app/src/ui`.
 

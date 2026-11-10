@@ -17,15 +17,15 @@ AC; use cases refer to it.
 ## Use cases
 
 ### UC-1 · Log, edit or delete an entry
-Me · I open the app or tap "log" · Signed in on this phone.
-Main flow: 1. The form opens prefilled (AC-1.1). 2. I type the text, adjusting times if backfilling. 3. I save; the Server saves it (AC-1.2, AC-2.1). 4. UC-3 runs for a new Entry.
-Alternate flows: 2b. I open an existing Entry and edit or delete it (AC-1.3). 2c. I cancel → nothing is saved.
+Me · I tap the floating + (any screen), or Fill on an Unlogged slot of any day · Signed in on this phone.
+Main flow: 1. The Log sheet opens prefilled (AC-1.1, or AC-1.4 for Fill). 2. I type the text, adjusting times if backfilling. 3. I save; the Server saves it (AC-1.2, AC-2.1). 4. UC-3 runs for a new Entry.
+Alternate flows: 2a. Backfill: I open a past day, tap Fill on an Unlogged slot, and log it one Entry at a time (AC-1.4). 2b. I open an existing Entry and edit or delete it (AC-1.3). 2c. I cancel → nothing is saved.
 Exceptions: 3a. Invalid or overlapping → AC-1.2. 3b. No connection or login session lost → AC-2.2; a lost session also starts UC-6.
 Postconditions: the Entry or change is on the Server and in the Local copy, or nothing changed and the form still holds my text.
 
 ### UC-2 · Open the app
 App · app opens or returns to the foreground · Signed in.
-Main flow: 1. If online, the app refreshes the Local copy and reports the time zone and push subscription (AC-2.3). 2. The form and the This week page read from the Local copy (AC-2.4).
+Main flow: 1. If online, the app refreshes the Local copy and reports the time zone and push subscription (AC-2.3). 2. The Day view (today) and the Week page read from the Local copy (AC-2.4).
 Exceptions: 1a. Offline → the Local copy as last refreshed, with that time shown. 1b. Session lost → UC-6. 1c. iOS cleared browser storage → the session is gone too, so I sign in (UC-6) first; no Local copy until then; nothing saved is lost (G3).
 Postconditions: the Local copy holds this week and last week, as of the time shown.
 
@@ -36,7 +36,7 @@ Exceptions: 1a. AI call fails, times out or returns a Category that isn't active
 Postconditions: the Entry has exactly one Tag, or is Untagged and will be retried.
 
 ### UC-4 · Weekly review
-Me · the Review reminder, or I open "This week" · Signed in.
+Me · the Review reminder, or I open the Week tab · Signed in.
 Main flow: 1. The page shows the current week (AC-5.1); I may browse to an earlier week. 2. I correct wrong Tags (AC-4.1). 3. I approve or reject Suggested categories (AC-4.2, AC-4.3). 4. I tap "Review done" (AC-5.3).
 Exceptions: 1a. No Entries in the week → all Unlogged, neutral wording (R8). 1b. Offline → the Local copy with its refresh time; weeks older than it, and every change, need a connection (AC-2.2, AC-2.4). 1c. Push not delivered (R4) → the email still arrives.
 Postconditions: corrected Tags have Tag source me; approved Categories are active; the week shown has a Review done record.
@@ -57,7 +57,7 @@ Postconditions: the app holds a login session.
 
 ### US-1 · As me, I want to log and fix entries in seconds, so that logging stays a habit (G1, G2)
 Logging burden (R8) is owned by the ui stage.
-- AC-1.1 When the log form opens, the app shall prefill:
+- AC-1.1 When the Log sheet opens from the floating +, the app shall prefill:
   - start with the latest end time among Entries in the Local copy, or the start of today if there is none;
   - end with the current time.
 - AC-1.2 When I save an Entry, the app shall:
@@ -65,6 +65,7 @@ Logging burden (R8) is owned by the ui stage.
   - warn, and still save, if it overlaps another Entry;
   - send it with the phone's IANA time zone and, on create only, the time the form opened, which NFR-1 uses.
 - AC-1.3 When I edit or delete an Entry, the app shall apply the AC-1.2 checks to an edit, without sending a form-open time (NFR-1 measures creates only); a delete removes the Entry for good (judgement).
+- AC-1.4 When I open a day on the Day view (any day; days older than the Local copy are fetched and need a connection), the app shall list its Entries in time order with its Unlogged slots between them. When I tap Fill on a slot, the Log sheet shall open with start and end set to the slot, on that day; after a confirmed save, what is left of the slot stays as a slot (#46).
 
 ### US-2 · As me, I want every saved change to be on the Server, and this week and last week readable offline, so that nothing saved is lost and the app stays useful without a connection (G3, G1, G2)
 - AC-2.1 When I save any change (Entry, Tag, Suggested category decision, Review done or setting), the app shall show it as done only after the Server confirms it (D3).
@@ -72,12 +73,12 @@ Logging burden (R8) is owned by the ui stage.
 - AC-2.3 When the app opens or returns to the foreground online, or the Server confirms a change, the app shall:
   - refresh the Local copy: my Entries that end after the previous Monday 00:00 (so sleep crossing into Monday is included), Categories and settings (judgement);
   - on open or foreground only, report the phone's IANA time zone, which scheduled jobs then use, and send the current Push subscription if push permission is granted (R4).
-- AC-2.4 The app shall read the form defaults and the This week page for the current and previous week from the Local copy, never change it except by a refresh, and show on the This week page when it was last refreshed; earlier weeks need a connection.
+- AC-2.4 The app shall read the Log sheet defaults, the Day view and the Week page for the current and previous week from the Local copy, never change it except by a refresh, and show on the Day view and Week page when it was last refreshed; earlier weeks need a connection.
 
 ### US-3 · As me, I want Entries tagged without my effort, so that the Weekly review needs no categorising (G1, G2)
 Starting Categories: Deep, Shallow, Maintenance, Waste, Recovery (README §Categories); their descriptions are in [03-data-model.md](03-data-model.md).
 - AC-3.1 When a new Entry is saved, or the Tagging check picks up an Untagged entry, the Server shall ask the AI to pick one Active Category and save it as the Tag with Tag source AI.
-- AC-3.2 If an Entry is Untagged, because tagging failed or timed out, or because I changed the text of an Entry whose Tag source isn't me (which clears its Tag and retry count), then the Tagging check shall retry it every 15 minutes, up to a limit (OQ-3, D2). After the limit, the This week page shall show it as Untagged with a "couldn't tag" note, and I tag it by hand (AC-4.1). Repeated tagging shall leave one Tag and at most one Suggested category and one Category suggestion.
+- AC-3.2 If an Entry is Untagged, because tagging failed or timed out, or because I changed the text of an Entry whose Tag source isn't me (which clears its Tag and retry count), then the Tagging check shall retry it every 15 minutes, up to a limit (OQ-3, D2). After the limit, the Day view shall show it as Untagged with a "couldn't tag" note, and I tag it by hand (AC-4.1). Repeated tagging shall leave one Tag and at most one Suggested category and one Category suggestion.
 - AC-3.3 If an Entry's Tag source is me, then the Server shall never change that Tag, even if I edit its text.
 - AC-3.4 When the AI proposes a new category, the Server shall keep the Entry in the best Active Category and:
   - if the name matches a Suggested category, set it as the Entry's Suggested category and send nothing;
@@ -91,7 +92,7 @@ Starting Categories: Deep, Shallow, Maintenance, Waste, Recovery (README §Categ
 
 ### US-5 · As me, I want a Sunday review of where my time went, so that I complete weekly reviews (G1)
 G1 counts a day as logged when at least one Entry starts that day in my time zone (judgement), and counts Review done records.
-- AC-5.1 When I open the This week page, the app shall show the current week (Monday 00:00 to now), let me browse earlier weeks, and show for the week shown time per Category, Untagged and Unlogged, where:
+- AC-5.1 When I open the Week page, the app shall show the current week (Monday 00:00 to now), let me browse earlier weeks, and show for the week shown time per Category, Untagged and Unlogged, and time logged per day (a tap opens that day), where:
   - days and weeks are split in my latest reported time zone (judgement), and an Entry crossing midnight or a week boundary counts in each part;
   - only past time counts;
   - overlapping time counts once, for the Entry created last;
@@ -113,7 +114,7 @@ G1 counts a day as logged when at least one Entry starts that day in my time zon
 
 ```mermaid
 flowchart TD
-  A[Open app or tap log] --> B[Form prefilled from Local copy: AC-1.1]
+  A[Tap + or Fill on a slot] --> B[Log sheet prefilled: AC-1.1 or AC-1.4]
   A -- open existing Entry --> ED[Edit or delete] --> C
   B -- cancel --> X[Discard]
   B --> C{Valid? AC-1.2}
@@ -131,7 +132,7 @@ flowchart TD
   ON -- offline --> OFF["Use Local copy; show last refreshed"]
   ON -- session lost --> SI[UC-6]
   ON -- yes --> R["Refresh Local copy; report time zone and Push subscription"]
-  R --> USE[Form defaults and This week from Local copy]
+  R --> USE[Log sheet defaults, Day view and Week from Local copy]
   OFF --> USE
   USE -- earlier week or any change offline --> NC[Say a connection is needed]
 ```
@@ -154,7 +155,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  RR[Review reminder: email + push, Sun 19:00] --> W[Open This week: current week]
+  RR[Review reminder: email + push, Sun 19:00] --> W[Open Week: current week]
   W -- browse earlier than Local copy --> L{Online?}
   L -- no --> L1[Say a connection is needed]
   L -- yes --> K
@@ -208,7 +209,7 @@ flowchart TD
 | NFR-7 | Nudge limits | Per Gap; Quiet hours default 23:00–07:00; measured from recorded Nudges against the current Quiet hours | ≤ 1 Nudge per Gap, 0 inside Quiet hours |
 | NFR-8 | Data volume | Entries | ~30 a day, ~11,000 a year, within free plans |
 | NFR-9 | Cost | All running services | < $5 a month |
-| NFR-10 | Accessibility | Log form and This week page | WCAG 2.2 AA contrast; touch targets ≥ 44 pt |
+| NFR-10 | Accessibility | Day view, Log sheet and Week page | WCAG 2.2 AA contrast; touch targets ≥ 44 pt |
 | NFR-11 | Security | Data access and secrets | Row-level security on every table; AI, Resend and push keys only in Server secrets, never on the phone |
 | NFR-12 | Availability | Supabase free-plan pause after low activity (R7) | 0 pauses in the 14-day run (OQ-5) |
 
