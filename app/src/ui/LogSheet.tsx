@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { dateOf, dayBounds } from '../data/day';
+import { dateOf, dayBounds, lastSlot } from '../data/day';
 import type { EntryRow } from '../data/db';
 import { findOverlaps, prefill, recentTexts } from '../data/prefill';
 import type { Result } from '../data/request';
@@ -19,6 +19,8 @@ export type SheetMode = { kind: 'now' } | { kind: 'fill'; start: number; end: nu
 
 export type LogSheetProps = {
   mode: SheetMode;
+  /** Log now: the day it starts on (the day the Day view shows); today when left out. */
+  day?: string;
   /** Entries known on the phone: the Local copy, plus a fetched earlier week. */
   entries: readonly LogEntry[];
   timeZone: string;
@@ -51,12 +53,13 @@ type FieldKey = keyof typeof fieldMessage;
 const keyOf = (m: SheetMode) => (m.kind === 'now' ? 'now' : `fill:${m.start}`);
 
 /**
- * The Log sheet (05-ui D5). Only the text is required; times are prefilled: Log now by AC-1.1, Fill with the slot (AC-1.4).
- * Log now: a time means its latest occurrence (To not after now, From before To), so it can cross midnight.
- * Fill: To is on the slot's day, From the latest such time before To.
+ * The Log sheet (05-ui D5): a full-screen sheet, so its fields and Save sit above the iOS keyboard. Only the text is required.
+ * Any day can be picked. Times are prefilled: today by AC-1.1 (latest end → now); Fill with its slot; another day with that
+ * day's latest Unlogged slot (AC-1.4). Today's To means its latest occurrence not after now (#49); on another day To is on
+ * that day. From is always the latest such time before To, so an Entry can cross midnight.
  */
 export function LogSheet({
-  mode, entries, timeZone, now, connection = 'online', loading, onSave, onSaved, onClose, returnFocusTo, frozen,
+  mode, day: startDay, entries, timeZone, now, connection = 'online', loading, onSave, onSaved, onClose, returnFocusTo, frozen,
   initialText, initialFrom, initialTo,
 }: LogSheetProps) {
   const key = keyOf(mode);
@@ -71,12 +74,25 @@ export function LogSheet({
   const saving = state === 'saving';
   const sheet = useRef<HTMLDivElement>(null);
 
-  const fill = mode.kind === 'fill' ? mode : undefined;
+  const today = dateOf(now, timeZone);
+  const [day, setDay] = useState(() => (mode.kind === 'fill' ? mode.day : startDay && startDay < today ? startDay : today));
+  const fill = mode.kind === 'fill' && mode.day === day ? mode : undefined;
+  const isToday = day === today;
+  const bounds = useMemo(() => dayBounds(day, timeZone), [day, timeZone]);
   const pre = useMemo(() => prefill(entries, now, timeZone), [entries, now, timeZone]);
-  const from = fromEdit ?? (fill ? fill.start : pre.start);
-  const to = toEdit ?? (fill ? fill.end : now);
-  const sheetDay = fill ? fill.day : dateOf(now, timeZone);
-  const hintFor = (ms: number) => (fill ? (dateOf(ms, timeZone) === fill.day ? undefined : shortDate(ms, timeZone)) : dayHint(ms, now, timeZone));
+  const slot = useMemo(() => (fill || isToday ? undefined : lastSlot(entries, bounds, now)), [fill, isToday, entries, bounds, now]);
+  const live = !fill && isToday; // To follows the clock
+  const from = fromEdit ?? (fill ? fill.start : isToday ? pre.start : slot ? slot.start : bounds.end - 30 * 60_000);
+  const to = toEdit ?? (fill ? fill.end : isToday ? now : slot ? slot.end : bounds.end);
+  const hintFor = (ms: number) =>
+    ms === bounds.end ? 'midnight' : isToday ? dayHint(ms, now, timeZone) : dateOf(ms, timeZone) === day ? undefined : shortDate(ms, timeZone);
+  const pickDay = (v: string) => {
+    if (!v || v > today) return;
+    setDay(v);
+    setFromEdit(null);
+    setToEdit(null);
+    setFieldError(undefined);
+  };
 
   const remember = (next: Draft) => {
     draft.current = next;
@@ -160,14 +176,16 @@ export function LogSheet({
 
   const title = fill ? 'Fill the gap' : 'What did you do?';
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop full">
       <div
         ref={sheet} className="sheet log-sheet" role="dialog" aria-modal="true" aria-labelledby="log-sheet-title"
-        aria-busy={loading || undefined} onClick={(e) => e.stopPropagation()} onKeyDown={keydown}
+        aria-busy={loading || undefined} onKeyDown={keydown}
       >
-        <div className="grab" aria-hidden="true" />
+        <div className="sheet-head">
+          <h2 id="log-sheet-title" className="sheet-title">{title}</h2>
+          <button className="link" onClick={onClose} disabled={saving}>Close</button>
+        </div>
         <ConnectionBanner state={sessionLost ? 'signed-out' : connection} />
-        <h2 id="log-sheet-title" className="sheet-title">{title}</h2>
         {fill && (
           <p className="sheet-sub">
             {shortDate(dayBounds(fill.day, timeZone).start, timeZone, true)} · {hhmm(fill.start, timeZone)}–{hhmm(fill.end, timeZone)} ·{' '}
@@ -186,9 +204,18 @@ export function LogSheet({
 
         <RecentChips loading={loading} texts={recent} onPick={edit} disabled={saving} />
 
+        <div className="time day-field">
+          <label className="field-label" htmlFor="entry-day">Day</label>
+          <input
+            id="entry-day" type="date" className="value" value={day} max={today} disabled={saving} required
+            onChange={(e) => pickDay(e.target.value)}
+          />
+          <span className="hint">{isToday ? 'today' : shortDate(bounds.start, timeZone, true)}</span>
+        </div>
+
         <div className="times">
           <TimeChip
-            label="From" loading={loading && !fill} value={hhmm(from, timeZone)} disabled={saving} describedBy="time-error"
+            label="From" loading={loading && live} value={hhmm(from, timeZone)} disabled={saving} describedBy="time-error"
             invalid={timeError === 'entry_end_not_after_start'}
             hint={hintFor(from)}
             onChange={(v) => setFromEdit(latestAt(to, v, timeZone, true))}
@@ -196,9 +223,9 @@ export function LogSheet({
           <TimeChip
             label="To" value={hhmm(to, timeZone)} disabled={saving} describedBy="time-error"
             invalid={timeError === 'entry_end_in_future'}
-            hint={!fill && toEdit === null ? 'now' : hintFor(to)}
-            onReset={fill || toEdit === null ? undefined : () => setToEdit(null)}
-            onChange={(v) => setToEdit(fill ? withTime(dayBounds(sheetDay, timeZone).start, v, timeZone) : latestAt(now, v, timeZone))}
+            hint={live && toEdit === null ? 'now' : hintFor(to)}
+            onReset={!live || toEdit === null ? undefined : () => setToEdit(null)}
+            onChange={(v) => setToEdit(live ? latestAt(now, v, timeZone) : withTime(bounds.start, v, timeZone))}
           />
         </div>
         {timeError && <p id="time-error" className="error" role="alert">{fieldMessage[timeError]}</p>}
@@ -211,10 +238,9 @@ export function LogSheet({
 
         <SaveStatus state={state} />
 
-        <div className="row-actions">
-          <button className="link" onClick={onClose} disabled={saving}>Close</button>
-          {text && !saving && <button className="link" onClick={() => edit('')}>Clear</button>}
-        </div>
+        {text && !saving && (
+          <div className="row-actions"><button className="link" onClick={() => edit('')}>Clear</button></div>
+        )}
       </div>
     </div>
   );

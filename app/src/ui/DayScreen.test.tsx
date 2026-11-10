@@ -55,6 +55,31 @@ beforeEach(() => {
 afterEach(() => { cleanup(); clearDrafts(); vi.useRealTimers(); });
 
 describe('DayScreen', () => {
+  it('hides the + while a sheet is open, and on a past day + starts on that day', async () => {
+    readLocalCopy.mockResolvedValue(copy());
+    mount('/day/2026-11-02');
+    fireEvent.click(await screen.findByLabelText('Log now'));
+    expect(screen.queryByLabelText('Log now')).toBeNull();
+    expect((screen.getByLabelText('Day') as HTMLInputElement).value).toBe('2026-11-02');
+    expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('19:00');
+    fireEvent.click(screen.getByText('Close'));
+    expect(screen.getByLabelText('Log now')).toBeTruthy();
+  });
+
+  it('slides the + away while scrolling down and brings it back on scroll up', async () => {
+    readLocalCopy.mockResolvedValue(copy());
+    mount('/');
+    await screen.findByText('Today');
+    const body = document.querySelector('main') as HTMLElement;
+    const dock = () => (document.querySelector('.fab-dock') as HTMLElement).className;
+    body.scrollTop = 200;
+    fireEvent.scroll(body);
+    expect(dock()).toContain('away');
+    body.scrollTop = 100;
+    fireEvent.scroll(body);
+    expect(dock()).not.toContain('away');
+  });
+
   it("opens on today with its Entries, Unlogged slots and the time logged (AC-1.4)", async () => {
     readLocalCopy.mockResolvedValue(copy());
     mount('/');

@@ -65,7 +65,7 @@ Logging burden (R8) is owned by the ui stage.
   - warn, and still save, if it overlaps another Entry;
   - send it with the phone's IANA time zone and, on create only, the time the form opened, which NFR-1 uses.
 - AC-1.3 When I edit or delete an Entry, the app shall apply the AC-1.2 checks to an edit, without sending a form-open time (NFR-1 measures creates only); a delete removes the Entry for good (judgement).
-- AC-1.4 When I open a day on the Day view (any day; days older than the Local copy are fetched and need a connection), the app shall list its Entries in time order with its Unlogged slots between them. When I tap Fill on a slot, the Log sheet shall open with start and end set to the slot, on that day; after a confirmed save, what is left of the slot stays as a slot (#46).
+- AC-1.4 When I open a day on the Day view (any day; days older than the Local copy are fetched and need a connection), the app shall list its Entries in time order with its Unlogged slots between them. When I tap Fill on a slot, the Log sheet shall open with start and end set to the slot, on that day; the Log sheet from the floating + shall let me pick any past day, starting on the day shown; after a confirmed save, what is left of the slot stays as a slot (#46).
 
 ### US-2 · As me, I want every saved change to be on the Server, and this week and last week readable offline, so that nothing saved is lost and the app stays useful without a connection (G3, G1, G2)
 - AC-2.1 When I save any change (Entry, Tag, Suggested category decision, Review done or setting), the app shall show it as done only after the Server confirms it (D3).

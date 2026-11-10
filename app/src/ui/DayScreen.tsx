@@ -130,7 +130,7 @@ export function DayView({
   const overlay = sheet ? (
     <LogSheet
       key={sheet.mode.kind === 'now' ? 'now' : `fill:${sheet.mode.start}`}
-      mode={sheet.mode} entries={known} timeZone={tz} now={now} connection={connection} loading={load === 'loading'}
+      mode={sheet.mode} day={date} entries={known} timeZone={tz} now={now} connection={connection} loading={load === 'loading'}
       initialText={initialText} returnFocusTo={sheet.opener}
       onSave={actions.createEntry} onSaved={() => { setSheet(null); setSaved(true); }} onClose={() => setSheet(null)}
     />
@@ -142,7 +142,7 @@ export function DayView({
   ) : undefined;
 
   return (
-    <Phone tab="day" busy={load === 'loading'} overlay={overlay} fab={<LogFab onOpen={(opener) => setSheet({ mode: { kind: 'now' }, opener })} />}>
+    <Phone tab="day" busy={load === 'loading'} overlay={overlay} fab={overlay ? undefined : <LogFab onOpen={(opener) => setSheet({ mode: { kind: 'now' }, opener })} />}>
       <ConnectionBanner state={connection} refreshedAt={refreshedLabel} />
       <header className="day-head">
         <div>

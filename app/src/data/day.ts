@@ -36,9 +36,8 @@ export function loggedMs(entries: readonly WeekEntry[], bounds: { start: number;
 export type DayItem<E> = { kind: 'entry'; entry: E } | { kind: 'slot'; start: number; end: number };
 
 /**
- * A day's Entries in start order, with its Unlogged slots between them (AC-1.4):
- * at least `minMs` between two Entries, and, today only, from the last Entry to now.
- * Time before a past day's first Entry and after its last is not a slot (usually sleep).
+ * A day's Entries in start order, with every Unlogged slot of at least `minMs` (AC-1.4): from 00:00 to the first Entry,
+ * between Entries, and from the last Entry to the end of the day (to now, today).
  * A day with no Entries is one slot from 00:00 to the end of the day, or to now today.
  */
 export function dayItems<E extends Pick<Entry, 'started_at' | 'ended_at'>>(
@@ -54,15 +53,14 @@ export function dayItems<E extends Pick<Entry, 'started_at' | 'ended_at'>>(
   if (day.length === 0) return limit > bounds.start ? [{ kind: 'slot', start: bounds.start, end: limit }] : [];
 
   const out: DayItem<E>[] = [];
-  let reach: number | null = null;
+  let reach = bounds.start;
   for (const e of day) {
     const s = Math.max(Date.parse(e.started_at), bounds.start);
-    if (reach !== null && s - reach >= minMs) out.push({ kind: 'slot', start: reach, end: s });
+    if (s - reach >= minMs) out.push({ kind: 'slot', start: reach, end: s });
     out.push({ kind: 'entry', entry: e });
-    reach = Math.max(reach ?? -Infinity, Math.min(Date.parse(e.ended_at), bounds.end));
+    reach = Math.max(reach, Math.min(Date.parse(e.ended_at), bounds.end));
   }
-  const isToday = now >= bounds.start && now < bounds.end;
-  if (isToday && reach !== null && now - reach >= minMs) out.push({ kind: 'slot', start: reach, end: now });
+  if (limit - reach >= minMs) out.push({ kind: 'slot', start: reach, end: limit });
   return out;
 }
 
@@ -87,4 +85,10 @@ export function coverage(entries: readonly WeekEntry[], bounds: { start: number;
     else out.push({ start: a, end: b, categoryId: owner.cat });
   }
   return out;
+}
+
+/** The latest Unlogged slot of a day (Log now on a past day starts there); undefined when the day is fully logged. */
+export function lastSlot(entries: readonly Pick<Entry, 'started_at' | 'ended_at'>[], bounds: { start: number; end: number }, now: number) {
+  const slots = dayItems(entries, bounds, now).filter((i): i is { kind: 'slot'; start: number; end: number } => i.kind === 'slot');
+  return slots[slots.length - 1];
 }
