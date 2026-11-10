@@ -21,3 +21,5 @@ export const SignedOut: Story = { args: { connection: 'signed-out' } };
 export const Saving: Story = { args: { saving: true } };
 export const SaveFailed: Story = { name: 'Save failed', args: { saveProblem: 'Needs a connection.' } };
 export const TurnOnFailed: Story = { name: 'Turn on failed', args: { pushProblem: "Couldn't turn on. Try again." } };
+export const SigningOut: Story = { name: 'Signing out', args: { signingOut: true } };
+export const SignOutFailed: Story = { name: 'Sign out failed', args: { signOutProblem: "Couldn't sign out. Try again." } };

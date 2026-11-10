@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 
+import { signOut } from '../data/auth';
 import { browserEnv, openPush, turnOnPush, type PushState } from '../data/push';
 import { getTimings, p95 } from '../data/timings';
 import { deviceZone, writes } from './liveWrites';
@@ -36,20 +38,24 @@ export type SettingsViewProps = {
   /** p95 of recent save and refresh durations in ms; null = no samples yet. */
   saveP95?: number | null;
   refreshP95?: number | null;
+  signingOut?: boolean;
+  /** Message under Sign out after a failed sign-out. */
+  signOutProblem?: string;
   onTurnOn?: () => void;
   onQuietStart?: (v: string) => void;
   onQuietEnd?: (v: string) => void;
   onNudgeHours?: (v: number) => void;
   onSave?: () => void;
+  onSignOut?: () => void;
 };
 
 const EQUAL = 'Start and end must differ.';
 const ms = (v: number | null | undefined) => (v == null ? '–' : `${v} ms`);
 
-/** Settings: push on/off (AC-6.2), Quiet hours (AC-6.3), the Nudge gap (AC-6.1) and Diagnostics. */
+/** Settings: push on/off (AC-6.2), Quiet hours (AC-6.3), the Nudge gap (AC-6.1), Diagnostics and Sign out. */
 export function SettingsView({
   connection = 'online', push = 'off', loading = {}, refreshedAt, pushBusy, pushProblem, quietStart = '23:00', quietEnd = '07:00', quietError, nudgeHours = 3, nudgeError,
-  saving, saved, saveProblem, saveP95, refreshP95, onTurnOn, onQuietStart = () => {}, onQuietEnd = () => {}, onNudgeHours = () => {}, onSave,
+  saving, saved, saveProblem, saveP95, refreshP95, signingOut, signOutProblem, onTurnOn, onQuietStart = () => {}, onQuietEnd = () => {}, onNudgeHours = () => {}, onSave, onSignOut,
 }: SettingsViewProps) {
   const online = connection !== 'offline';
   const error = quietError || quietStart === quietEnd ? EQUAL : undefined;
@@ -86,6 +92,13 @@ export function SettingsView({
               <p className="note">Usually this fast or faster on this device: save {ms(saveP95)} · refresh {ms(refreshP95)}.</p>
             </>}
       </section>
+
+      <section className="panel" aria-labelledby="account-h">
+        <h2 id="account-h">Account</h2>
+        <button className="secondary" onClick={onSignOut} disabled={signingOut || !online}>{signingOut ? 'Signing out…' : 'Sign out'}</button>
+        {!online && <p className="note">Signing out needs a connection.</p>}
+        {signOutProblem && <p className="error" role="alert">{signOutProblem}</p>}
+      </section>
     </Phone>
   );
 }
@@ -97,6 +110,7 @@ const pushProblemText = (e?: string) =>
 
 /** The Settings page wired to the Local copy, the Server and the browser's push. */
 export function SettingsScreen() {
+  const navigate = useNavigate();
   const [online, setOnline] = useState(() => navigator.onLine);
   const [signedOut, setSignedOut] = useState(false);
   const { copy, ready } = useLocalCopy();
@@ -115,6 +129,8 @@ export function SettingsScreen() {
   const [saveProblem, setSaveProblem] = useState<string>();
   const [serverRefused, setServerRefused] = useState(false);
   const [nudgeRefused, setNudgeRefused] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutProblem, setSignOutProblem] = useState<string>();
   const [speed, setSpeed] = useState<{ save: number | null; refresh: number | null }>();
 
   const report = async (sub: Parameters<typeof writes.upsertPushSubscription>[0]) => {
@@ -167,18 +183,28 @@ export function SettingsScreen() {
     else setSaveProblem(r.error === 'unknown' ? 'Needs a connection.' : "Couldn't save. Try again.");
   };
 
+  const leave = async () => {
+    setSigningOut(true);
+    setSignOutProblem(undefined);
+    const r = await signOut();
+    if (r.ok) { void navigate('/sign-in', { replace: true }); return; }
+    setSigningOut(false);
+    setSignOutProblem(r.error === 'unknown' ? 'Needs a connection.' : "Couldn't sign out. Try again.");
+  };
+
   return (
     <SettingsView
       connection={signedOut ? 'signed-out' : online ? 'online' : 'offline'}
       push={push ?? 'off'} loading={{ push: !push, hours: !ready || !copy.settings, nudge: !ready || !copy.settings, speed: !speed }}
       refreshedAt={copy.refreshedAt ? clockTime(Date.parse(copy.refreshedAt), deviceZone()) : null} pushBusy={pushBusy} pushProblem={pushProblem}
       quietStart={start} quietEnd={end} quietError={serverRefused} nudgeHours={nudge} nudgeError={nudgeRefused} saving={saving} saved={saved} saveProblem={saveProblem}
-      saveP95={speed?.save} refreshP95={speed?.refresh}
+      saveP95={speed?.save} refreshP95={speed?.refresh} signingOut={signingOut} signOutProblem={signOutProblem}
       onTurnOn={() => void turnOn()}
       onQuietStart={(v) => { setStartEdit(v); setSaved(false); setServerRefused(false); }}
       onQuietEnd={(v) => { setEndEdit(v); setSaved(false); setServerRefused(false); }}
       onNudgeHours={(v) => { setNudgeEdit(v); setSaved(false); setNudgeRefused(false); }}
       onSave={() => void save()}
+      onSignOut={() => void leave()}
     />
   );
 }

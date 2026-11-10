@@ -1,14 +1,18 @@
+import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const signInWithOtp = vi.fn();
 const verifyOtp = vi.fn();
-vi.mock('./supabase', () => ({ supabase: { auth: { signInWithOtp, verifyOtp } } }));
+const signOutApi = vi.fn();
+vi.mock('./supabase', () => ({ supabase: { auth: { signInWithOtp, verifyOtp, signOut: signOutApi } } }));
 
-const { sendCode, verifyCode } = await import('./auth');
+const { sendCode, verifyCode, signOut } = await import('./auth');
+const { db } = await import('./db');
 
 beforeEach(() => {
   signInWithOtp.mockReset();
   verifyOtp.mockReset();
+  signOutApi.mockReset();
 });
 
 describe('sendCode', () => {
@@ -47,5 +51,30 @@ describe('verifyCode', () => {
     expect(await verifyCode('a@b.c', '1')).toEqual({ ok: false, error: 'unknown' });
     verifyOtp.mockResolvedValue({ error: { status: 502, name: 'AuthApiError' } });
     expect(await verifyCode('a@b.c', '1')).toEqual({ ok: false, error: 'server' });
+  });
+});
+
+describe('signOut', () => {
+  const fill = async () => {
+    await db.entries.put({ id: 'e1', text: 't', started_at: 'a', ended_at: 'b', time_zone: 'UTC', category_id: null, tag_source: null, suggested_category_id: null, tagging_gave_up_at: null, created_at: 'a' } as never);
+    await db.meta.put({ key: 'refreshed_at', value: 'x' });
+  };
+  it('signs this device out only and clears the Local copy', async () => {
+    await fill();
+    signOutApi.mockResolvedValue({ error: null });
+    expect(await signOut()).toEqual({ ok: true });
+    expect(signOutApi).toHaveBeenCalledWith({ scope: 'local' });
+    expect(await db.entries.count()).toBe(0);
+    expect(await db.meta.count()).toBe(0);
+  });
+  it('keeps the Local copy when the Server fails or is unreachable', async () => {
+    await fill();
+    signOutApi.mockResolvedValue({ error: { status: 0, name: 'AuthRetryableFetchError' } });
+    expect(await signOut()).toEqual({ ok: false, error: 'unknown' });
+    signOutApi.mockResolvedValue({ error: { status: 500, name: 'AuthApiError' } });
+    expect(await signOut()).toEqual({ ok: false, error: 'server' });
+    signOutApi.mockRejectedValue(new Error('x'));
+    expect(await signOut()).toEqual({ ok: false, error: 'unknown' });
+    expect(await db.entries.count()).toBe(1);
   });
 });
