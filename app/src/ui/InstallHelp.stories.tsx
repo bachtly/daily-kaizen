@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { InstallHelp } from './InstallHelp';
 
 const meta = {
-  title: 'Screens/4 Sign in',
+  title: 'Screens/5 Add to Home Screen',
   component: InstallHelp,
   args: { browser: 'ios-safari', address: 'kaizen.bachtly.com' },
 } satisfies Meta<typeof InstallHelp>;

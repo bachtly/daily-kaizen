@@ -214,7 +214,7 @@ describe('SettingsView', () => {
   it('hides the button when not on the Home Screen', () => {
     render(<MemoryRouter><SettingsView push="not-installed" /></MemoryRouter>);
     expect(screen.queryByText('Turn on notifications')).toBeNull();
-    expect(screen.getByText(/Add daily-kaizen to your Home Screen first/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Add to Home Screen' }).getAttribute('href')).toBe('/install');
   });
 });
 

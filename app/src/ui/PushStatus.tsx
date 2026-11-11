@@ -13,7 +13,12 @@ export function PushStatus({ state, loading, online = true, busy, problem, onTur
 }) {
   if (loading) return <><Skeleton height={24} width="40%" /><Skeleton height={44} radius={12} /></>;
   if (state === 'not-installed') {
-    return <p className="note">Add daily-kaizen to your Home Screen first: Share → Add to Home Screen. The Sunday email arrives either way.</p>;
+    return (
+      <>
+        <p className="note">Push works from the Home Screen app. The Sunday email arrives either way.</p>
+        <a className="secondary button-link" href="/install">Add to Home Screen</a>
+      </>
+    );
   }
   if (state === 'denied') {
     return <p className="note">Push is off. Turn it on in iOS Settings → Notifications → daily-kaizen. The Sunday email still arrives.</p>;

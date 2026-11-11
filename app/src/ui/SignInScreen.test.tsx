@@ -28,6 +28,12 @@ afterEach(() => {
 });
 
 describe('SignInScreen', () => {
+  it('signs in from a browser too, with a link to the Home Screen steps', () => {
+    mount();
+    expect(screen.getByText('Send code')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Add it to your Home Screen' }).getAttribute('href')).toBe('/install');
+  });
+
   it('shows the same neutral message once the code is sent', async () => {
     sendCode.mockResolvedValue({ ok: true });
     mount();

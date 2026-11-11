@@ -1,8 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { sendCode, verifyCode } from '../data/auth';
-import { InstallHelp } from './InstallHelp';
-import { detectInstallBrowser, type InstallBrowser } from './installBrowser';
 import { Phone } from './Phone';
 
 const RESEND_WAIT_SECONDS = 60;
@@ -14,8 +12,8 @@ export type SignInViewProps = {
   email?: string;
   busy?: boolean;
   error?: SignInError;
-  /** Set when opened in a browser instead of the home-screen app: which steps to show. */
-  installHelp?: InstallBrowser;
+  /** Opened in a browser, not the home-screen app: a link to the Add to Home Screen steps. */
+  installLink?: boolean;
   resendWaitSeconds?: number;
   onEmailChange?: (email: string) => void;
   onCodeChange?: (code: string) => void;
@@ -30,12 +28,11 @@ const ERROR_TEXT: Record<SignInError, string> = {
   server: "Couldn't sign in. Try again.",
 };
 
-/** The Sign in screen, props only (UC-6). Any email gets a code; a new one gets a new account (AC-7.2). */
+/** The Sign in screen, props only (UC-6). Works in any browser (AC-7.1). Any email gets a code; a new one gets a new account (AC-7.2). */
 export function SignInView({
-  step = 'email', email = '', busy, error, installHelp, resendWaitSeconds = 0,
+  step = 'email', email = '', busy, error, installLink, resendWaitSeconds = 0,
   onEmailChange, onCodeChange, onSendCode, onVerify,
 }: SignInViewProps) {
-  if (installHelp) return <InstallHelp browser={installHelp} />;
   const submit = (action?: () => void) => (e: FormEvent) => {
     e.preventDefault();
     action?.();
@@ -76,15 +73,19 @@ export function SignInView({
           </>
         )}
       </form>
+      {installLink && (
+        <p className="note install-link">
+          Want Nudges and reminders? <a href="/install">Add it to your Home Screen</a>
+        </p>
+      )}
     </Phone>
   );
 }
 
-/** iOS home-screen app, or any installed display mode. The dev server counts as installed. */
+/** iOS home-screen app, or any installed display mode. */
 function isStandalone(): boolean {
-  if (import.meta.env.DEV) return true;
   const nav = navigator as Navigator & { standalone?: boolean };
-  return nav.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  return nav.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches === true;
 }
 
 /** The wired Sign in screen: send code, verify, then go to the Log form. */
@@ -134,7 +135,7 @@ export function SignInScreen({ onSignedIn }: { onSignedIn?: () => void } = {}) {
   return (
     <SignInView
       step={step} email={email} busy={busy} error={error} resendWaitSeconds={wait}
-      installHelp={isStandalone() ? undefined : detectInstallBrowser(navigator.userAgent, navigator.platform, navigator.maxTouchPoints)}
+      installLink={!isStandalone()}
       onEmailChange={setEmail} onCodeChange={setCode} onSendCode={() => void send()} onVerify={() => void verify()}
     />
   );

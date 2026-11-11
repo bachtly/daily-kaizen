@@ -53,15 +53,18 @@ function Step({ title, hint, children }: { title: ReactNode; hint?: string; chil
   );
 }
 
-/** Shown instead of Sign in when the app isn't running from the Home Screen (AC-7.1). */
+const Back = () => <a className="link install-back" href="/">‹ Back</a>;
+
+/** The /install page, linked from Sign in and Settings. The app works in any browser; the Home Screen app adds push. */
 export function InstallHelp({ browser, address = window.location.host }: { browser: InstallBrowser; address?: string }) {
   if (browser === 'elsewhere') {
     return (
       <Phone>
+        <Back />
         <header className="install-head">
           <img src="/icons/apple-touch-icon.png" alt="" width="56" height="56" />
           <h1>Open daily-kaizen on your iPhone</h1>
-          <p>It runs from the iPhone Home Screen, so you can't sign in from this device. Go to this address in Safari or Chrome on your iPhone:</p>
+          <p>You can use it here, but Nudges and the Review reminder push only reach the iPhone Home Screen app. Go to this address in Safari or Chrome on your iPhone:</p>
         </header>
         <p className="install-address">{address}</p>
         <p className="install-hint install-next">Your iPhone will show you the rest of the steps.</p>
@@ -71,10 +74,11 @@ export function InstallHelp({ browser, address = window.location.host }: { brows
   const safari = browser === 'ios-safari';
   return (
     <Phone>
+      <Back />
       <header className="install-head">
         <img src="/icons/apple-touch-icon.png" alt="" width="56" height="56" />
         <h1>Add daily-kaizen to your Home Screen</h1>
-        <p>You sign in from the Home Screen app, not from this browser. It takes about 20 seconds.</p>
+        <p>It opens full screen and can send Nudges and the Review reminder. It takes about 20 seconds.</p>
       </header>
       <ol className="install-steps">
         {safari ? (
@@ -92,7 +96,7 @@ export function InstallHelp({ browser, address = window.location.host }: { brows
         <Step title={safari ? <>Keep <b>Open as Web App</b> on, then tap <b>Add</b></> : <>Tap <b>Add</b></>}>
           <AddArt webAppToggle={safari} />
         </Step>
-        <Step title={<>Open <b>daily-kaizen</b> from your Home Screen</>} hint="Then sign in with your email.">
+        <Step title={<>Open <b>daily-kaizen</b> from your Home Screen</>} hint="Sign in there once more: the Home Screen app keeps its own sign-in.">
           <HomeArt />
         </Step>
       </ol>
