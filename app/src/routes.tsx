@@ -4,6 +4,7 @@ import { onOpen, type RefreshWindow } from './data/localCopy';
 import { browserEnv, openPush } from './data/push';
 import { mondayOf, weekBounds } from './data/week';
 import { DayScreen } from './ui/DayScreen';
+import { InstallScreen } from './ui/InstallScreen';
 import { SettingsScreen } from './ui/SettingsScreen';
 import { SignInScreen } from './ui/SignInScreen';
 import { writes } from './ui/liveWrites';
@@ -39,7 +40,7 @@ export function OnOpen() {
   return <Outlet />;
 }
 
-// All screens but /sign-in need a session, and share one OnOpen (tab changes do not refresh again). The screens still show mock data until their ui-* tasks wire them to the Local copy.
+// All screens but /sign-in and /install need a session, and share one OnOpen (tab changes do not refresh again). The screens still show mock data until their ui-* tasks wire them to the Local copy.
 export const routes: RouteObject[] = [
   {
     element: (
@@ -56,6 +57,7 @@ export const routes: RouteObject[] = [
     ],
   },
   { path: '/sign-in', element: <SignInScreen /> },
+  { path: '/install', element: <InstallScreen /> },
 ];
 
 export const router = () => createBrowserRouter(routes);

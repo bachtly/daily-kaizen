@@ -195,6 +195,10 @@ input.text[aria-invalid="true"], select.text[aria-invalid="true"] { border-color
 .code { letter-spacing: 0.5em; font-variant-numeric: tabular-nums; text-align: center; }
 
 /* Add to Home Screen help. The .art blocks are small drawings of the browser's own buttons. */
+.button-link { display: inline-flex; align-items: center; text-decoration: none; margin-top: 8px; }
+.install-back { display: inline-flex; align-items: center; text-decoration: none; margin-bottom: 4px; }
+.install-link { text-align: center; margin-top: 24px; }
+.install-link a { color: var(--accent); display: inline-block; padding: 12px 0; }
 .install-head img { display: block; border-radius: 13px; }
 .install-head h1 { font-size: 26px; line-height: 1.2; margin: 14px 0 8px; }
 .install-head p { font-size: 16px; line-height: 1.4; color: var(--muted); margin: 0; }

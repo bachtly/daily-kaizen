@@ -47,4 +47,9 @@ describe('InstallHelp', () => {
     expect(screen.getByText('kaizen.example')).toBeTruthy();
     expect(screen.queryByRole('listitem')).toBeNull();
   });
+
+  it('has a way back', () => {
+    render(<InstallHelp browser="ios-safari" address="kaizen.example" />);
+    expect(screen.getByRole('link', { name: '‹ Back' }).getAttribute('href')).toBe('/');
+  });
 });

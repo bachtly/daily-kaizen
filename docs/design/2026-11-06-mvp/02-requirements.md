@@ -107,7 +107,7 @@ G1 counts a day as logged when at least one Entry starts that day in my time zon
 - AC-6.4 When I change the Nudge gap in settings (whole hours 1–12, default 3), the Server shall use it for the next Nudge; a Gap that already got its Nudge gets no second one.
 
 ### US-7 · As me, I want to sign in once with an emailed code, so that my Entries stay mine (G3)
-- AC-7.1 When I enter a valid 6-digit code from my email in the home-screen app, the app shall sign me in and refresh the Local copy.
+- AC-7.1 When I enter a valid 6-digit code from my email, in the home-screen app or any browser, the app shall sign me in and refresh the Local copy. Rejected: sign in only from the home-screen app; replaced so the app works on the web too, with the Add to Home Screen steps on their own page.
 - AC-7.2 The Server shall limit all data access to the signed-in account with row-level security, and shall create and seed an account for a new email (judgement). Rejected: refuse sign-ups from any other email; replaced to let other people use the app (#48).
 
 ## User flows
@@ -191,7 +191,7 @@ flowchart TD
   NEW -- no --> ACC[Create account, 5 Categories, settings] --> CODE
   NEW -- yes --> CODE[Server emails 6-digit code]
   CODE -- not received / rate-limited --> RS[Request new code after wait: OQ-1] --> CODE
-  CODE --> ENT[Enter code in home-screen app]
+  CODE --> ENT[Enter code]
   ENT -- wrong or expired --> ERR[Show error] --> ENT
   ENT -- valid --> IN[Signed in] --> SY[Refresh Local copy]
 ```

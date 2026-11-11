@@ -9,6 +9,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Email: Story = {};
+export const InBrowser: Story = { name: 'Email, in a browser', args: { installLink: true } };
 export const Sending: Story = { args: { email: 'me@example.com', busy: true } };
 export const OfflineOnSend: Story = { args: { email: 'me@example.com', error: 'offline' } };
 export const Code: Story = { args: { step: 'code', email: 'me@example.com', resendWaitSeconds: 42 } };
