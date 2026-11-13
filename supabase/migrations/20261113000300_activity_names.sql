@@ -4,6 +4,7 @@
 -- Existing names cut first so the check can be added.
 -- Collision-safe: among names with the same cut, a plain (<= 60) name goes first, then oldest; rank 1 gets the
 -- plain cut, the rest get a number ("... 2") so activities_user_name_key still holds.
+create function public.cut_long_activity_names() returns void language sql as $$
 with ranked as (
   select a.id, char_length(a.name) > 60 as is_long,
          row_number() over (partition by a.user_id, lower(btrim(left(a.name, 60)))
@@ -15,6 +16,10 @@ update public.activities a
                   else btrim(left(a.name, 56)) || ' ' || r.rn end
   from ranked r
   where r.id = a.id and r.is_long;
+$$;
+revoke execute on function public.cut_long_activity_names() from public, anon, authenticated;
+select public.cut_long_activity_names();
+
 alter table public.activities add constraint activity_name_too_long check (char_length(name) <= 60);
 
 -- AI and phone share this. An AI name longer than 60 is cut (the AI path never fails on it);

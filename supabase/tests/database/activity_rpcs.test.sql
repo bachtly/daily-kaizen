@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(43);
+select plan(46);
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-0000000000a1'), ('00000000-0000-0000-0000-0000000000a2');
@@ -109,6 +109,17 @@ select is((select n from activity_slots() where hour = 8), 2, 'Tokyo Entries cou
 select is((select dow from activity_slots() where hour = 8), (select extract(dow from (ts + interval '9 hours'))::int from base), 'weekday follows the Entry''s zone');
 select is((select n from activity_slots() where hour = 23), 1, 'UTC Entry counts at 23:xx');
 reset role;
+
+-- The migration's cut of existing long names: same-cut names stay distinct (no unique violation)
+reset role;
+alter table activities drop constraint activity_name_too_long;
+insert into activities (user_id, name, created_at) values
+  ('00000000-0000-0000-0000-0000000000a2', repeat('p', 60), now()),
+  ('00000000-0000-0000-0000-0000000000a2', repeat('p', 60) || 'q', now() - interval '1 day'),
+  ('00000000-0000-0000-0000-0000000000a2', repeat('p', 60) || 'r', now() - interval '2 days');
+select lives_ok($$select cut_long_activity_names()$$, 'cut raises no unique violation');
+select is((select count(distinct lower(name))::int from activities where name like 'pppp%'), 3, 'the three names stay distinct');
+select ok((select max(char_length(name)) <= 60 from activities where name like 'pppp%'), 'all at most 60 characters');
 
 select * from finish();
 rollback;
