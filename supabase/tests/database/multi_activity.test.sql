@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(54);
+select plan(58);
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-0000000000a1'), ('00000000-0000-0000-0000-0000000000a2');
@@ -142,6 +142,14 @@ select save_ai_labels(eid(5), upd(5), null, null, null, array['Delta']);
 select is((select names(5)), array['Beta'], 'AI never overwrites a me list');
 select save_ai_labels(eid(4), upd(4), null, null, null, 'Gamma'::text);
 select is((select names(4)), array['Gamma'], 'old 6-arg save_ai_labels is a list of one');
+
+-- Named arguments (how PostgREST calls it) pick the right version with no ambiguity
+select save_ai_labels(p_entry_id := eid(4), p_read_updated_at := upd(4), p_category_id := null, p_proposed_name := null, p_proposed_description := null, p_activity_name := 'Gamma');
+select is((select names(4)), array['Gamma'], 'named p_activity_name calls the old version');
+select is(save_ai_labels(p_entry_id := eid(4), p_read_updated_at := upd(4), p_category_id := null, p_proposed_name := null, p_proposed_description := null, p_activity_names := array['Delta', 'Gamma']), false, 'named p_activity_names calls the new version');
+select is((select names(4)), array['Delta', 'Gamma'], 'and saves the list');
+select save_ai_labels(p_entry_id := eid(4), p_read_updated_at := upd(4), p_category_id := null, p_proposed_name := null, p_proposed_description := null, p_activity_name := null);
+select is((select names(4)), '{}'::text[], 'old version with a null name is none');
 
 select * from finish();
 rollback;
