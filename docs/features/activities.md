@@ -16,7 +16,7 @@
 - A blank name, a name over 60 and a taken name each get their own message; the app blocks blank input and caps typing at 60 (#71). In the Activity field, null still means none.
 - Merge A into B moves A's Entries to B and keeps A's name as an alias of B, so the AI and anything I type with it resolve to B. Repeating a rename or merge changes nothing more.
 - Chips: the 3 most used (an Entry counts once for each of its Activities) for the sheet's start weekday and hour over the last 12 weeks (each Entry in its own time zone), filled up by most used overall. No AI call. With no Activities, Recent chips show instead.
-- Time per activity uses the Week page's split and overlap rules, and an Entry's time is split equally among its Activities (1 h with two = 30 min each), so the panel still adds up to the week; hidden while I have no Activities. Rename and Merge need a connection.
+- Time per activity uses the Week page's split and overlap rules, and an Entry's time is split equally among its Activities (1 h with two = 30 min each), so the panel still adds up to the week; hidden while I have no Activities. Rename and Merge need a connection. Weekly targets on an Activity are in [week review](week-review.md).
 - The correction examples (#62) show the list of Activities I set.
 - Existing Entries get labelled by the normal Tagging check, oldest first; there is no batch backfill.
 
