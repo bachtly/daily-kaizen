@@ -67,6 +67,14 @@ describe('signOut', () => {
     expect(await db.entries.count()).toBe(0);
     expect(await db.meta.count()).toBe(0);
   });
+  it('clears every table in db.tables', async () => {
+    await fill();
+    await db.activities.put({ id: 'a1', name: 'Run' } as never);
+    await db.activity_slots.put({ activity_id: 'a1', dow: 1, hour: 9, count: 1 } as never);
+    signOutApi.mockResolvedValue({ error: null });
+    await signOut();
+    for (const t of db.tables) expect(await t.count(), t.name).toBe(0);
+  });
   it('keeps the Local copy when the Server fails or is unreachable', async () => {
     await fill();
     signOutApi.mockResolvedValue({ error: { status: 0, name: 'AuthRetryableFetchError' } });
