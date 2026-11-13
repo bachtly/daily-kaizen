@@ -10,6 +10,8 @@ export const VALIDATION_KEYS = [
   'entry_not_found',
   'category_not_active',
   'category_already_decided',
+  'activity_name_taken',
+  'activity_not_found',
 ] as const;
 
 export type ValidationKey = (typeof VALIDATION_KEYS)[number];

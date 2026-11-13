@@ -20,7 +20,7 @@ function builder(table: string) {
     Promise.resolve(replies[table] ?? { data: [], error: null, status: 200 }).then(ok, bad);
   return b;
 }
-vi.mock('./supabase', () => ({ supabase: { from: (t: string) => builder(t), auth: { getSession: async () => ({ data: { session: session() } }) } } }));
+vi.mock('./supabase', () => ({ supabase: { from: (t: string) => builder(t), rpc: (n: string) => builder(n), auth: { getSession: async () => ({ data: { session: session() } }) } } }));
 
 const { refresh, readLocalCopy, fetchWeek, reportTimeZone, persist } = await import('./localCopy');
 const { db } = await import('./db');
@@ -35,6 +35,8 @@ const entry = (id: string) => ({
   time_zone: 'UTC',
   category_id: null,
   tag_source: null,
+  activity_id: null,
+  activity_source: null,
   suggested_category_id: null,
   tagging_gave_up_at: null,
   created_at: '2026-11-03T02:00:00Z',
@@ -48,20 +50,25 @@ beforeEach(async () => {
 });
 
 describe('refresh', () => {
-  it('reads four tables and replaces the copy with refreshed_at', async () => {
+  it('reads six sources and replaces the copy with refreshed_at', async () => {
     replies.entries = ok([entry('a'), entry('b')]);
     replies.categories = ok([{ id: 'c', name: 'Work', description: 'd', status: 'active' }]);
+    replies.activities = ok([{ id: 'a1', name: 'Email', status: 'active', merged_into_id: null }]);
+    replies.activity_slots = ok([{ activity_id: 'a1', dow: 1, hour: 9, n: 4 }]);
     replies.settings = ok([{ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00', nudge_gap_hours: 5 }]);
     replies.weekly_reviews = ok([{ week_start: '2026-11-02' }]);
     const r = await refresh(window);
     expect(r.ok).toBe(true);
-    expect(calls.map((c) => c.table).sort()).toEqual(['categories', 'entries', 'settings', 'weekly_reviews']);
+    expect(calls.map((c) => c.table).sort()).toEqual(['activities', 'activity_slots', 'categories', 'entries', 'settings', 'weekly_reviews']);
     const entryOps = calls.find((c) => c.table === 'entries')!.ops;
     expect(entryOps).toContainEqual(['gt', ['ended_at', window.since]]);
     expect(calls.find((c) => c.table === 'weekly_reviews')!.ops).toContainEqual(['gte', ['week_start', '2026-11-02']]);
     const copy = await readLocalCopy();
     expect(copy.entries.map((e) => e.id)).toEqual(['a', 'b']);
     expect(copy.categories).toHaveLength(1);
+    expect(copy.activities).toEqual([{ id: 'a1', name: 'Email', status: 'active', merged_into_id: null }]);
+    expect(copy.slots).toEqual([{ activity_id: 'a1', dow: 1, hour: 9, n: 4 }]);
+    expect(entryOps.find(([m]) => m === 'select')![1][0]).toContain('activity_id, activity_source');
     expect(copy.settings).toEqual({ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00', nudge_gap_hours: 5 });
     expect(copy.reviews).toEqual([{ week_start: '2026-11-02' }]);
     expect(copy.refreshedAt).toBe(r.ok ? r.data.refreshedAt : '');
@@ -84,6 +91,28 @@ describe('refresh', () => {
     const r = await refresh(window);
     expect(r).toEqual({ ok: false, error: 'server' });
     expect(await readLocalCopy()).toEqual(before);
+  });
+
+  it('keeps the old copy when the Activity reads fail', async () => {
+    replies.entries = ok([entry('a')]);
+    replies.activities = ok([{ id: 'a1', name: 'Email', status: 'active', merged_into_id: null }]);
+    await refresh(window);
+    const before = await readLocalCopy();
+    replies.activity_slots = { data: null, error: { message: 'x' }, status: 503 };
+    expect(await refresh(window)).toEqual({ ok: false, error: 'server' });
+    expect(await readLocalCopy()).toEqual(before);
+  });
+
+  it('replaces Activities and slots, not merges them', async () => {
+    replies.activities = ok([{ id: 'a1', name: 'Email', status: 'active', merged_into_id: null }]);
+    replies.activity_slots = ok([{ activity_id: 'a1', dow: 1, hour: 9, n: 4 }]);
+    await refresh(window);
+    replies.activities = ok([]);
+    replies.activity_slots = ok([]);
+    await refresh(window);
+    const copy = await readLocalCopy();
+    expect(copy.activities).toEqual([]);
+    expect(copy.slots).toEqual([]);
   });
 
   it('keeps the old copy and reports session_lost on 401', async () => {

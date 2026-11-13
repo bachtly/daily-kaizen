@@ -173,6 +173,50 @@ describe('tag and category rpcs', () => {
   });
 });
 
+describe('activity rpcs', () => {
+  it('sets, clears, renames and merges, refreshing after each', async () => {
+    await w.setEntryActivity('e1', 'Email');
+    await w.setEntryActivity('e1', null);
+    await w.renameActivity('a1', 'Mail');
+    await w.mergeActivity('a1', 'a2');
+    expect(rpcCalls).toEqual([
+      { name: 'set_entry_activity', args: { p_entry_id: 'e1', p_name: 'Email' } },
+      { name: 'set_entry_activity', args: { p_entry_id: 'e1', p_name: null } },
+      { name: 'rename_activity', args: { p_id: 'a1', p_name: 'Mail' } },
+      { name: 'merge_activity', args: { p_from: 'a1', p_into: 'a2' } },
+    ]);
+    expect(refresh).toHaveBeenCalledTimes(4);
+    expect(recordTiming).toHaveBeenCalledTimes(4);
+  });
+  it('passes the error keys through and does not refresh', async () => {
+    rpcReply = { data: null, error: { message: 'activity_name_taken' }, status: 400 };
+    expect(await w.renameActivity('a1', 'Mail')).toEqual({ ok: false, error: 'activity_name_taken' });
+    rpcReply = { data: null, error: { message: 'activity_not_found' }, status: 400 };
+    expect(await w.mergeActivity('a1', 'a1')).toEqual({ ok: false, error: 'activity_not_found' });
+    rpcReply = { data: null, error: { message: 'entry_not_found' }, status: 400 };
+    expect(await w.setEntryActivity('e1', 'x')).toEqual({ ok: false, error: 'entry_not_found' });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe('every update and delete carries a filter (CLAUDE.md)', () => {
+  it('Entry edit, delete and settings updates are filtered', async () => {
+    await w.createEntry(entry);
+    await w.editEntry('e1', fields);
+    await w.deleteEntry('e1');
+    await w.saveSettings({ quiet_start: '22:00' });
+    const writes = calls.filter((c) => c.op === 'update' || c.op === 'delete');
+    expect(writes.map((c) => c.op)).toEqual(['update', 'delete', 'update']);
+    expect(writes.map((c) => c.filter)).toEqual([['id', 'e1'], ['id', 'e1'], ['user_id', 'u1']]);
+  });
+  it('the Activity writes are rpcs, so they send no table update or delete', async () => {
+    await w.setEntryActivity('e1', 'Email');
+    await w.renameActivity('a1', 'Mail');
+    await w.mergeActivity('a1', 'a2');
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe('reviewDone, settings, push', () => {
   it('reviewDone ignores duplicates and [] counts as done', async () => {
     const r = await w.reviewDone('2026-11-02');
