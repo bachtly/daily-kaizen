@@ -29,7 +29,7 @@ select ok(not has_function_privilege('authenticated', 'public.resolve_activity(u
   and not has_function_privilege('anon', 'public.resolve_activity(uuid, text)', 'execute')
  , 'resolve_activity is not callable by the app roles');
 select is((select count(*)::int from pg_proc where proname in ('resolve_activity', 'save_ai_labels')
-  and prosecdef and proconfig = array['search_path=""']), 2, 'security definer with empty search_path');
+  and prosecdef and proconfig = array['search_path=""']), 3, 'security definer with empty search_path');
 
 -- Name resolution: create, case/space-insensitive match, no duplicate
 create temp table first_ra as select resolve_activity(a1(), '  Company   A ') as id;

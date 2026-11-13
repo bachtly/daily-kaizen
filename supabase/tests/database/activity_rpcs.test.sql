@@ -24,6 +24,7 @@ insert into entries (id, user_id, text, started_at, ended_at, time_zone, form_op
   ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-0000000000a1', 'e3', now() - interval '3 hours', now() - interval '2 hours', 'UTC', now(), null, null),
   ('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-0000000000a2', 'e4', now() - interval '5 hours', now() - interval '4 hours', 'UTC', now(), '00000000-0000-0000-0000-00000000ac03', 'ai'),
   ('00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-0000000000a2', 'e5', now() - interval '3 hours', now() - interval '2 hours', 'UTC', now(), '00000000-0000-0000-0000-00000000ac03', 'ai');
+insert into entry_activities (entry_id, activity_id, user_id) select id, activity_id, user_id from entries where activity_id is not null;
 
 -- anon cannot execute
 set local role anon;
@@ -83,6 +84,7 @@ reset role;
 select is((select count(*)::int from entries where user_id = '00000000-0000-0000-0000-0000000000a2' and activity_id = '00000000-0000-0000-0000-00000000ac03'), 2, 'another user''s Entries untouched');
 -- the filter: a2's Entry points at a2's Activity; a1 cannot merge it, and a2's rows stay
 update entries set activity_id = '00000000-0000-0000-0000-00000000ac04' where id = '00000000-0000-0000-0000-000000000005';
+update entry_activities set activity_id = '00000000-0000-0000-0000-00000000ac04' where entry_id = '00000000-0000-0000-0000-000000000005';
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 select throws_ok($$select merge_activity('00000000-0000-0000-0000-00000000ac04', '00000000-0000-0000-0000-00000000ac06')$$, 'P0001', 'activity_not_found', 'cannot merge another user''s Activity');
@@ -102,6 +104,7 @@ select gen_random_uuid(), '00000000-0000-0000-0000-0000000000a1', 'x', (select t
 from (values ('Asia/Tokyo', interval '0'), ('Asia/Tokyo', interval '0'), ('UTC', interval '0'), ('UTC', interval '-13 weeks')) v(tz, off);
 insert into entries (id, user_id, text, started_at, ended_at, time_zone, form_opened_at, activity_id, activity_source)
 values (gen_random_uuid(), '00000000-0000-0000-0000-0000000000a2', 'y', now() - interval '3 hours', now() - interval '2 hours', 'UTC', now(), '00000000-0000-0000-0000-00000000ac03', 'ai');
+insert into entry_activities (entry_id, activity_id, user_id) select id, activity_id, user_id from entries where activity_id is not null;
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 select is((select count(*)::int from activity_slots()), 2, 'one row per zone-local slot; the 13-week-old and other user''s Entries are out');
