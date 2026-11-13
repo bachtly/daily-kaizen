@@ -16,8 +16,10 @@ export const activityList = (names: readonly string[]) => {
  * Change an Entry's Activities: remove one with ×, add up to 3 by picking an Active one or typing a new name (#79).
  * The value is the list of names; the parent saves it with the Entry.
  */
-export function ActivityPicker({ value, activities, onChange, disabled, error }: {
+export function ActivityPicker({ value, activities, onChange, onDraft, disabled, error }: {
   value: readonly string[]; activities: readonly ActivityRow[]; onChange: (names: string[]) => void; disabled?: boolean;
+  /** Called with the name being typed, '' once it is added or cancelled, so the parent can save it too. */
+  onDraft?: (draft: string) => void;
   /** A message about a name, shown right under the field. */
   error?: string;
 }) {
@@ -32,6 +34,7 @@ export function ActivityPicker({ value, activities, onChange, disabled, error }:
   const add = (name: string) => {
     onChange(activityList([...value, name]).slice(0, MAX_ACTIVITIES));
     setDraft('');
+    onDraft?.('');
     setAdding(false);
   };
   return (
@@ -53,7 +56,7 @@ export function ActivityPicker({ value, activities, onChange, disabled, error }:
           <label className="field-label" htmlFor={id}>Activity name</label>
           <input
             id={id} className="text" autoFocus value={draft} readOnly={disabled} maxLength={60}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); onDraft?.(e.target.value); }}
             onKeyDown={(e) => { if (e.key === 'Enter' && activityKey(draft)) { e.preventDefault(); add(draft); } }}
           />
           <div className="chips" role="group" aria-label="Pick an Activity">
@@ -63,7 +66,7 @@ export function ActivityPicker({ value, activities, onChange, disabled, error }:
           </div>
           <div className="row-actions">
             <button type="button" className="secondary" disabled={disabled || !activityKey(draft)} onClick={() => add(draft)}>Add</button>
-            <button type="button" className="link" disabled={disabled} onClick={() => { setAdding(false); setDraft(''); }}>Cancel</button>
+            <button type="button" className="link" disabled={disabled} onClick={() => { setAdding(false); setDraft(''); onDraft?.(''); }}>Cancel</button>
           </div>
         </div>
       )}

@@ -113,6 +113,16 @@ describe('EntryEditor: Activities', () => {
     await waitFor(() => expect(a.setEntryActivities).toHaveBeenCalledWith('b', ['Side project']));
   });
 
+  it('Save takes a name typed but not confirmed with Add', async () => {
+    const a = acts();
+    day(a);
+    openEditor('b');
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: 'Side project' } });
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => expect(a.setEntryActivities).toHaveBeenCalledWith('b', ['Side project']));
+  });
+
   it('caps the typed name at 60 characters', () => {
     day(acts());
     openEditor('a');
@@ -150,7 +160,7 @@ describe('EntryEditor: Activities', () => {
   });
 
   it.each([
-    ['activity_name_blank', 'Write an Activity name, or choose None.'],
+    ['activity_name_blank', 'Write an Activity name.'],
     ['activity_name_too_long', 'Use 60 characters or fewer.'],
   ] as const)('shows a message when the Server answers %s, and keeps the editor open', async (error, text) => {
     const a = acts({ setEntryActivities: vi.fn(async () => fail(error)) });

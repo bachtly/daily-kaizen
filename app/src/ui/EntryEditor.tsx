@@ -16,7 +16,7 @@ const messages = {
   entry_end_not_after_start: 'From must be before To.',
   entry_end_in_future: "To can't be later than now.",
   time_zone_unknown: "Couldn't save. Try again.",
-  activity_name_blank: 'Write an Activity name, or choose None.',
+  activity_name_blank: 'Write an Activity name.',
   activity_name_too_long: 'Use 60 characters or fewer.',
 } as const;
 type Known = keyof typeof messages;
@@ -52,6 +52,8 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
   const [activity, setActivity] = useState<string[]>(() => [...activityNames]);
   const [busy, setBusy] = useState<'saving' | 'deleting' | null>(null);
   const [problem, setProblem] = useState<string>();
+  /** A name typed in the picker but not yet confirmed with Add; Save takes it too. */
+  const [pending, setPending] = useState('');
   const [activityProblem, setActivityProblem] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -79,12 +81,13 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
   };
   // The Activity goes after the text: an edited text clears an AI label, and a label I set must stay.
   const lower = (names: readonly string[]) => activityList(names).map((n) => n.toLowerCase()).join('|');
-  const activityChanged = !!onSetActivities && lower(activity) !== lower(activityNames);
+  const finalActivities = activityList([...activity, pending]).slice(0, 3);
+  const activityChanged = !!onSetActivities && lower(finalActivities) !== lower(activityNames);
   const save = () =>
     run('saving', async () => {
       const r = await onSave({ text: text.trim(), started_at: new Date(from).toISOString(), ended_at: new Date(to).toISOString(), time_zone: tz });
       if (!r.ok || !activityChanged) return r;
-      return onSetActivities!(activityList(activity));
+      return onSetActivities!(finalActivities);
     });
 
   const disabled = busy !== null;
@@ -100,6 +103,7 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
       {textError && <p id={`edit-text-error-${entry.id}`} className="error" role="alert">{textError}</p>}
       {onSetActivities && <ActivityPicker
         value={activity} activities={activities} disabled={disabled} error={activityProblem}
+        onDraft={setPending}
         onChange={(names) => { setActivity(names); setActivityProblem(undefined); }}
       />}
       <div className="times">
