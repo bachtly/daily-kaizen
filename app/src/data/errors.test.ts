@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { mapError, VALIDATION_KEYS } from './errors';
 
 describe('mapError', () => {
+  it('maps the next_change length check by its constraint name', () => {
+    const msg = 'new row for relation "weekly_reviews" violates check constraint "weekly_reviews_next_change_len"';
+    expect(mapError({ code: '23514', message: msg }, 400)).toBe('next_change_too_long');
+  });
   it('maps each validation key from a check violation message', () => {
     for (const k of VALIDATION_KEYS) {
       const msg = `new row for relation "entries" violates check constraint "${k}"`;

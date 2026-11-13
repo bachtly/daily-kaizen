@@ -9,7 +9,8 @@ export const ENTRY_COLUMNS =
 export const CATEGORY_COLUMNS = 'id, name, description, status' as const;
 export const ACTIVITY_COLUMNS = 'id, name, status, merged_into_id' as const;
 export const SETTINGS_COLUMNS = 'time_zone, quiet_start, quiet_end, nudge_gap_hours' as const;
-export const REVIEW_COLUMNS = 'week_start' as const;
+export const REVIEW_COLUMNS = 'week_start, next_change' as const;
+export const TARGET_COLUMNS = 'id, activity_id, category_id, minutes' as const;
 
 export type EntryRow = Pick<
   Tables['entries']['Row'],
@@ -45,7 +46,9 @@ export type ActivityRow = Pick<Tables['activities']['Row'], 'id' | 'name' | 'sta
 /** One `activity_slots()` row: Entries with an Activity at a weekday (0 = Sunday) and hour over 12 weeks. */
 export type SlotRow = Database['public']['Functions']['activity_slots']['Returns'][number];
 export type SettingsRow = Pick<Tables['settings']['Row'], 'time_zone' | 'quiet_start' | 'quiet_end' | 'nudge_gap_hours'>;
-export type ReviewRow = Pick<Tables['weekly_reviews']['Row'], 'week_start'>;
+export type ReviewRow = Pick<Tables['weekly_reviews']['Row'], 'week_start'> & Partial<Pick<Tables['weekly_reviews']['Row'], 'next_change'>>;
+/** A weekly target (minutes) for an Activity; `category_id` null = any Category. */
+export type TargetRow = Pick<Tables['activity_targets']['Row'], 'id' | 'activity_id' | 'category_id' | 'minutes'>;
 
 export type MetaRow = { key: string; value: unknown };
 
@@ -57,6 +60,7 @@ export class LocalDb extends Dexie {
   activities!: EntityTable<ActivityRow, 'id'>;
   activity_slots!: Table<SlotRow, [string, number, number]>;
   settings!: EntityTable<SettingsRow & { key: string }, 'key'>;
+  activity_targets!: EntityTable<TargetRow, 'id'>;
   weekly_reviews!: EntityTable<ReviewRow, 'week_start'>;
   meta!: EntityTable<MetaRow, 'key'>;
 
@@ -73,6 +77,10 @@ export class LocalDb extends Dexie {
     this.version(2).stores({
       activities: 'id',
       activity_slots: '[activity_id+dow+hour]',
+    });
+    // v3: weekly targets per Activity (the Reviews keep their key; `next_change` is just another field)
+    this.version(3).stores({
+      activity_targets: 'id',
     });
   }
 }

@@ -5,6 +5,10 @@ import { supabase } from './supabase';
 
 type Tables = Database['public']['Tables'];
 
+type SetActivityTargetGenerated = Database['public']['Functions']['set_activity_target']['Args'];
+/** The generated type says `string` and `number`: the args have no default, but the SQL function accepts null for both. */
+type SetActivityTargetArgs = { p_activity_id: string; p_category_id: string | null; p_minutes: number | null };
+
 export type EntryFields = Pick<Tables['entries']['Row'], 'text' | 'started_at' | 'ended_at' | 'time_zone'>;
 export type NewEntry = EntryFields & Pick<Tables['entries']['Row'], 'id' | 'form_opened_at'>;
 export type SettingsPatch = Partial<Pick<Tables['settings']['Row'], 'time_zone' | 'quiet_start' | 'quiet_end' | 'nudge_gap_hours'>>;
@@ -89,13 +93,23 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
   const mergeActivity = (from: string, into: string) =>
     rpc((signal) => supabase.rpc('merge_activity', { p_from: from, p_into: into }).abortSignal(signal));
 
-  /** Both the new row (`201`) and an already-done week (`[]`) mean done. */
-  async function reviewDone(weekStart: string) {
+  /** Set (or clear, with null minutes) the weekly target of an Activity, narrowed to a Category or `null` for any. 30–4800 minutes. */
+  const setActivityTarget = (activityId: string, categoryId: string | null, minutes: number | null) => {
+    const args: SetActivityTargetArgs = { p_activity_id: activityId, p_category_id: categoryId, p_minutes: minutes };
+    return rpc((signal) => supabase.rpc('set_activity_target', args as SetActivityTargetGenerated).abortSignal(signal));
+  };
+
+  /**
+   * Both the new row (`201`) and an already-done week (`[]`) mean done. `note` is the one change for next week (at most 140
+   * characters; a blank one is not sent). A week already done keeps its first note.
+   */
+  async function reviewDone(weekStart: string, note?: string | null) {
+    const nextChange = note?.trim();
     const started = performance.now();
     const r = await request((signal) =>
       supabase
         .from('weekly_reviews')
-        .upsert({ week_start: weekStart }, { onConflict: 'user_id,week_start', ignoreDuplicates: true })
+        .upsert(nextChange ? { week_start: weekStart, next_change: nextChange } : { week_start: weekStart }, { onConflict: 'user_id,week_start', ignoreDuplicates: true })
         .select()
         .abortSignal(signal),
     );
@@ -133,6 +147,7 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
     setEntryActivities,
     renameActivity,
     mergeActivity,
+    setActivityTarget,
     reviewDone,
     saveSettings,
     upsertPushSubscription,

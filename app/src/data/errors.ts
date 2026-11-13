@@ -14,6 +14,9 @@ export const VALIDATION_KEYS = [
   'activity_name_blank',
   'activity_name_too_long',
   'activity_not_found',
+  'category_not_found',
+  'target_out_of_range',
+  'next_change_too_long',
 ] as const;
 
 export type ValidationKey = (typeof VALIDATION_KEYS)[number];
@@ -37,6 +40,8 @@ export function mapError(error: PostgrestLikeError | null | undefined, status = 
     // Check violations name the constraint inside the message; raised errors are the message itself.
     const text = `${error?.message ?? ''} ${error?.details ?? ''}`;
     const found = VALIDATION_KEYS.find((k) => new RegExp(`\\b${k}\\b`).test(text));
+    // The 140-character check on weekly_reviews.next_change is named by its constraint.
+    if (!found && text.includes('weekly_reviews_next_change_len')) return 'next_change_too_long';
     return found ?? 'server';
   }
   if (status === 0) return 'unknown';
