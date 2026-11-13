@@ -1,6 +1,6 @@
 # daily-kaizen MVP: data model
 
-All new; extends [`docs/mvp-design.md`](../../mvp-design.md) §Data under [D3](#decisions)
+All new (Activities, #57, added on 2026-11-13: [D7](#decisions)); extends [`docs/mvp-design.md`](../../mvp-design.md) §Data under [D3](#decisions)
 (writes online, read-only Local copy) and [D2](02-requirements.md#decisions) (Tagging check).
 Conventions (Supabase defaults; no repo schema yet): snake_case plural tables, `uuid` keys, `timestamptz` times, and on every Server
 table a `user_id` to the login user with row-level security limiting rows to the signed-in user (AC-7.2, NFR-11).
@@ -13,6 +13,7 @@ so no allowed-email record is stored (AC-7.2). Rejected: sign-ups off with one l
 |---|---|---|---|---|
 | `entries` | Entries | `supabase/migrations` | New | I save → I edit, Server tags → I delete (hard delete) |
 | `categories` | Active Categories, Suggested and Rejected categories | `supabase/migrations` | New | 5 starting ones with each account; tagging adds Suggested → active or Rejected; never deleted |
+| `activities` | Activities (#57) | `supabase/migrations` | New | The AI or I name one → renamed → merged into another (kept as an alias); never deleted |
 | `push_subscriptions` | Push subscriptions | `supabase/migrations` | New | Sent on each open → deleted when the push service reports it gone |
 | `settings` | Time zone, Quiet hours and Nudge gap | `supabase/migrations` | New | Created with each account → updated by the app |
 | `weekly_reviews` | Review done records | `supabase/migrations` | New | Created by "Review done" (AC-5.3); kept |
@@ -26,11 +27,14 @@ erDiagram
   AUTH_USERS ||--|| SETTINGS : has
   AUTH_USERS ||--o{ CATEGORIES : owns
   AUTH_USERS ||--o{ ENTRIES : owns
+  AUTH_USERS ||--o{ ACTIVITIES : owns
   AUTH_USERS ||--o{ PUSH_SUBSCRIPTIONS : has
   AUTH_USERS ||--o{ WEEKLY_REVIEWS : records
   AUTH_USERS ||--o{ NOTIFICATIONS_SENT : records
   CATEGORIES |o--o{ ENTRIES : "Tag"
   CATEGORIES |o--o{ ENTRIES : "Suggested category"
+  ACTIVITIES |o--o{ ENTRIES : "Activity"
+  ACTIVITIES |o--o{ ACTIVITIES : "merged into"
 ```
 
 ## Attributes (new or changed only)
@@ -50,12 +54,19 @@ erDiagram
 | entries.suggested_category_id | uuid | yes | null | **SO**. The Entry's Suggested category (AC-3.4), so approval can move it (AC-4.2). FK, restrict |
 | entries.tag_attempts | int | no | 0 | **SO**. Failed AI calls since the last Tag, counted only when the guarded update matches; reset by a text edit that clears the Tag |
 | entries.tagging_gave_up_at | timestamptz | yes | null | **SO**. Set when `tag_attempts` reaches 3 (06-backend); the Tagging check skips the Entry; shown as Untagged with a "couldn't tag" note; I tag it by hand (AC-3.2) |
+| entries.activity_id | uuid | yes | null | **SO**. The Entry's Activity (#57); null = none or not labelled yet. FK, restrict |
+| entries.activity_source | enum `ai`, `me` (the `tag_source` type) | yes | null | **SO**. Null = not labelled yet (the Tagging check picks the Entry up); `ai` with a null `activity_id` = the AI found no Activity, so it isn't asked again; `me` with a null id = I chose none. Independent of `tag_source` |
 | entries.created_at | timestamptz | no | now() | **SO**. Server save time; also the save order used for overlaps (AC-5.1) |
 | entries.updated_at | timestamptz | no | now() | **SO**. Set by a database trigger on every update |
 | categories.id | uuid | no | generated | PK |
 | categories.name | text | no | | Unique per user, case-insensitive, all statuses |
 | categories.description | text | no | | For the AI; starting set below, AI-written for Suggested |
 | categories.status | enum `active`, `suggested`, `rejected` | no | `active` | `rejected` is new vs the sketch (AC-4.3) |
+| activities.id | uuid | no | generated | PK |
+| activities.name | text | no | | Normalised: trimmed, inner spaces collapsed. Unique per user on `lower(btrim(name))`, all statuses; a merged name stays taken as an alias |
+| activities.status | enum `active`, `merged` | no | `active` | `merged` = an alias of `merged_into_id` |
+| activities.merged_into_id | uuid | yes | null | The Activity it was merged into; set only when `merged`. FK to `activities`. Reads follow it to the end |
+| activities.created_at, updated_at | timestamptz | no | now() | **SO**. `updated_at` set by trigger |
 | push_subscriptions.id | uuid | no | generated | PK |
 | push_subscriptions.endpoint | text | no | | Unique |
 | push_subscriptions.p256dh, auth | text | no | | The sketch's `keys` |
@@ -73,7 +84,7 @@ Push is on when I have at least one `push_subscriptions` row; there is no separa
 **Gap start**: the latest `ended_at` among my Entries; the Gap runs from it to now. With no Entries there is no Gap and no Nudge; deleting the latest Entry moves the Gap start back, and one Nudge per Gap still applies (user decision).
 
 **Local copy** (phone, read-only, AC-2.4): copies of my Entries that end after the previous Monday 00:00 (this week and last week, including sleep crossing into Monday, and given-up Entries),
-all my Categories, my settings, my `weekly_reviews` from the previous Monday on (Review done shown offline), and `refreshed_at`, the time of the last refresh shown on the Week page.
+all my Categories, all my Activities (Active and merged), `activity_slots()` (below), my settings, my `weekly_reviews` from the previous Monday on (Review done shown offline), and `refreshed_at`, the time of the last refresh shown on the Week page.
 
 ### Starting Category descriptions (resolves OQ-2)
 
@@ -101,6 +112,11 @@ Examples from README §Categories.
 | Status moves only `suggested → active` or `suggested → rejected` | Server approve/reject code |
 | One Nudge per Gap and one Review reminder per week | DB PK `(user_id, kind, about)` on `notifications_sent` |
 | One Review done per week | DB PK `(user_id, week_start)` |
+| The text-edit rule above also clears `activity_id` and `activity_source` when `activity_source` isn't `me` (AC-8.2); with `me` they stay | Server write path |
+| An AI label saves only when its own source isn't `me` and `updated_at` is unchanged since the AI call began; the Category part and the Activity part are judged separately, in one transaction | Server tagging code (`save_ai_labels`) |
+| Resolving a name (AI or phone): normalise; an Active match → it; a merged match → its `merged_into_id`, followed to the end; otherwise insert it Active. One SQL helper serves both | Server code |
+| `merged_into_id` is set only on `merged` rows and never makes a cycle (merge refuses A into A; an Active target only) | Server merge code |
+| Merge moves only my Entries: `where user_id = auth.uid() and activity_id = <from>` | Server merge code, pgTAP |
 | The Local copy changes only by a whole refresh from the Server | App code |
 
 ## Access patterns
@@ -114,6 +130,8 @@ Examples from README §Categories.
 | Categories (UC-3, AC-4.2) | Each tagging, review and refresh | None: < ~20 rows | Grows by approvals |
 | Entries with a given Entry's Suggested category (AC-4.2) | Per approval | FK index `suggested_category_id` | Few |
 | Settings, reviews, notifications, subscriptions (AC-5.2, 5.3, 6.1) | Per job or tap | PKs; unique `endpoint` | 1 row; ≤ 52/year; ~10/day; few |
+| Entries missing an Activity label, not given up (AC-8.6) | Every 15 min | Partial index: `activity_source` null and `tagging_gave_up_at` null | Backfill: ~20 per check, then a handful |
+| Activities; chip counts by weekday × hour, last 12 weeks (AC-8.4) | Each refresh | None: < ~100 Activities; counts by one grouped read of ~2,500 Entries | Grows with use |
 | Form prefill (AC-1.1) | Each open | In memory over the Local copy | ≤ ~400 |
 
 ## Transactions and consistency
@@ -121,6 +139,8 @@ Examples from README §Categories.
 - **Entry write:** one row insert, update (including any Tag clearing) or delete.
 - **Save a Tag:** one transaction inserts the Suggested category if the name is new and updates the Entry; if the Entry update matches no row (edited, re-tagged or deleted meanwhile), the transaction rolls back. The Category suggestion push goes after commit, only for a new insert.
 - **Approve:** one transaction sets `active` and moves the Entries that have it as their Entry's Suggested category and are not tagged by me (AC-4.2), keeping their `tagged_at` and `tag_source`. **Reject:** one status update; Tags and `suggested_category_id` unchanged.
+- **Save AI labels:** one transaction does the Save a Tag steps for the Category (only when `tag_source` isn't `me`; no Category picked = left alone) and sets the Activity (only when `activity_source` isn't `me`) with `activity_source` `ai`; if the Entry update matches no row, everything rolls back. A new Activity name is inserted in the same transaction.
+- **Rename:** one update on my Activity. **Merge:** one transaction re-points my Entries and any earlier aliases to the target, then marks the source `merged`. **Set an Entry's Activity:** resolves the name, then one Entry update with source me.
 - **Nudge, Review reminder:** insert the `notifications_sent` row first, then send. A crash between loses one notification, consistent with no push retry (R4).
 - **Phone:** a refresh replaces the whole Local copy in one write, so it is never half old and half new.
 - **Deletes:** deleting my login user cascades to all my rows. Categories are never deleted, so Entry → Category references restrict. An Entry delete is a hard delete with no dependants; the next refresh drops it from the Local copy. Dead push subscriptions are deleted.
@@ -128,13 +148,13 @@ Examples from README §Categories.
 ## Migration and backfill
 
 Greenfield: one migration creates tables, indexes and policies; no running code or data, so no expand/contract or backfill.
-Rollback drops the tables. Creating an account adds its `settings` row and the 5 starting Categories (trigger `on_auth_user_created` → `seed_account`).
+Rollback drops the tables. Activities (#57) are additive: one migration adds `activities` and the two `entries` columns (all null), so existing Entries and the running app are unaffected. Existing Entries are labelled by the normal Tagging check once `untagged_due()` also returns Entries with `activity_source` null (AC-8.6); until then nothing changes. Rollback of the switch-on: restore the old `untagged_due()`; the columns can stay. Creating an account adds its `settings` row and the 5 starting Categories (trigger `on_auth_user_created` → `seed_account`).
 The Local copy has no migration: a new app version may discard and rebuild it. Update `docs/mvp-design.md` §Data to match at approval.
 
 ## Retention and privacy
 
 - **PII:** email (Supabase login), Entry text (personal, may be sensitive), time zones (rough location), push endpoints. Single owner.
-- **Shared with:** Anthropic receives Entry text and Category descriptions for tagging.
+- **Shared with:** Anthropic receives Entry text, Category descriptions and Active Activity names for tagging.
 - **Retention:** Entries until I delete them; Review done and `notifications_sent` records kept for G1 and the NFRs.
 - **Deletion and export:** deleting my login user removes everything; no in-app export, the Supabase dashboard can export. Daily free-plan backup is unverified (NFR-5).
 - **Phone:** the Local copy holds this week's and last week's Entry text; losing it to iOS storage clearing loses nothing (G3).
@@ -174,6 +194,23 @@ I wanted to choose how long a Gap runs before a Nudge instead of the fixed 3 hou
 
 Consequences:
 - Changing the gap mid-Gap uses the new value at the next job run; a Gap already Nudged stays Nudged (`notifications_sent` key), so lowering it never sends a second Nudge.
+
+### D7 · Activity is a second label, independent of Category (#57, approved 2026-11-13)
+
+Categories give the kind of time but not what it was for: "Company A" can be Deep or Shallow, and Lunch, Dinner and Pooping are all Maintenance. Drivers: G2 (one line to log), little code, labelling without effort (G1). Light research (sources in #57): Toggl pairs a task (what) with a tag (kind); RescueTime derives the category from the activity; time-audit advice keeps logging under about 5 s.
+
+| Option | Outcome | Reason |
+|---|---|---|
+| A second label `entries.activity_id`, independent of the Category; one input; the AI labels both in one call and creates Activities directly | **Chosen** | Company A can be Deep or Shallow; no extra typing; no approval step to do each week |
+| Activity determines Category (RescueTime-style derived Category) | Rejected | Company A has both Deep and Shallow time |
+| Two input fields (what, and what for) | Rejected | Slower to log (R8); the AI can label the one line |
+| Suggested / approve / reject for Activities, like Categories | Rejected | Activities are many and change often; reviewing each is the work this removes. Mistakes are fixed by merge and rename; a merged name is an alias, so it isn't recreated |
+| A one-off batch script to label existing Entries | Rejected | A second code path; the Tagging check already retries and labels, so the switch-on is the backfill (AC-8.6) |
+| Seed a starting set of Activities | Rejected | Personal and unknowable; they start empty and grow from my text |
+
+Consequences:
+- A merged-away name keeps the unique name slot and resolves to its target, so renaming or merging never loses a label.
+- A wrong AI Activity costs one correction (AC-8.2); a label I set is never changed.
 
 ## Open questions
 

@@ -12,7 +12,7 @@ AC; use cases refer to it.
 |---|---|---|
 | Me | A user (me or anyone who signs up), on an iPhone (iOS 18.4+) home-screen web app, writing in English (brief Constraints) | Only my own rows (AC-7.2) |
 | Server | Supabase database, Edge Functions and pg_cron jobs | Service role; jobs call functions with a shared secret |
-| AI | Claude Haiku 5.5, called only by the Server to pick Tags | Sees an Entry's text and the Active Categories |
+| AI | Claude Haiku 5.5, called only by the Server to pick Tags and Activities | Sees an Entry's text, the Active Categories and the Active Activity names |
 
 ## Use cases
 
@@ -31,7 +31,7 @@ Postconditions: the Local copy holds this week and last week, as of the time sho
 
 ### UC-3 · Tag an entry
 Server · a new Entry is saved, or the Tagging check finds an Untagged entry · Tag source is not me.
-Main flow: 1. The Server sends the text and Active Categories to the AI. 2. The AI picks one and may propose a new one. 3. The Server saves the Tag (AC-3.1) and handles any proposal (AC-3.4).
+Main flow: 1. The Server sends the text, Active Categories and Active Activity names to the AI. 2. The AI picks a Category and may propose a new one; it also names the Activity (AC-8.1). 3. The Server saves the Tag (AC-3.1), handles any proposal (AC-3.4) and saves the Activity.
 Exceptions: 1a. AI call fails, times out or returns a Category that isn't active (judgement) → Untagged, retried (AC-3.2). 3a. I set the Tag meanwhile → mine is kept (AC-3.3). 3b. Push off or failing → the Suggested category still shows in the app.
 Postconditions: the Entry has exactly one Tag, or is Untagged and will be retried.
 
@@ -109,6 +109,19 @@ G1 counts a day as logged when at least one Entry starts that day in my time zon
 ### US-7 · As me, I want to sign in once with an emailed code, so that my Entries stay mine (G3)
 - AC-7.1 When I enter a valid 6-digit code from my email, in the home-screen app or any browser, the app shall sign me in and refresh the Local copy. Rejected: sign in only from the home-screen app; replaced so the app works on the web too, with the Add to Home Screen steps on their own page.
 - AC-7.2 The Server shall limit all data access to the signed-in account with row-level security, and shall create and seed an account for a new email (judgement). Rejected: refuse sign-ups from any other email; replaced to let other people use the app (#48).
+
+### US-8 · As me, I want each Entry labelled with what it was for, so that the Weekly review shows time per Activity as well as per Category (G1, G2) (#57)
+An Activity says what the time was for (Company A, Lunch, Game B); a Category says the kind of time. They are independent: Company A can be Deep in one Entry and Shallow in the next, and neither label sets the other. Both are optional. Activities start empty for every account (no seeded set); the AI creates them.
+- AC-8.1 When the Server tags an Entry (AC-3.1), it shall in the same AI call also pick the Entry's Activity, and save it with Activity source AI:
+  - the AI sees the Active Activity names; a name that matches one (ignoring case and extra spaces) or an alias is that Activity; any other name creates an Active Activity directly, with no approval step;
+  - no clear activity → no Activity (shown as "(no Activity)"), recorded as labelled by the AI and not asked again;
+  - the AI call failed → not labelled, retried by the Tagging check like an Untagged entry (AC-3.2), sharing its attempt limit;
+  - the Entry's text is stored as typed; the AI only labels it.
+- AC-8.2 When I change an Entry's Activity on the Day view (pick an Active one, type a new name, or choose none), the Server shall save it with Activity source me. The Server shall never change an Activity whose source is me. A text edit clears an Activity whose source isn't me, so it is labelled again; this is the AC-3.2 rule for Activity.
+- AC-8.3 When I rename an Activity on the Week page, the Server shall change its name everywhere; a name another Activity has is refused. When I merge Activity A into B, the Server shall move A's Entries to B and keep A's name as an alias of B, so the AI and anything I type with that name resolve to B (chains resolve to the end). Repeating a rename or merge changes nothing more.
+- AC-8.4 When the Log sheet opens, the app shall show up to 3 Activity chips: the Activities most used for the sheet's start weekday and hour over the last 12 weeks (each Entry in its own time zone), filled up with the most-used overall. Tapping a chip inserts "Name " into the text; no AI call is involved. While I have no Activities, the sheet shows Recent chips instead.
+- AC-8.5 When I open the Week page and have at least one Activity, the app shall show "Time per activity" under "Time per category": one row per Activity with a stacked bar by Category and a total, plus "(no Activity)". Tapping a row shows its time per Category and the Rename and Merge into… actions. Time is split and counted as in AC-5.1. With no Activities the panel is hidden.
+- AC-8.6 When the Tagging check runs after the switch-on, it shall also pick up Entries with no Activity label yet, oldest first, so existing Entries are labelled over the next checks. There is no batch backfill; Category, Tag source and Suggested category of those Entries stay as they are.
 
 ## User flows
 
