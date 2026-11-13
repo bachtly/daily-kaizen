@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ActivityRow, CategoryRow, EntryRow, SlotRow } from '../data/db';
 import type { Result } from '../data/request';
+import { expect } from 'storybook/test';
 import { DayView, type DayActions } from './DayScreen';
 
 const cat = (id: string, name: string): CategoryRow => ({ id, name, description: name, status: 'active' });
@@ -74,6 +75,27 @@ export const TagPickerOpen: Story = { name: 'Change a Tag', args: { initialPicke
 export const Loading: Story = { args: { load: 'loading', refreshedAt: null } };
 export const EarlierDayOffline: Story = { name: 'Earlier day: offline', args: { date: '2026-10-21', entries: [], load: 'offline-earlier-week', connection: 'offline' } };
 export const EarlierDaySignedOut: Story = { name: 'Earlier day: signed out', args: { date: '2026-10-21', entries: [], load: 'session-lost-earlier-week', connection: 'signed-out' } };
+const long: EntryRow[] = Array.from({ length: 14 }, (_, i) => {
+  const h = String(i + 7).padStart(2, '0');
+  return entry(`l${i}`, '10', `Block ${i + 1}`, `${h}:00`, `${h}:50`, i % 3 ? 'deep' : 'shallow');
+});
+export const LongList: Story = {
+  name: 'Long list (scrolled to the bottom)',
+  args: { entries: long, now: at('2026-11-10T23:55:00Z') },
+  parameters: { docs: { description: { story: 'Scrolled to the end, the last row sits fully above the + (issue #70).' } } },
+  play: async ({ canvasElement }) => {
+    const body = canvasElement.querySelector('.phone-body') as HTMLElement;
+    body.scrollTop = body.scrollHeight;
+    await new Promise((r) => setTimeout(r, 300));
+    const rows = body.querySelectorAll('.entry');
+    const last = rows[rows.length - 1].getBoundingClientRect();
+    // The + hides on scroll down, so measure where it sits when shown: its top edge is size + margin above the dock.
+    const dock = (canvasElement.querySelector('.fab-dock') as HTMLElement).getBoundingClientRect();
+    const fab = (canvasElement.querySelector('.fab') as HTMLElement);
+    const shownTop = dock.top - fab.offsetHeight - parseFloat(getComputedStyle(fab).bottom);
+    await expect(last.bottom).toBeLessThanOrEqual(shownTop);
+  },
+};
 export const Offline: Story = { args: { connection: 'offline' } };
 export const SignedOut: Story = { args: { connection: 'signed-out' } };
 
