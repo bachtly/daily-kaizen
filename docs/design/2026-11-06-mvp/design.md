@@ -41,15 +41,15 @@ work offline. Business rules live in Postgres; Edge Functions only call the AI, 
 
 ### Requirements → [02-requirements.md](02-requirements.md)
 
-Seven user stories (US-1 to US-7) with 22 ACs: log and fix Entries (AC-1.x), online writes with a read-only Local copy
+Eight user stories (US-1 to US-8) with 30 ACs: log and fix Entries (AC-1.x), online writes with a read-only Local copy
 (AC-2.x), automatic tagging with retries (AC-3.x), Tag corrections and Suggested category decisions (AC-4.x), the This week
-page, Review reminder and Review done (AC-5.x), Nudges and Quiet hours (AC-6.x), and sign-in with an emailed code (AC-7.x).
+page, Review reminder and Review done (AC-5.x), Nudges and Quiet hours (AC-6.x), sign-in with an emailed code (AC-7.x), and Activities, a second label for what the time was for (AC-8.x, #57).
 Key NFRs: save confirmation p95 < 1 s (NFR-2), 95% tagged within 30 min (NFR-4), 0 lost Entries (NFR-5), Review reminder
 within 5 min of Sunday 19:00 (NFR-6), at most 1 Nudge per Gap and none in Quiet hours (NFR-7), under $5 a month (NFR-9).
 
 ### Data model → [03-data-model.md](03-data-model.md)
 
-Six tables: `entries`, `categories` (status `active`, `suggested`, `rejected`), `push_subscriptions`, `settings`,
+Seven tables: `entries`, `categories` (status `active`, `suggested`, `rejected`), `activities` (status `active`, `merged`; a merged name is an alias; independent of Category, [D7](03-data-model.md#decisions)), `push_subscriptions`, `settings`,
 `weekly_reviews`, `notifications_sent`. The phone creates the Entry id when the form opens, so a resent create never makes a
 duplicate. Server-owned fields (Tag, Tag source, `tagged_at`, Entry's Suggested category, tagging attempts) are never
 written by the phone. A text edit clears an AI Tag so it is re-tagged; a Tag with Tag source me is never changed. The five
@@ -58,21 +58,21 @@ Starting Categories and their AI descriptions are fixed there.
 ### API → [04-api.md](04-api.md)
 
 Supabase's generated API for plain row writes (create, edit, delete Entry; Review done; settings; Push subscription), guarded
-by RLS and column grants. Postgres functions (`rpc/set_entry_tag`, `rpc/approve_category`, `rpc/reject_category`) for writes
+by RLS and column grants. Postgres functions (`rpc/set_entry_tag`, `rpc/approve_category`, `rpc/reject_category`, and for Activities `rpc/set_entry_activity`, `rpc/rename_activity`, `rpc/merge_activity`, `rpc/activity_slots`) for writes
 that touch Server-owned fields. Every phone write returns the saved row and is safe to resend after an unknown result
 (AC-2.2). The Local copy refresh is one read of this and last week.
 
 ### UI → [05-ui.md](05-ui.md)
 
 Four screens: Day (week strip, a day's Entries with Unlogged slots to Fill, inline Entry editing, Tag picker; a floating + opens the
-Log sheet with prefilled start and end, Recent chips, overlap note), Week (Category totals, Untagged, Unlogged, time per day,
+Log sheet with prefilled start and end, Activity chips (Recent chips until there are Activities), overlap note), Week (Category totals, time per Activity, Untagged, Unlogged, time per day,
 Suggested category cards, Review done), Settings (push status, Quiet hours, Nudge gap) and Sign in
 (email, 6-digit code). One `ConnectionBanner` shows offline and lost-session states; `SaveStatus` shows "saved" only after the
 Server confirms. Storybook mockups of every screen are in `app/src/ui`.
 
 ### Backend → [06-backend.md](06-backend.md)
 
-Two Edge Functions called by pg_net with a job secret: `tag-entries` (on insert and from the Tagging check; 20 s AI timeout,
+Two Edge Functions called by pg_net with a job secret: `tag-entries` (labels Category and Activity in one AI call; on insert and from the Tagging check, which also labels old Entries after the Activities switch-on; 20 s AI timeout,
 give up after 3 attempts, then I tag by hand) and `send-notifications` (claims due rows in SQL, then sends). Races are
 handled by a guarded update on the AI Tag, a unique Category name index and the `notifications_sent` key. Time-zone logic
 runs in SQL from `settings.time_zone`. Web Push uses `@pushforge/builder` ([D5](06-backend.md#decisions)).
@@ -107,6 +107,7 @@ Rollout: Supabase project and Resend SMTP, migration and seed, functions, cron l
 | Free-plan backup unverified (NFR-5) | Weekly export during the run | Bach |
 | Session lifetime in the home-screen app; Local copy survives a week; Cloudflare Pages headers on device | Device tests before the run | Bach (device test) |
 | TBD: current Haiku 5.5 price | Check the pricing page at setup | Bach |
+| Activities mislabelled by the AI, or duplicates ("Company A" vs "Co A") | Merge and rename from the Week page; a merged name is an alias, so it isn't recreated (D7) | Bach |
 | UI defaults left open: Recent chip count, reminder email wording, Unlogged per day, no date picker | Keep defaults in [05-ui.md#open-questions](05-ui.md#open-questions) | Bach |
 
 ## Decisions
@@ -120,3 +121,5 @@ Each decision is recorded, with its options and consequences, in the stage doc w
 | D3 | Require a connection for every write; read-only Local copy | Outbox for new Entries; Outbox for edits and deletes too; Outbox for every write; fully online with no local copy | [03-data-model.md](03-data-model.md#decisions) |
 | D4 | Postgres functions for Server-owned writes; Edge Functions only for outside calls | An Edge Function for every write; triggers only | [04-api.md](04-api.md#decisions) |
 | D5 | Send Web Push with `@pushforge/builder` | `negrel/webpush` (fallback); npm `web-push` | [06-backend.md](06-backend.md#decisions) |
+| D7 | Activity is a second label independent of Category; the AI creates Activities; the switch-on is the backfill | Activity derives Category; two input fields; Suggested/approve/reject for Activities; batch backfill script; seeded Activities | [03-data-model.md](03-data-model.md#decisions) |
+| D8 | Week page shows time per Activity as layout B | Layout A (matrix); layout C (nested under Category) | [05-ui.md](05-ui.md#decisions) |

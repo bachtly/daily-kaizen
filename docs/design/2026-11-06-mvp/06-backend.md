@@ -58,9 +58,9 @@ sequenceDiagram
   D->>T: after commit, pg_net {entry_id} (2 s timeout)
   T-->>D: 202, continue in waitUntil
   T->>D: read Entry, Active Categories, Rejected categories
-  T->>A: classify (timeout 20 s)
-  A-->>T: {category_name, proposed}
-  T->>D: save_ai_tag() in one tx: insert Suggested category if new, guarded update
+  T->>A: classify (timeout 20 s; text, Active Categories, Active Activity names)
+  A-->>T: {category_name, proposed, activity_name}
+  T->>D: save_ai_labels() in one tx: Category part (insert Suggested category if new) and Activity part (resolve or create), guarded update
   opt new Suggested category inserted
     T->>P: Category suggestion push
   end
@@ -106,9 +106,9 @@ Repo layering is new; this follows Supabase defaults (`supabase/migrations`, `su
 
 | Module | Responsibility | Main types / interfaces | Depends on |
 |---|---|---|---|
-| `supabase/migrations/` | Tables, checks, indexes, RLS, grants, triggers (`updated_at`, clear the Tag on a text edit, insert → pg_net), phone rpcs from 04-api.md, internal job helpers `untagged_due()`, `save_ai_tag()`, `claim_due_notifications()`, cron schedules, `seed_account(uid)` and the `on_auth_user_created` trigger that runs it, Vault secret + function URLs | Enums as in 03-data-model.md | Postgres, pg_net, pg_cron, Vault |
+| `supabase/migrations/` | Tables, checks, indexes, RLS, grants, triggers (`updated_at`, clear the Tag on a text edit, insert → pg_net), phone rpcs from 04-api.md (incl. the Activity rpcs, #57), internal job helpers `untagged_due()`, `save_ai_labels()` (replaces `save_ai_tag()`), one name-resolution helper shared with `set_entry_activity`, `claim_due_notifications()`, cron schedules, `seed_account(uid)` and the `on_auth_user_created` trigger that runs it, Vault secret + function URLs | Enums as in 03-data-model.md | Postgres, pg_net, pg_cron, Vault |
 | `supabase/functions/_shared/` | Job-secret check, config check (503), service-role client, `sendPush()`, `sendEmail()` | `PushPayload`, `JobRequest` (implementation names) | `@pushforge/builder` (D5), Resend HTTP API |
-| `supabase/functions/tag-entries/` | Build prompt, call AI, validate reply, call `save_ai_tag()` | `TagReply {category_name, proposed}` | `_shared`, Anthropic API |
+| `supabase/functions/tag-entries/` | Build prompt (Active Activity names too), call AI, validate reply, call `save_ai_labels()` | `TagReply {category_name, proposed, activity_name}` | `_shared`, Anthropic API |
 | `supabase/functions/send-notifications/` | Call `claim_due_notifications()`, send claimed rows | `ClaimedNotification {kind, about}` | `_shared` |
 | `app/src/data/` | Supabase client, writes with resend-on-unknown, Local copy refresh into Dexie, last ~50 save and refresh durations | `LocalCopy` | supabase-js, Dexie |
 
@@ -120,6 +120,7 @@ Job helpers are internal (not in 04-api.md): EXECUTE revoked from `public`, `ano
 - **Shared state and contention:** an Entry can be edited by me while `tag-entries` tags it; two `tag-entries` runs (trigger and cron) can tag the same Entry; approve can run while tagging inserts a Suggested category; two Notification checks can overlap if one runs long.
 - **Consistency:** phone writes are strong (response shows the saved row). Tags are eventual: Untagged until tagging finishes (NFR-4, 30 min). The Local copy is a snapshot with `refreshed_at`.
 - **Control:**
+  - Activity: the Activity part of `save_ai_labels()` has the same guard on `activity_source` and `updated_at`; two runs creating the same new name meet the unique index and resolve to one row (insert `on conflict do nothing`, then select). Merge locks the source and target Activity rows (`for update`, lowest id first) so two merges never cross.
   - AI Tag: conditional update `where id = ? and tag_source is distinct from 'me' and updated_at = <read value>`; no match → roll back (data model).
   - Suggested category: unique case-insensitive name index; insert `on conflict do nothing`, so only the inserting run sends the Category suggestion.
   - Approve/reject: single rpc transaction, `select … for update` on the Category row.
@@ -134,6 +135,7 @@ Job helpers are internal (not in 04-api.md): EXECUTE revoked from `public`, `ano
   - Push send: 10 s timeout, no retry (R4).
   - Resend send: 10 s timeout, no retry; one email a week at most.
   - Phone → Server: 10 s, resend same request (04-api.md).
+- **Switch-on and backfill (#57):** `untagged_due()` first returns only Entries without a Category; the last Activities step makes it also return Entries with `activity_source` null (same order, limit and give-up rule), so the normal check labels new and old Entries, about 20 per 15 minutes (~2,000 Entries in about 25 hours). Only the AI-labelled parts are saved; a Tag already set is kept, so an Entry with a Tag only gets its Activity. Deploy `tag-entries` first: the old function never sets an Activity, so every Entry would stay due. Rollback: restore the old `untagged_due()`.
 - **Backpressure and limits:** Tagging check takes at most 20 Entries per run, oldest first, one AI call at a time, and starts no new AI call after ~110 s (150 s wall clock [S11]); leftovers wait for the next run, so NFR-4 still holds at ~30 Entries/day. Both job functions reply 202 and finish in `EdgeRuntime.waitUntil` [S37]. pg_cron: 2 jobs, well under the 8-concurrent advice [S14].
 - **Load model:** one user, ~30 Entries/day, ≤ 300 cron calls/day, ≤ 400 rows per refresh. First to break: Supabase free-plan pause (NFR-12), not load.
 
@@ -179,6 +181,7 @@ No new infrastructure beyond `docs/mvp-design.md`; the push library is D5.
 |---|---|---|---|
 | AI slow or down | Timeout, 5xx; `tag_attempts` rises | Entries Untagged | Tagging check every 15 min; give up at 3; tag by hand |
 | AI returns unknown name | Validation | Same | Counts as an attempt |
+| AI returns a bad or empty `activity_name` (#57) | Validation | Entry has no Activity, still tagged | Treated as none; `activity_source` ai, not retried |
 | pg_net call lost or Edge Function down | Untagged count; `net._http_response` | Tag delayed ≤ 15 min | Tagging check (D2); trigger never fails the insert |
 | Config missing (kill switch) | 503 in `net._http_response` | Entries stay Untagged | 503 not counted as an attempt |
 | pg_cron stops / project paused | `cron.job_run_details`; pause email [S8]; no `notifications_sent` on Sunday | No Nudge, reminder, retries; paused → app can't save | Daily use; restore from dashboard |
@@ -219,7 +222,7 @@ No alerting service: one user reviews `nfr_report` weekly (judgement; fits the c
 
 ## Testing strategy
 
-- **Database (pgTAP via `supabase test db`, fixtures via `seed_account(uid)`):** constraints and error keys (AC-1.2, AC-1.3); RLS, grants, job-helper EXECUTE per role (AC-7.2, NFR-11); Tag cleared on text edit (AC-3.2, AC-3.3); guarded AI update races (AC-3.2, AC-3.4); Suggested category and approve/reject (AC-4.1, AC-4.2, AC-4.3); `claim_due_notifications()` with fixed `now()` across zones, DST, Quiet hours wrapping midnight, no subscription, no Entries, a changed Nudge gap, settings changes, double claim (NFR-6, NFR-7, AC-5.2, AC-5.3, AC-6.1, AC-6.2, AC-6.3, AC-6.4); insert trigger survives a pg_net error.
+- **Database (pgTAP via `supabase test db`, fixtures via `seed_account(uid)`):** constraints and error keys (AC-1.2, AC-1.3); RLS, grants, job-helper EXECUTE per role (AC-7.2, NFR-11); Tag cleared on text edit (AC-3.2, AC-3.3); guarded AI update races (AC-3.2, AC-3.4); Suggested category and approve/reject (AC-4.1, AC-4.2, AC-4.3); `claim_due_notifications()` with fixed `now()` across zones, DST, Quiet hours wrapping midnight, no subscription, no Entries, a changed Nudge gap, settings changes, double claim (NFR-6, NFR-7, AC-5.2, AC-5.3, AC-6.1, AC-6.2, AC-6.3, AC-6.4); insert trigger survives a pg_net error; Activities (#57): RLS, normalised name uniqueness, alias chains, the text edit clearing only AI labels, `save_ai_labels()` guards, merge touching only my Entries, rename clash, `activity_slots()` in each Entry's zone.
 - **Edge Functions (Deno test, mocked AI/push/Resend):** reply validation, attempt counting, give-up at 3, 503 on missing config, 110 s budget, 404/410 deletes subscription, secret check.
 - **Contract:** phone data layer against local Supabase (`supabase start`): create resend with same id, edit, delete twice, refresh (AC-2.1–2.4, incl. AC-2.3); sign-in with code and expired session (UC-6).
 - **Device (iPhone, iOS 18.4+):** first push (D5), session after 7+ days, Local copy survives a week, offline open from cache, Pages headers.
