@@ -54,7 +54,9 @@ select mk(11, interval '26 minutes');                    -- both mine
 update entries set category_id = (select id from deep), tag_source = 'me', tagged_at = now(), activity_source = 'me' where id = eid(11);
 select mk(12, interval '1 minute');                      -- Activity missing but too new
 update entries set category_id = (select id from deep), tag_source = 'ai', tagged_at = now() where id = eid(12);
-select is((select array_agg(id order by created_at) from untagged_due()), array[eid(7), eid(8)], 'untagged_due: Entries missing either label, oldest first; skips both-set, mine, given up, too new');
+select mk(13, interval '25 minutes');                    -- Category mine, Activity not labelled (the main backfill group)
+update entries set category_id = (select id from deep), tag_source = 'me', tagged_at = now(), activity_source = null where id = eid(13);
+select is((select array_agg(id order by created_at) from untagged_due()), array[eid(7), eid(8), eid(13)], 'untagged_due: Entries missing either label (incl. Category mine, no Activity), oldest first; skips both-set, mine, given up, too new');
 select is((select count(*)::int from pg_proc where proname = 'save_ai_tag'), 0, 'save_ai_tag is gone');
 select ok(exists (select 1 from pg_indexes where indexname = 'entries_activity_due_idx'), 'partial index for Entries missing an Activity label');
 delete from entries;

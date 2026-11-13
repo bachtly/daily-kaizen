@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(43);
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-0000000000a1'), ('00000000-0000-0000-0000-0000000000a2');
@@ -56,6 +56,18 @@ select throws_ok($$select rename_activity('00000000-0000-0000-0000-00000000ac01'
 select throws_ok($$select rename_activity('00000000-0000-0000-0000-00000000ac01', 'gamma')$$, 'P0001', 'activity_name_taken', 'clash with a merged name');
 select throws_ok($$select rename_activity('00000000-0000-0000-0000-00000000ac05', 'Gamma 2')$$, 'P0001', 'activity_not_found', 'merged Activity cannot be renamed');
 select throws_ok($$select rename_activity('00000000-0000-0000-0000-00000000ac03', 'Mine')$$, 'P0001', 'activity_not_found', 'another user''s Activity looks missing');
+select throws_ok($$select rename_activity('00000000-0000-0000-0000-00000000ac01', '   ')$$, 'P0001', 'activity_name_blank', 'blank rename');
+select throws_ok($$select rename_activity('00000000-0000-0000-0000-00000000ac01', repeat('x', 61))$$, 'P0001', 'activity_name_too_long', 'rename over 60');
+select is((select rename_activity('00000000-0000-0000-0000-00000000ac01', repeat('y', 60)) -> 'activity' ->> 'name'), repeat('y', 60), 'rename of exactly 60 is allowed');
+select throws_ok($$select set_entry_activity('00000000-0000-0000-0000-000000000003', '  ')$$, 'P0001', 'activity_name_blank', 'blank Activity name on an Entry');
+select throws_ok($$select set_entry_activity('00000000-0000-0000-0000-000000000003', repeat('z', 61))$$, 'P0001', 'activity_name_too_long', 'Entry Activity over 60');
+select is((select set_entry_activity('00000000-0000-0000-0000-000000000003', null) -> 'entry' ->> 'activity_source'), 'me', 'null still means no Activity, source me');
+reset role;
+create temp table cut_ra as select resolve_activity('00000000-0000-0000-0000-0000000000a1', repeat('w', 70)) as id;
+select is((select name from activities where id = (select id from cut_ra)), repeat('w', 60), 'AI name over 60 is cut to 60');
+select throws_ok($$update activities set name = repeat('v', 61) where id = '00000000-0000-0000-0000-00000000ac06'$$, '23514', null, 'check blocks names over 60');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 
 -- merge_activity: a1 merges Alpha into Beta
 select is((select merge_activity('00000000-0000-0000-0000-00000000ac01', '00000000-0000-0000-0000-00000000ac02') -> 'activity' ->> 'id'), '00000000-0000-0000-0000-00000000ac02', 'merge returns the target');
