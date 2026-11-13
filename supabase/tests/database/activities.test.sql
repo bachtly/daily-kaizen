@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(32);
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-0000000000a1'), ('00000000-0000-0000-0000-0000000000a2');
@@ -19,17 +19,19 @@ $$;
 create function eid(n int) returns uuid language sql as $$
   select ('00000000-0000-0000-0000-0000000000' || lpad(n::text, 2, '0'))::uuid $$;
 create function upd(n int) returns timestamptz language sql as $$ select updated_at from entries where id = eid(n) $$;
+create function names(n int) returns text[] language sql as $$
+  select coalesce(array_agg(a.name order by a.name), '{}') from entry_activities ea join activities a on a.id = ea.activity_id where ea.entry_id = eid(n) $$;
 create function a1() returns uuid language sql as $$ select '00000000-0000-0000-0000-0000000000a1'::uuid $$;
 
 -- Privileges and shape
-select ok(not has_function_privilege('authenticated', 'public.save_ai_labels(uuid, timestamptz, uuid, text, text, text)', 'execute')
-  and not has_function_privilege('anon', 'public.save_ai_labels(uuid, timestamptz, uuid, text, text, text)', 'execute')
-  and has_function_privilege('service_role', 'public.save_ai_labels(uuid, timestamptz, uuid, text, text, text)', 'execute'), 'save_ai_labels for service_role only');
+select ok(not has_function_privilege('authenticated', 'public.save_ai_labels(uuid, timestamptz, uuid, text, text, text[])', 'execute')
+  and not has_function_privilege('anon', 'public.save_ai_labels(uuid, timestamptz, uuid, text, text, text[])', 'execute')
+  and has_function_privilege('service_role', 'public.save_ai_labels(uuid, timestamptz, uuid, text, text, text[])', 'execute'), 'save_ai_labels for service_role only');
 select ok(not has_function_privilege('authenticated', 'public.resolve_activity(uuid, text)', 'execute')
   and not has_function_privilege('anon', 'public.resolve_activity(uuid, text)', 'execute')
  , 'resolve_activity is not callable by the app roles');
 select is((select count(*)::int from pg_proc where proname in ('resolve_activity', 'save_ai_labels')
-  and prosecdef and proconfig = array['search_path=""']), 3, 'security definer with empty search_path');
+  and prosecdef and proconfig = array['search_path=""']), 2, 'security definer with empty search_path');
 
 -- Name resolution: create, case/space-insensitive match, no duplicate
 create temp table first_ra as select resolve_activity(a1(), '  Company   A ') as id;
@@ -64,51 +66,53 @@ select is((select count(*)::int from activities), 4, 'sees only own activities')
 select throws_ok($$insert into activities (name) values ('Direct')$$, '42501', null, 'no direct insert');
 select throws_ok($$update activities set name = 'Hax' where user_id = auth.uid()$$, '42501', null, 'no direct update');
 select throws_ok($$delete from activities where user_id = auth.uid()$$, '42501', null, 'no direct delete');
-select throws_ok($$update entries set activity_id = null where user_id = auth.uid()$$, '42501', null, 'activity columns not writable');
+select throws_ok($$update entries set activity_source = null where user_id = auth.uid()$$, '42501', null, 'activity columns not writable');
 reset role;
 
 -- save_ai_labels: both labels
 select mk(1);
-select is(save_ai_labels(eid(1), upd(1), (select id from deep), null, null, 'Company A'), false, 'both labels saved');
-select results_eq($$select tag_source::text, activity_source::text, activity_id = (select id from activities where name = 'Company A') from entries where id = eid(1)$$,
-  $$values ('ai', 'ai', true)$$, 'Entry has Category and Activity from ai');
+select is(save_ai_labels(eid(1), upd(1), (select id from deep), null, null, array['Company A']), false, 'both labels saved');
+select results_eq($$select tag_source::text, activity_source::text from entries where id = eid(1)$$,
+  $$values ('ai', 'ai')$$, 'Entry has Category and Activity source from ai');
+select is((select names(1)), array['Company A'], 'and the Activity row');
 
 -- no activity found: ai with null id
 select mk(2);
 select save_ai_labels(eid(2), upd(2), (select id from deep), null, null, null);
-select results_eq($$select activity_source::text, activity_id from entries where id = eid(2)$$, $$values ('ai', null::uuid)$$, 'no activity is ai with null id');
+select results_eq($$select activity_source::text, (select count(*)::int from entry_activities where entry_id = eid(2)) from entries where id = eid(2)$$, $$values ('ai', 0)$$, 'no activity is ai with no rows');
 
 -- stale updated_at: no-op, nothing created
 select mk(3);
-select is(save_ai_labels(eid(3), upd(3) - interval '1 second', (select id from deep), null, null, 'Stale Act'), false, 'stale updated_at is a no-op');
+select is(save_ai_labels(eid(3), upd(3) - interval '1 second', (select id from deep), null, null, array['Stale Act']), false, 'stale updated_at is a no-op');
 select is((select count(*)::int from activities where name = 'Stale Act'), 0, 'stale run created no activity');
 
 -- me kept on either label
 select mk(4);
 update entries set category_id = (select id from shallow), tag_source = 'me', tagged_at = now() where id = eid(4);
-select save_ai_labels(eid(4), upd(4), (select id from deep), null, null, 'Fresh');
-select results_eq($$select category_id = (select id from shallow), tag_source::text, activity_source::text, activity_id is not null from entries where id = eid(4)$$,
+select save_ai_labels(eid(4), upd(4), (select id from deep), null, null, array['Fresh']);
+select results_eq($$select category_id = (select id from shallow), tag_source::text, activity_source::text, cardinality(names(4)) = 1 from entries where id = eid(4)$$,
   $$values (true, 'me', 'ai', true)$$, 'me Category kept, Activity still labelled');
 select mk(5);
-update entries set activity_id = (select id from activities where name = 'Target'), activity_source = 'me' where id = eid(5);
-select save_ai_labels(eid(5), upd(5), (select id from deep), null, null, 'Fresh');
-select results_eq($$select tag_source::text, activity_source::text, activity_id = (select id from activities where name = 'Target') from entries where id = eid(5)$$,
+update entries set activity_source = 'me' where id = eid(5);
+insert into entry_activities (entry_id, activity_id, user_id) select eid(5), id, a1() from activities where name = 'Target';
+select save_ai_labels(eid(5), upd(5), (select id from deep), null, null, array['Fresh']);
+select results_eq($$select tag_source::text, activity_source::text, names(5) = array['Target'] from entries where id = eid(5)$$,
   $$values ('ai', 'me', true)$$, 'me Activity kept, Category still labelled');
 
 -- a save that writes nothing keeps the failure count
 select mk(6);
 update entries set category_id = (select id from shallow), tag_source = 'me', tagged_at = now(),
   activity_source = 'me', tag_attempts = 2 where id = eid(6);
-select is(save_ai_labels(eid(6), upd(6), (select id from deep), null, null, 'Nope'), false, 'both me: returns false');
+select is(save_ai_labels(eid(6), upd(6), (select id from deep), null, null, array['Nope']), false, 'both me: returns false');
 select is((select tag_attempts from entries where id = eid(6)), 2, 'both me: nothing written, attempts kept');
 
 -- text edit trigger: clears AI labels only
 update entries set text = 'changed' where id in (eid(1), eid(4), eid(5));
-select results_eq($$select category_id is null, activity_id is null, activity_source is null from entries where id = eid(1)$$,
+select results_eq($$select category_id is null, names(1) = '{}', activity_source is null from entries where id = eid(1)$$,
   $$values (true, true, true)$$, 'text edit clears AI labels');
-select results_eq($$select tag_source::text, activity_source::text, activity_id is not null from entries where id = eid(4)$$,
+select results_eq($$select tag_source::text, activity_source::text, cardinality(names(4)) > 0 from entries where id = eid(4)$$,
   $$values ('me', null, false)$$, 'text edit clears AI Activity, keeps me Category');
-select results_eq($$select tag_source::text, activity_source::text, activity_id is not null from entries where id = eid(5)$$,
+select results_eq($$select tag_source::text, activity_source::text, cardinality(names(5)) > 0 from entries where id = eid(5)$$,
   $$values (null, 'me', true)$$, 'text edit clears AI Category, keeps me Activity');
 
 select * from finish();
