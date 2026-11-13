@@ -57,7 +57,7 @@ sequenceDiagram
   R-->>P: 201 row (NFR-2)
   D->>T: after commit, pg_net {entry_id} (2 s timeout)
   T-->>D: 202, continue in waitUntil
-  T->>D: read Entry, Active Categories, Rejected categories
+  T->>D: read Entry, Active Categories, Rejected categories, my recent corrections
   T->>A: classify (timeout 20 s; text, Active Categories, Active Activity names)
   A-->>T: {category_name, proposed, activity_name}
   T->>D: save_ai_labels() in one tx: Category part (insert Suggested category if new) and Activity part (resolve or create), guarded update
@@ -268,6 +268,22 @@ npm `web-push` library relies on Node APIs, so we need a sender that works on De
 Consequences:
 - The sources are snippets and untested on iOS. The first push on the iPhone confirms it; if it fails, switch to
   `negrel/webpush`.
+
+### D6 · The Tagging prompt learns from my corrections (#62)
+
+When I correct a label, only that Entry is fixed; the next similar Entry would repeat the mistake. Each `tag-entries` call adds my corrections to the prompt as examples.
+
+- **Examples:** up to 20 of my newest Entries with `tag_source = 'me'` or `activity_source = 'me'` (read newest 100 by `updated_at`, filtered by `user_id`), shown as Entry text → the labels I set.
+- **Dedup:** normalise the text (trim, collapse spaces, lower case) and keep the newest per text, so "lunch" corrected five times takes one slot and my last decision wins.
+- **Only `me` labels shown:** the Category if `tag_source = 'me'`, the Activity if `activity_source = 'me'` ("none" if cleared); AI labels are never fed back. A merged Activity shows its target's name.
+- **None yet:** no examples section; the prompt is as before.
+
+| Option | Outcome | Reason |
+|---|---|---|
+| Examples in the prompt from existing `entries` rows | **Chosen** | No new storage; the corrections are already in `entries` |
+| Fine-tuning | Rejected | Cost and setup far beyond ~30 Entries/day; corrections show up in the next call anyway |
+| A separate corrections table | Rejected | Duplicates data in `entries` and can drift from it |
+| Reuse the exact corrected text without the AI | Rejected | Only helps identical text; the AI generalises to similar text |
 
 ### Other backend choices
 
