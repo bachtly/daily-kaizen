@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(31);
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-0000000000a1'), ('00000000-0000-0000-0000-0000000000a2');
@@ -94,6 +94,13 @@ update entries set activity_id = (select id from activities where name = 'Target
 select save_ai_labels(eid(5), upd(5), (select id from deep), null, null, 'Fresh');
 select results_eq($$select tag_source::text, activity_source::text, activity_id = (select id from activities where name = 'Target') from entries where id = eid(5)$$,
   $$values ('ai', 'me', true)$$, 'me Activity kept, Category still labelled');
+
+-- a save that writes nothing keeps the failure count
+select mk(6);
+update entries set category_id = (select id from shallow), tag_source = 'me', tagged_at = now(),
+  activity_source = 'me', tag_attempts = 2 where id = eid(6);
+select is(save_ai_labels(eid(6), upd(6), (select id from deep), null, null, 'Nope'), false, 'both me: returns false');
+select is((select tag_attempts from entries where id = eid(6)), 2, 'both me: nothing written, attempts kept');
 
 -- text edit trigger: clears AI labels only
 update entries set text = 'changed' where id in (eid(1), eid(4), eid(5));

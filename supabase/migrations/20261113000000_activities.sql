@@ -108,6 +108,7 @@ declare
   v_suggested uuid;
   v_status public.category_status;
   v_activity uuid;
+  v_wrote boolean := false;
 begin
   select e.user_id, e.tag_source, e.activity_source into v_user, v_tag_source, v_act_source
     from public.entries e
@@ -143,6 +144,7 @@ begin
       set category_id = p_category_id, tag_source = 'ai', tagged_at = now(),
           suggested_category_id = v_suggested
       where e.id = p_entry_id;
+    v_wrote := true;
   end if;
 
   if v_act_source is distinct from 'me' then
@@ -150,9 +152,13 @@ begin
     update public.entries e
       set activity_id = v_activity, activity_source = 'ai'
       where e.id = p_entry_id;
+    v_wrote := true;
   end if;
 
-  update public.entries e set tag_attempts = 0, tagging_gave_up_at = null where e.id = p_entry_id;
+  -- Only a save that wrote something clears the failure count.
+  if v_wrote then
+    update public.entries e set tag_attempts = 0, tagging_gave_up_at = null where e.id = p_entry_id;
+  end if;
 
   return v_new_id is not null;
 end $$;
