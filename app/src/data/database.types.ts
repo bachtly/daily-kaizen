@@ -49,6 +49,46 @@ export type Database = {
           },
         ];
       };
+      activity_targets: {
+        Row: {
+          activity_id: string;
+          category_id: string | null;
+          id: string;
+          minutes: number;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          activity_id: string;
+          category_id?: string | null;
+          id?: string;
+          minutes: number;
+          user_id?: string;
+        };
+        Update: {
+          activity_id?: string;
+          category_id?: string | null;
+          id?: string;
+          minutes?: number;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activity_targets_activity_id_fkey";
+            columns: ["activity_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "activity_targets_category_id_fkey";
+            columns: ["category_id"];
+            isOneToOne: false;
+            referencedRelation: "categories";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       categories: {
         Row: {
           description: string;
@@ -276,17 +316,20 @@ export type Database = {
       weekly_reviews: {
         Row: {
           done_at: string;
+          next_change: string | null;
           user_id: string;
           week_start: string;
         };
         ComputedFields: never;
         Insert: {
           done_at?: string;
+          next_change?: string | null;
           user_id?: string;
           week_start: string;
         };
         Update: {
           done_at?: string;
+          next_change?: string | null;
           user_id?: string;
           week_start?: string;
         };
@@ -385,6 +428,10 @@ export type Database = {
             Returns: boolean;
           };
       seed_account: { Args: { uid: string }; Returns: undefined };
+      set_activity_target: {
+        Args: { p_activity_id: string; p_category_id: string; p_minutes: number };
+        Returns: Json;
+      };
       set_entry_activities: { Args: { p_entry_id: string; p_names: string[] }; Returns: Json };
       set_entry_activity: { Args: { p_entry_id: string; p_name: string }; Returns: Json };
       set_entry_activity_rows: {
