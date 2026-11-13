@@ -352,4 +352,5 @@ input.text[aria-invalid="true"], select.text[aria-invalid="true"] { border-color
 
 .entry .what .act { font-size: 13px; color: var(--muted); }
 .activity-picker { margin-top: 10px; }
-.activity-picker .chip[aria-pressed="true"] { border-color: var(--accent); font-weight: 600; }
+.activity-picker .chip.selected { border-color: var(--accent); font-weight: 600; }
+.activity-picker .activity-add { margin-top: 6px; }

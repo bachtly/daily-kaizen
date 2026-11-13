@@ -28,8 +28,9 @@ const activities: ActivityRow[] = [
   { id: 'lu', name: 'Lunch', status: 'active', merged_into_id: null },
   { id: 'sp', name: 'Side project', status: 'active', merged_into_id: null },
 ];
-const activityOf: Record<string, string> = { t1: 'ca', t2: 'ca', t4: 'lu', t6: 'ca', m1: 'sp' };
-const labelled: EntryRow[] = entries.map((e) => ({ ...e, activity_id: activityOf[e.id] ?? null }));
+// t2 is multitasking: two Activities (#79)
+const activityOf: Record<string, string[]> = { t1: ['ca'], t2: ['ca', 'sp'], t4: ['lu'], t6: ['ca'], m1: ['sp'] };
+const labelled: EntryRow[] = entries.map((e) => ({ ...e, activity_id: activityOf[e.id]?.[0] ?? null, activity_ids: activityOf[e.id] ?? [] }));
 // Tuesday is Postgres dow 2
 const slots: SlotRow[] = [
   { activity_id: 'ca', dow: 2, hour: 14, n: 6 },
@@ -38,7 +39,7 @@ const slots: SlotRow[] = [
 ];
 
 const later = (r: Result<unknown> = { ok: true, data: null }) => () => new Promise<Result<unknown>>((res) => setTimeout(() => res(r), 600));
-const actions: DayActions = { createEntry: later(), editEntry: later(), deleteEntry: later(), setEntryTag: later(), setEntryActivity: later() };
+const actions: DayActions = { createEntry: later(), editEntry: later(), deleteEntry: later(), setEntryTag: later(), setEntryActivities: later() };
 const at = (iso: string) => Date.parse(iso);
 
 const meta = {
@@ -107,16 +108,20 @@ export const LogNowActivityChips: Story = {
 };
 const setActivityFails = (error: 'activity_name_blank' | 'activity_name_too_long'): DayActions => ({
   ...actions, editEntry: () => Promise.resolve({ ok: true as const, data: null }),
-  setEntryActivity: () => Promise.resolve({ ok: false as const, error }),
+  setEntryActivities: () => Promise.resolve({ ok: false as const, error }),
 });
 const saveWithNewActivity = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
   await new Promise((r) => setTimeout(r, 100));
+  [...canvasElement.querySelectorAll<HTMLButtonElement>('.activity-picker button')].find((b) => b.textContent === '+ Add')?.click();
+  await new Promise((r) => setTimeout(r, 50));
   const input = canvasElement.querySelector('.activity-picker input') as HTMLInputElement;
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
   set.call(input, 'Side project');
   input.dispatchEvent(new Event('input', { bubbles: true }));
   await new Promise((r) => setTimeout(r, 50));
-  [...canvasElement.querySelectorAll<HTMLButtonElement>('.entry-edit button')].find((b) => b.textContent === 'Save')?.click();
+  [...canvasElement.querySelectorAll<HTMLButtonElement>('.activity-picker .row-actions button')].find((b) => b.textContent === 'Add')?.click();
+  await new Promise((r) => setTimeout(r, 50));
+  [...canvasElement.querySelectorAll<HTMLButtonElement>('.entry-edit .row-actions button')].find((b) => b.textContent === 'Save')?.click();
   await new Promise((r) => setTimeout(r, 100));
 };
 export const EditActivityTooLong: Story = {
@@ -130,6 +135,20 @@ export const EditActivityBlank: Story = {
   play: saveWithNewActivity,
 };
 export const EditActivity: Story = {
-  name: 'With Activities: edit an Entry',
+  name: 'With Activities: edit an Entry with two Activities',
   args: { ...withActivities, initialEditId: 't2' },
+};
+const threeActivities: EntryRow[] = labelled.map((e) => (e.id === 't2' ? { ...e, activity_ids: ['ca', 'lu', 'sp'] } : e));
+export const EditActivityFull: Story = {
+  name: 'With Activities: edit an Entry at 3 (no + Add)',
+  args: { ...withActivities, entries: threeActivities, initialEditId: 't2' },
+};
+export const EditActivityAdding: Story = {
+  name: 'With Activities: adding one',
+  args: { ...withActivities, initialEditId: 't1' },
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    await new Promise((r) => setTimeout(r, 100));
+    [...canvasElement.querySelectorAll<HTMLButtonElement>('.activity-picker button')].find((b) => b.textContent === '+ Add')?.click();
+    await new Promise((r) => setTimeout(r, 100));
+  },
 };
