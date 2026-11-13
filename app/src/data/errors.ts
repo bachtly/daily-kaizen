@@ -11,6 +11,8 @@ export const VALIDATION_KEYS = [
   'category_not_active',
   'category_already_decided',
   'activity_name_taken',
+  'activity_name_blank',
+  'activity_name_too_long',
   'activity_not_found',
 ] as const;
 

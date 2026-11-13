@@ -191,6 +191,10 @@ describe('activity rpcs', () => {
   it('passes the error keys through and does not refresh', async () => {
     rpcReply = { data: null, error: { message: 'activity_name_taken' }, status: 400 };
     expect(await w.renameActivity('a1', 'Mail')).toEqual({ ok: false, error: 'activity_name_taken' });
+    rpcReply = { data: null, error: { message: 'activity_name_blank' }, status: 400 };
+    expect(await w.renameActivity('a1', ' ')).toEqual({ ok: false, error: 'activity_name_blank' });
+    rpcReply = { data: null, error: { message: 'activity_name_too_long' }, status: 400 };
+    expect(await w.setEntryActivity('e1', 'x'.repeat(61))).toEqual({ ok: false, error: 'activity_name_too_long' });
     rpcReply = { data: null, error: { message: 'activity_not_found' }, status: 400 };
     expect(await w.mergeActivity('a1', 'a1')).toEqual({ ok: false, error: 'activity_not_found' });
     rpcReply = { data: null, error: { message: 'entry_not_found' }, status: 400 };
