@@ -14,54 +14,64 @@ export interface TagDeps {
   ) => Promise<void> | void;
 }
 
-/** Tags one Entry. Returns "tagged", "failed" (attempt counted) or "skipped". Never logs Entry text. */
+/** Labels one Entry (Category and/or Activity). Returns "tagged", "failed" (attempt counted) or "skipped". Never logs Entry text. */
 export async function tagEntry(
   entryId: string,
   deps: TagDeps,
 ): Promise<"tagged" | "failed" | "skipped"> {
   const { db } = deps;
   const entry = await db.getEntry(entryId);
-  if (
-    !entry || entry.category_id !== null || entry.tag_source === "me" ||
-    entry.tagging_gave_up_at !== null
-  ) return "skipped";
+  if (!entry || entry.tagging_gave_up_at !== null) return "skipped";
+  // A label set by me is kept; a label that is already there is not asked for again.
+  const needCategory = entry.category_id === null && entry.tag_source !== "me";
+  const needActivity = entry.activity_source === null;
+  if (!needCategory && !needActivity) return "skipped";
 
   const cats = await db.getCategories(entry.user_id);
   const active = cats.filter((c) => c.status === "active");
   const rejected = cats.filter((c) => c.status === "rejected");
+  const activities = await db.getActiveActivityNames(entry.user_id);
 
   let categoryId: string | null = null;
   let proposed: { name: string; description: string } | null = null;
+  let activityName: string | null = null;
+  let ok = false;
   try {
     const raw = await classify(
-      buildPrompt(entry.text, active, rejected),
+      buildPrompt(entry.text, active, rejected, activities),
       deps.anthropicApiKey,
       deps.fetchFn,
     );
     const reply = parseReply(raw);
     if (!reply) throw new Error("bad reply shape");
-    const match = active.find(
-      (c) => c.name.toLowerCase() === reply.category_name.toLowerCase(),
-    );
-    if (!match) throw new Error("category not active");
-    categoryId = match.id;
-    proposed = reply.proposed;
+    if (needCategory) {
+      const match = active.find(
+        (c) => c.name.toLowerCase() === reply.category_name.toLowerCase(),
+      );
+      if (!match) throw new Error("category not active");
+      categoryId = match.id;
+      proposed = reply.proposed;
+    }
+    activityName = reply.activity_name;
+    ok = true;
   } catch (e) {
     console.error(
       `tag-entries: entry ${entry.id} failed: ${(e as Error).message}`,
     );
   }
 
-  if (categoryId === null) {
+  if (!ok) {
     await db.recordTagFailure(entry.id, entry.updated_at);
     return "failed";
   }
-  const inserted = await db.saveAiTag({
+  const inserted = await db.saveAiLabels({
     entryId: entry.id,
     readUpdatedAt: entry.updated_at,
     categoryId,
     proposedName: proposed?.name ?? null,
     proposedDescription: proposed?.description ?? null,
+    // save_ai_labels ignores it when activity_source is me.
+    activityName,
   });
   if (inserted && proposed) {
     try {

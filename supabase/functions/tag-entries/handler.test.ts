@@ -1,8 +1,8 @@
 import { assertEquals } from "@std/assert";
 import { handle, type HandlerDeps } from "./handler.ts";
-import { parseReply } from "./ai.ts";
+import { buildPrompt, parseReply } from "./ai.ts";
 import { tagEntry } from "./tagger.ts";
-import type { CategoryRow, EntryRow, SaveAiTagArgs, TagDb } from "./types.ts";
+import type { CategoryRow, EntryRow, SaveAiLabelsArgs, TagDb } from "./types.ts";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const ENV: Record<string, string> = {
@@ -25,18 +25,20 @@ const entry = (over: Partial<EntryRow> = {}): EntryRow => ({
   updated_at: "2026-11-08T10:00:00Z",
   category_id: null,
   tag_source: null,
+  activity_source: null,
   tagging_gave_up_at: null,
   ...over,
 });
 
-function fakeDb(entries: EntryRow[], saveResult = false) {
-  const saves: SaveAiTagArgs[] = [];
+function fakeDb(entries: EntryRow[], saveResult = false, activities: string[] = []) {
+  const saves: SaveAiLabelsArgs[] = [];
   const failures: string[] = [];
   const db: TagDb = {
     untaggedDue: () => Promise.resolve(entries.map((e) => ({ id: e.id }))),
     getEntry: (id) => Promise.resolve(entries.find((e) => e.id === id) ?? null),
     getCategories: () => Promise.resolve(CATS),
-    saveAiTag: (a) => {
+    getActiveActivityNames: () => Promise.resolve(activities),
+    saveAiLabels: (a) => {
       saves.push(a);
       return Promise.resolve(saveResult);
     },
@@ -107,7 +109,7 @@ Deno.test("202 at once, tags with the matching Active category", async () => {
   const { db, saves } = fakeDb([entry()]);
   const t = setup({
     db,
-    fetchFn: () => Promise.resolve(aiReply({ category_name: "deep", proposed: null })),
+    fetchFn: () => Promise.resolve(aiReply({ category_name: "deep", proposed: null, activity_name: "Company A" })),
   });
   assertEquals((await t.call({ entry_id: ID })).status, 202);
   await t.done();
@@ -117,10 +119,11 @@ Deno.test("202 at once, tags with the matching Active category", async () => {
     categoryId: "c-deep",
     proposedName: null,
     proposedDescription: null,
+    activityName: "Company A",
   }]);
 });
 
-Deno.test("proposal is passed on to save_ai_tag", async () => {
+Deno.test("proposal is passed on to save_ai_labels", async () => {
   const { db, saves } = fakeDb([entry()], true);
   const t = setup({
     db,
@@ -165,11 +168,11 @@ Deno.test("malformed reply, 5xx and timeout each count one failed attempt", asyn
   }
 });
 
-Deno.test("Entries tagged by me, already tagged or given up are skipped", async () => {
+Deno.test("Entries with both labels set (or mine) and given-up Entries are skipped", async () => {
   for (
     const e of [
-      entry({ tag_source: "me" }),
-      entry({ category_id: "c-deep", tag_source: "ai" }),
+      entry({ category_id: "c-deep", tag_source: "ai", activity_source: "ai" }),
+      entry({ tag_source: "me", activity_source: "me" }),
       entry({ tagging_gave_up_at: "2026-11-08T11:00:00Z" }),
     ]
   ) {
@@ -222,13 +225,18 @@ Deno.test("parseReply validates shape", () => {
   assertEquals(parseReply({ category_name: " Deep ", proposed: null }), {
     category_name: "Deep",
     proposed: null,
+    activity_name: null,
   });
+  assertEquals(parseReply({ category_name: "Deep", proposed: null, activity_name: " Lunch " })?.activity_name, "Lunch");
+  for (const bad of [undefined, null, "", "  ", 5]) {
+    assertEquals(parseReply({ category_name: "Deep", proposed: null, activity_name: bad })?.activity_name, null);
+  }
   assertEquals(parseReply({ category_name: "", proposed: null }), null);
   assertEquals(parseReply({ category_name: "Deep", proposed: { name: "x" } }), null);
   assertEquals(parseReply("x"), null);
 });
 
-Deno.test("suggestion hook fires only when save_ai_tag inserted a new category", async () => {
+Deno.test("suggestion hook fires only when save_ai_labels inserted a new category", async () => {
   const reply = () =>
     Promise.resolve(aiReply({
       category_name: "Deep",
@@ -263,4 +271,103 @@ Deno.test("a failing suggestion hook does not fail tagging", async () => {
   });
   assertEquals(res, "tagged");
   assertEquals(saves.length, 1);
+});
+
+const AI_ACT = (input: unknown) => () => Promise.resolve(aiReply(input));
+
+Deno.test("prompt lists the Active Activities, or says there are none", () => {
+  const p = buildPrompt("x", CATS.slice(0, 2), [], ["Company A", "Lunch"]);
+  assertEquals(p.includes("- Company A\n- Lunch"), true);
+  assertEquals(buildPrompt("x", CATS.slice(0, 2), []).includes("no Activities yet"), true);
+});
+
+Deno.test("the prompt sent to the AI carries the user's Active Activity names", async () => {
+  const { db } = fakeDb([entry()], false, ["Company A"]);
+  let sent = "";
+  await tagEntry(ID, {
+    db,
+    anthropicApiKey: "ak",
+    fetchFn: (_u, init) => {
+      sent = String(init?.body);
+      return Promise.resolve(aiReply({ category_name: "Deep", proposed: null, activity_name: null }));
+    },
+  });
+  assertEquals(sent.includes("Company A"), true);
+});
+
+Deno.test("both labels missing: both are saved in one call", async () => {
+  const { db, saves } = fakeDb([entry()]);
+  const res = await tagEntry(ID, {
+    db,
+    anthropicApiKey: "ak",
+    fetchFn: AI_ACT({ category_name: "Deep", proposed: null, activity_name: "Company A" }),
+  });
+  assertEquals(res, "tagged");
+  assertEquals(saves[0].categoryId, "c-deep");
+  assertEquals(saves[0].activityName, "Company A");
+});
+
+Deno.test("activity-only: Category already set, so categoryId is null and no proposal is sent", async () => {
+  const { db, saves } = fakeDb([entry({ category_id: "c-waste", tag_source: "ai" })]);
+  const res = await tagEntry(ID, {
+    db,
+    anthropicApiKey: "ak",
+    fetchFn: AI_ACT({
+      category_name: "Deep",
+      proposed: { name: "Social", description: "people" },
+      activity_name: "Game A",
+    }),
+  });
+  assertEquals(res, "tagged");
+  assertEquals(saves, [{
+    entryId: ID,
+    readUpdatedAt: "2026-11-08T10:00:00Z",
+    categoryId: null,
+    proposedName: null,
+    proposedDescription: null,
+    activityName: "Game A",
+  }]);
+});
+
+Deno.test("activity-only: an unusable category_name is not a failure when the Category is set", async () => {
+  const { db, saves, failures } = fakeDb([entry({ category_id: "c-deep", tag_source: "me" })]);
+  await tagEntry(ID, {
+    db,
+    anthropicApiKey: "ak",
+    fetchFn: AI_ACT({ category_name: "Rejected one", proposed: null, activity_name: "Lunch" }),
+  });
+  assertEquals(failures.length, 0);
+  assertEquals(saves[0].activityName, "Lunch");
+});
+
+Deno.test("Category missing, Activity already set: only the Category is asked for and saved", async () => {
+  const { db, saves } = fakeDb([entry({ activity_source: "me" })]);
+  await tagEntry(ID, {
+    db,
+    anthropicApiKey: "ak",
+    fetchFn: AI_ACT({ category_name: "Waste", proposed: null, activity_name: "Ignored" }),
+  });
+  assertEquals(saves[0].categoryId, "c-waste");
+});
+
+Deno.test("null activity_name is saved as no Activity", async () => {
+  const { db, saves } = fakeDb([entry()]);
+  await tagEntry(ID, {
+    db,
+    anthropicApiKey: "ak",
+    fetchFn: AI_ACT({ category_name: "Deep", proposed: null, activity_name: null }),
+  });
+  assertEquals(saves[0].activityName, null);
+});
+
+Deno.test("an Activity-only Entry still counts a failed attempt when the AI call fails", async () => {
+  const { db, saves, failures } = fakeDb([entry({ category_id: "c-deep", tag_source: "ai" })]);
+  const res = await tagEntry(ID, {
+    db,
+    anthropicApiKey: "ak",
+    fetchFn: () => Promise.resolve(new Response("err", { status: 529 })),
+  });
+  assertEquals(res, "failed");
+  assertEquals(saves.length, 0);
+  assertEquals(failures.length, 1);
 });
