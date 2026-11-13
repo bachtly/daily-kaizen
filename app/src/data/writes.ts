@@ -10,6 +10,10 @@ export type NewEntry = EntryFields & Pick<Tables['entries']['Row'], 'id' | 'form
 export type SettingsPatch = Partial<Pick<Tables['settings']['Row'], 'time_zone' | 'quiet_start' | 'quiet_end' | 'nudge_gap_hours'>>;
 export type PushSubscriptionInput = Pick<Tables['push_subscriptions']['Row'], 'endpoint' | 'p256dh' | 'auth'>;
 
+type SetEntryActivityGenerated = Database['public']['Functions']['set_entry_activity']['Args'];
+/** The generated type says `string` for `p_name` because the arg has no default; the SQL function accepts null. */
+type SetEntryActivityArgs = Omit<SetEntryActivityGenerated, 'p_name'> & { p_name: string | null };
+
 /** Injected so this module does not import the Local copy (the caller wires `refresh` and `recordTiming`). */
 export type WriteDeps = {
   /** Refresh the Local copy; called after every confirmed write. Its failure never fails the write. */
@@ -80,10 +84,12 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
   const rejectCategory = (categoryId: string) =>
     rpc((signal) => supabase.rpc('reject_category', { category_id: categoryId }).abortSignal(signal));
 
-  /** `name` is free text, or null for none (04-api); the Server resolves it to an Activity.
-   * The generated type says `string` because the arg has no default; the SQL function accepts null. */
-  const setEntryActivity = (entryId: string, name: string | null) =>
-    rpc((signal) => supabase.rpc('set_entry_activity', { p_entry_id: entryId, p_name: name as string }).abortSignal(signal));
+  /** `name` is free text, or null for none (04-api); the Server resolves it to an Activity. */
+  const setEntryActivity = (entryId: string, name: string | null) => {
+    const args: SetEntryActivityArgs = { p_entry_id: entryId, p_name: name };
+    // The one widening: generated types can't express the null the SQL function accepts.
+    return rpc((signal) => supabase.rpc('set_entry_activity', args as SetEntryActivityGenerated).abortSignal(signal));
+  };
   const renameActivity = (id: string, name: string) =>
     rpc((signal) => supabase.rpc('rename_activity', { p_id: id, p_name: name }).abortSignal(signal));
   /** Moves `from`'s Entries and names into `into`. Repeating a done merge is fine. */
