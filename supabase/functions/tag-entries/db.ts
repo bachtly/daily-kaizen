@@ -13,7 +13,7 @@ export function dbFromClient(client: SupabaseClient): TagDb {
       const { data, error } = await client
         .from("entries")
         .select(
-          "id,user_id,text,updated_at,category_id,tag_source,tagging_gave_up_at",
+          "id,user_id,text,updated_at,category_id,tag_source,activity_source,tagging_gave_up_at",
         )
         .eq("id", id)
         .maybeSingle();
@@ -28,15 +28,25 @@ export function dbFromClient(client: SupabaseClient): TagDb {
       if (error) throw new Error(`get categories: ${error.message}`);
       return data ?? [];
     },
-    async saveAiTag(a) {
-      const { data, error } = await client.rpc("save_ai_tag", {
+    async getActiveActivityNames(userId) {
+      const { data, error } = await client
+        .from("activities")
+        .select("name")
+        .eq("user_id", userId)
+        .eq("status", "active");
+      if (error) throw new Error(`get activities: ${error.message}`);
+      return (data ?? []).map((a: { name: string }) => a.name);
+    },
+    async saveAiLabels(a) {
+      const { data, error } = await client.rpc("save_ai_labels", {
         p_entry_id: a.entryId,
         p_read_updated_at: a.readUpdatedAt,
         p_category_id: a.categoryId,
         p_proposed_name: a.proposedName,
         p_proposed_description: a.proposedDescription,
+        p_activity_name: a.activityName,
       });
-      if (error) throw new Error(`save_ai_tag: ${error.message}`);
+      if (error) throw new Error(`save_ai_labels: ${error.message}`);
       return data === true;
     },
     async recordTagFailure(entryId, readUpdatedAt) {

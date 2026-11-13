@@ -5,7 +5,7 @@ export const AI_TIMEOUT_MS = 20_000;
 
 const TOOL = {
   name: "tag_entry",
-  description: "Record the Category for the Entry.",
+  description: "Record the Category and the Activity for the Entry.",
   input_schema: {
     type: "object",
     properties: {
@@ -28,8 +28,13 @@ const TOOL = {
           },
         ],
       },
+      activity_name: {
+        description:
+          "What the time was for, in a few words (e.g. a project, person, meal or game). Reuse a listed Activity name when the Entry is about it; otherwise a short new name; null when no clear activity.",
+        anyOf: [{ type: "null" }, { type: "string" }],
+      },
     },
-    required: ["category_name", "proposed"],
+    required: ["category_name", "proposed", "activity_name"],
   },
 };
 
@@ -37,12 +42,16 @@ export function buildPrompt(
   text: string,
   active: CategoryRow[],
   rejected: CategoryRow[],
+  activities: string[] = [],
 ): string {
   const list = active.map((c) => `- ${c.name}: ${c.description}`).join("\n");
   const no = rejected.length
     ? `\nNever propose these names: ${rejected.map((c) => c.name).join(", ")}.`
     : "";
-  return `Classify this time-log Entry into exactly one Category.\n\nCategories:\n${list}${no}\n\nEntry:\n${text}`;
+  const acts = activities.length
+    ? `\n\nActive Activities (reuse one when the Entry is about it):\n${activities.map((a) => `- ${a}`).join("\n")}`
+    : "\n\nThere are no Activities yet.";
+  return `Classify this time-log Entry into exactly one Category and name its Activity.\n\nCategories:\n${list}${no}${acts}\n\nEntry:\n${text}`;
 }
 
 /** Calls Anthropic with a 20 s timeout; throws on timeout, non-2xx or a missing tool call. Never logs the text. */
@@ -84,9 +93,11 @@ export function parseReply(raw: unknown): TagReply | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
   if (!str(r.category_name)) return null;
+  // A missing, empty or non-string activity_name means "no Activity" (#57).
+  const activity_name = str(r.activity_name) ? r.activity_name.trim() : null;
   const p = r.proposed;
   if (p === null || p === undefined) {
-    return { category_name: r.category_name.trim(), proposed: null };
+    return { category_name: r.category_name.trim(), proposed: null, activity_name };
   }
   if (typeof p !== "object") return null;
   const { name, description } = p as Record<string, unknown>;
@@ -94,5 +105,6 @@ export function parseReply(raw: unknown): TagReply | null {
   return {
     category_name: r.category_name.trim(),
     proposed: { name: name.trim(), description: description.trim() },
+    activity_name,
   };
 }
