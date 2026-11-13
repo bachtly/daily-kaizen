@@ -23,7 +23,8 @@ Resend → Edge Function. Every phone write sends `Prefer: return=representation
 | Change an Entry's Activity | `rpc/set_entry_activity` | Phone | AC-8.2 | New (#57) |
 | Rename / merge an Activity | `rpc/rename_activity`, `rpc/merge_activity` | Phone | AC-8.3 | New (#57) |
 | Activity counts for the chips | `rpc/activity_slots` | Phone | AC-8.4 | New (#57) |
-| Review done | `POST /weekly_reviews` | Phone | AC-5.3 | New |
+| Review done | `POST /weekly_reviews` | Phone | AC-5.3, AC-5.5 | New; `next_change` added (#74) |
+| Set a Category's weekly target | `rpc/set_category_target` | Phone | AC-5.4 | New (#74) |
 | Settings and time zone report | `PATCH /settings?user_id=eq.<my id>` | Phone | AC-2.3, AC-6.3, AC-6.4 | New |
 | Push subscription report | `POST /push_subscriptions` (upsert) | Phone | AC-2.3, AC-6.2 | New |
 | Local copy refresh, earlier week | `GET /entries`, `/categories`, `/activities`, `/settings`, `/weekly_reviews`, `rpc/activity_slots` (an earlier week: Entries only) | Phone | AC-2.3, AC-2.4, AC-5.1 | New |
@@ -52,15 +53,17 @@ clearing (a text change when Tag source isn't me clears the Tag, AC-3.2). `200 [
 category, except Tag source me, keeping their `tagged_at` and `tag_source` (AC-4.2); reject sets `rejected` (AC-4.3). Response `200 {category, moved_entry_ids}` (reject: `[]`).
 Repeating the same decision returns `200` and changes nothing.
 
-**Change an Entry's Activity (#57).** Request: `{entry_id, name}`; `name` is free text or null (null = none). The name is resolved as in 03-data-model Invariants (an Active match, an alias → its target, otherwise a new Active Activity), then the Entry gets it with Activity source me. Response `200 {entry}`; an Entry not on the Server → 400 `entry_not_found`. Repeating it changes nothing.
+**Change an Entry's Activity (#57).** Request: `{entry_id, name}`; `name` is free text or null (null = none). The name is resolved as in 03-data-model Invariants (an Active match, an alias → its target, otherwise a new Active Activity), then the Entry gets it with Activity source me. A non-null name that is empty after trimming → 400 `activity_name_blank` (null still means none); over 60 characters → 400 `activity_name_too_long`. Response `200 {entry}`; an Entry not on the Server → 400 `entry_not_found`. Repeating it changes nothing.
 
-**Rename an Activity.** Request: `{id, name}`. Response `200 {activity}`; another Activity (any status) already has that normalised name → 400 `activity_name_taken`; not mine, or merged → 400 `activity_not_found`. The same name again is a no-op.
+**Rename an Activity.** Request: `{id, name}`. Response `200 {activity}`; a name that is empty after trimming → 400 `activity_name_blank`; over 60 characters after normalising → 400 `activity_name_too_long`; another Activity (any status) already has that normalised name → 400 `activity_name_taken`; not mine, or merged → 400 `activity_not_found`. The same name again is a no-op.
+
+**Set a Category's target (#74).** Request: `{category_id, minutes}`; `minutes` is 30 to 4800, or null to clear. Response `200 {category}`; out of range → 400 `category_target_out_of_range`; not my Category → 400 `category_not_found`. Repeating it changes nothing. The app sends whole or half hours as minutes.
 
 **Merge an Activity.** Request: `{from, into}`. Moves my Entries from `from` to `into`, re-points earlier aliases of `from` to `into`, and marks `from` merged. Response `200 {activity}` (the target). A missing, not-mine or already merged `into`, a missing `from`, or `from = into` → 400 `activity_not_found`; repeating a done merge → `200`, no change.
 
 **Activity counts.** `rpc/activity_slots()` returns `(activity_id, dow, hour, n)` rows: Entries with an Activity over the last 12 weeks, by weekday and hour of the start in each Entry's own time zone. The chips are computed on the phone from these rows (AC-8.4).
 
-**Review done.** Request: `{week_start}` (the Monday of the week shown, my time zone), `Prefer: resolution=ignore-duplicates`.
+**Review done.** Request: `{week_start, next_change?}` (the Monday of the week shown, my time zone; `next_change` is one line of at most 140 characters, trimmed, empty = null), `Prefer: resolution=ignore-duplicates`. A longer note → 400 `next_change_too_long`.
 Response `201` with the row, or `[]` if already done; both mean done.
 
 **Settings.** Request: any of `{time_zone, quiet_start, quiet_end, nudge_gap_hours}` (`HH:MM`; whole hours 1–12). Response `200` with the row. On open the app sends
@@ -72,8 +75,8 @@ Response `201`. Sent on each open when permission is granted, and after "Turn on
 **Local copy refresh.** Six reads, run together; the app replaces the Local copy only when all succeed:
 - `GET /entries?ended_at=gt.<previous Monday 00:00>&order=started_at` with `id, text, started_at, ended_at, time_zone,
   category_id, tag_source, activity_id, activity_source, suggested_category_id, tagging_gave_up_at, created_at` (`created_at` orders overlaps, AC-5.1);
-- `GET /categories` (`id, name, description, status`); `GET /activities` (`id, name, status, merged_into_id`, all of mine); `rpc/activity_slots()`; `GET /settings` (`time_zone, quiet_start, quiet_end, nudge_gap_hours`);
-- `GET /weekly_reviews?week_start=gte.<previous Monday>` (`week_start`), so the Week page shows Review done offline too.
+- `GET /categories` (`id, name, description, status, weekly_target_minutes`); `GET /activities` (`id, name, status, merged_into_id`, all of mine); `rpc/activity_slots()`; `GET /settings` (`time_zone, quiet_start, quiet_end, nudge_gap_hours`);
+- `GET /weekly_reviews?week_start=gte.<previous Monday>` (`week_start, next_change`), so the Week page shows Review done offline too.
 
 An earlier week is the same Entry read with `ended_at=gt.<week start>&started_at=lt.<week end>`, shown but not stored.
 
@@ -107,6 +110,11 @@ constraint name, or the `message` of an error raised by a database trigger or fu
 | `week_start_not_monday` | `week_start` isn't a Monday | 400 | No | App bug; "Couldn't save." |
 | `entry_not_found` | Edit (`200 []`, mapped by the app) or Tag or Activity change (`set_entry_tag`, `set_entry_activity`, 400) of an Entry not on the Server | 400 (the rpcs only) | No | "This Entry was deleted." and refresh |
 | `category_not_active` | Tag change to a Category that isn't active | 400 | No | "Pick another category." and refresh |
+| `activity_name_blank` | Rename, or an Activity change with a non-null name, that is empty after trimming | 400 | No | "Write a name." on the name |
+| `activity_name_too_long` | Rename or Activity change with a name over 60 characters after normalising | 400 | No | "Use 60 characters or fewer." on the name |
+| `next_change_too_long` | Review done note over 140 characters | 400 | No | "Use 140 characters or fewer." on the note |
+| `category_target_out_of_range` | Target not 30 to 4800 minutes | 400 | No | "Choose 0.5 to 80 hours." on the target |
+| `category_not_found` | Target for a Category that isn't mine | 400 | No | "That category is gone." and refresh |
 | `activity_name_taken` | Rename to a name another Activity has (any status) | 400 | No | "You already have an Activity with that name." on the name |
 | `activity_not_found` | Rename or merge with an Activity that isn't mine or is merged, or merge into itself | 400 | No | "That Activity is gone." and refresh |
 | `category_already_decided` | Approve a rejected, or reject an active, Category | 400 | No | Refresh; nothing to do |
@@ -121,15 +129,15 @@ are refused by column grants (403); the app never sends them.
 
 | Operation | Who may call | Check |
 |---|---|---|
-| Entry, settings, Review done, Push subscription writes | Signed-in user | RLS policies for `authenticated` only, `user_id = auth.uid()`. Insert, update, delete revoked on all `public` tables from `anon` and `authenticated`, then granted per table: `entries` select, delete, insert `id, text, started_at, ended_at, time_zone, form_opened_at`, update `text, started_at, ended_at, time_zone`; `categories` select; `activities` select (writes only through the rpcs); `settings` select, update `time_zone, quiet_start, quiet_end, nudge_gap_hours`; `weekly_reviews` select, insert; `push_subscriptions` select, insert, update; `notifications_sent` none. Backend writes the SQL |
+| Entry, settings, Review done, Push subscription writes | Signed-in user | RLS policies for `authenticated` only, `user_id = auth.uid()`. Insert, update, delete revoked on all `public` tables from `anon` and `authenticated`, then granted per table: `entries` select, delete, insert `id, text, started_at, ended_at, time_zone, form_opened_at`, update `text, started_at, ended_at, time_zone`; `categories` select (the target is written only through `set_category_target`); `activities` select (writes only through the rpcs); `settings` select, update `time_zone, quiet_start, quiet_end, nudge_gap_hours`; `weekly_reviews` select, insert `week_start, next_change`; `push_subscriptions` select, insert, update; `notifications_sent` none. Backend writes the SQL |
 | Reads | Signed-in user | RLS and the grants above |
-| `set_entry_tag`, `approve_category`, `reject_category`, `set_entry_activity`, `rename_activity`, `merge_activity`, `activity_slots` | Signed-in user | `security definer`, `set search_path = ''`, execute granted to `authenticated` only; explicit `user_id = auth.uid()` check on the Entry, Category and Activity, and on every update inside (`merge_activity` re-points only `where user_id = auth.uid() and activity_id = p_from`) |
+| `set_entry_tag`, `approve_category`, `reject_category`, `set_entry_activity`, `rename_activity`, `merge_activity`, `set_category_target`, `activity_slots` | Signed-in user | `security definer`, `set search_path = ''`, execute granted to `authenticated` only; explicit `user_id = auth.uid()` check on the Entry, Category and Activity, and on every update inside (`merge_activity` re-points only `where user_id = auth.uid() and activity_id = p_from`) |
 | `tag-entries`, `send-notifications` | pg_cron and the Entry insert trigger only | `x-job-secret` equals a Server secret, which the trigger and pg_cron jobs read from Supabase Vault, never inline; JWT check off; the function uses the service role |
 | Sign in | Any email | Sign-ups on; a new email gets a new, seeded account; same message either way (AC-7.2) |
 
 ## Behaviour
 
-- **Idempotency:** create and Review done ignore duplicates by key; edit, settings, Tag change, Activity change, rename and the push upsert set
+- **Idempotency:** create and Review done ignore duplicates by key; edit, settings, Tag change, Activity change, rename, target and the push upsert set
   the same values again; delete, approve, reject and merge are no-ops when already done. So every phone write is safe to resend
   after an unknown result (AC-2.2). Internal calls are safe to repeat (D2; `notifications_sent` key).
 - **Pagination:** none. The refresh returns at most ~400 Entries, a week ~200, under the 1,000-row default limit.
@@ -156,7 +164,7 @@ rebuild the Local copy. `docs/mvp-design.md` (Outbox sync) is superseded here by
 |---|---|---|
 | Day view and Log sheet | UC-1 create, edit, delete, resend, backfill (earlier days: the same `GET /entries` as earlier weeks) | Yes |
 | App open | UC-2 refresh, time zone, Push subscription | Yes |
-| Week page | UC-4 weeks, Tag change, approve/reject, Review done; Activity totals from the Local copy, rename, merge (AC-8.3, AC-8.5) | Yes |
+| Week page | UC-4 weeks, Tag change, approve/reject, Review done with its note, Category target; targets and last week's note from the Local copy; Activity totals, rename, merge (AC-5.4, AC-5.5, AC-8.3, AC-8.5) | Yes |
 | Log sheet chips, Day view Activity picker | `activity_slots()` and `activities` from the Local copy; `set_entry_activity` (AC-8.2, AC-8.4) | Yes |
 | Settings page | AC-6.2, AC-6.3, AC-6.4 | Yes |
 | Service worker / iOS | Push payloads | Yes |

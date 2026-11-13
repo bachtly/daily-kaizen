@@ -62,8 +62,9 @@ erDiagram
 | categories.name | text | no | | Unique per user, case-insensitive, all statuses |
 | categories.description | text | no | | For the AI; starting set below, AI-written for Suggested |
 | categories.status | enum `active`, `suggested`, `rejected` | no | `active` | `rejected` is new vs the sketch (AC-4.3) |
+| categories.weekly_target_minutes | integer | yes | null | Weekly target (#74, AC-5.4); null = none. Check 30 to 4800 (`category_target_out_of_range`). Not versioned: every week is compared with the current value |
 | activities.id | uuid | no | generated | PK |
-| activities.name | text | no | | Normalised: trimmed, inner spaces collapsed. Unique per user on `lower(btrim(name))`, all statuses; a merged name stays taken as an alias |
+| activities.name | text | no | | Normalised: trimmed, inner spaces collapsed; 1 to 60 characters (check `char_length(name) <= 60`, #71). Unique per user on `lower(btrim(name))`, all statuses; a merged name stays taken as an alias |
 | activities.status | enum `active`, `merged` | no | `active` | `merged` = an alias of `merged_into_id` |
 | activities.merged_into_id | uuid | yes | null | The Activity it was merged into; set only when `merged`. FK to `activities`. Reads follow it to the end |
 | activities.created_at, updated_at | timestamptz | no | now() | **SO**. `updated_at` set by trigger |
@@ -76,6 +77,7 @@ erDiagram
 | settings.nudge_gap_hours | smallint | no | 3 | Whole hours, 1–12 (`nudge_gap_out_of_range`); the Gap length that triggers a Nudge (D6) |
 | weekly_reviews.week_start | date | no | | Monday, my time zone, checked (`week_start_not_monday`); PK with `user_id` |
 | weekly_reviews.done_at | timestamptz | no | now() | |
+| weekly_reviews.next_change | text | yes | null | One change for the next week (#74, AC-5.5); trimmed, null when empty; check `char_length <= 140`. Written with the insert and never edited |
 | notifications_sent.kind | enum `nudge`, `review_reminder` | no | | |
 | notifications_sent.about | text | no | | For a Nudge, the Gap start; for a Review reminder, the week start. PK with `user_id`, `kind` |
 | notifications_sent.sent_at | timestamptz | no | now() | Send time, for NFR-6 and NFR-7 |
@@ -112,6 +114,8 @@ Examples from README §Categories.
 | Status moves only `suggested → active` or `suggested → rejected` | Server approve/reject code |
 | One Nudge per Gap and one Review reminder per week | DB PK `(user_id, kind, about)` on `notifications_sent` |
 | One Review done per week | DB PK `(user_id, week_start)` |
+| Activity names are at most 60 characters; the phone rpcs refuse more, the AI path cuts to 60 and never fails on it | DB check, rpcs, `save_ai_labels` |
+| A Category target is null or 30 to 4800 minutes; only `set_category_target` writes it, for my Category (`user_id = auth.uid()`) | DB check, rpc |
 | The text-edit rule above also clears `activity_id` and `activity_source` when `activity_source` isn't `me` (AC-8.2); with `me` they stay | Server write path |
 | An AI label saves only when its own source isn't `me` and `updated_at` is unchanged since the AI call began; the Category part and the Activity part are judged separately, in one transaction | Server tagging code (`save_ai_labels`) |
 | Resolving a name (AI or phone): normalise; an Active match → it; a merged match → its `merged_into_id`, followed to the end; otherwise insert it Active. One SQL helper serves both | Server code |
@@ -211,6 +215,20 @@ Categories give the kind of time but not what it was for: "Company A" can be Dee
 Consequences:
 - A merged-away name keeps the unique name slot and resolves to its target, so renaming or merging never loses a label.
 - A wrong AI Activity costs one correction (AC-8.2); a label I set is never changed.
+
+### D9 · Weekly targets and one change for next week (#74, approved 2026-11-13)
+
+A time audit is a loop of log, review, intend, change. The Week page covers log and review; this adds the target to compare with and one action out of the review, and nothing else. Source: the #57 research report linked in #74.
+
+| Option | Outcome | Reason |
+|---|---|---|
+| An optional target per Category on `categories`, and one note saved with Review done, shown the next week | **Chosen** | Categories are stable; the note is in front of me while that week happens; one column each, no new table |
+| Targets per Activity | Rejected | Activities come and go (merge, rename); Categories are stable |
+| Colour for over / under target | Rejected | The Waste target is a ceiling and Deep a floor; the app doesn't judge which, so the bar passing the tick is shown plainly |
+| Versioned targets (a past week compared with its own target) | Rejected | A table and a history view for a rare edit; the current target is enough |
+| A streak or score for meeting targets | Rejected | Judges me; the Review reminder stays the only nudge |
+
+Consequences: Review done needs a connection as before; the note can't be edited because Review done is once per week.
 
 ## Open questions
 
