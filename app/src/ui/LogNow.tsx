@@ -30,7 +30,7 @@ export function useLogNow() {
   const fab = <LogFab onOpen={(opener) => { setNow(Date.now()); setOpen(opener); }} />;
   const sheet = open === false ? undefined : (
     <LogSheet
-      mode={{ kind: 'now' }} entries={copy.entries} timeZone={deviceZone()} now={now} loading={!ready}
+      mode={{ kind: 'now' }} entries={copy.entries} timeZone={deviceZone()} now={now} loading={!ready} activities={copy.activities} slots={copy.slots}
       connection={online ? 'online' : 'offline'} returnFocusTo={open}
       onSave={(entry) => writes.createEntry(entry)} // refreshes the Local copy after the Server confirms
       onSaved={() => setOpen(false)} onClose={() => setOpen(false)}
