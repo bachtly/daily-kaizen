@@ -16,6 +16,16 @@ export interface CategoryRow {
   status: "active" | "suggested" | "rejected";
 }
 
+/** One of my own corrections: an Entry where I set a label (source me), newest first from the db. */
+export interface CorrectionRow {
+  text: string;
+  tag_source: string | null;
+  activity_source: string | null;
+  category_name: string | null;
+  /** Already the merge target's name for a merged Activity; null = none. */
+  activity_name: string | null;
+}
+
 export interface TagReply {
   category_name: string;
   proposed: { name: string; description: string } | null;
@@ -54,6 +64,8 @@ export interface TagDb {
   getCategories(userId: string): Promise<CategoryRow[]>;
   /** Names of the user's Active Activities. */
   getActiveActivityNames(userId: string): Promise<string[]>;
+  /** The user's newest Entries with a `me` label, newest first (max 100), for prompt examples. */
+  getCorrections(userId: string): Promise<CorrectionRow[]>;
   saveAiLabels(args: SaveAiLabelsArgs): Promise<boolean>;
   recordTagFailure(entryId: string, readUpdatedAt: string): Promise<void>;
 }
