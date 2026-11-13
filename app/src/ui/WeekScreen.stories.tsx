@@ -105,6 +105,15 @@ export const ActivityOpen: Story = {
 const renameFails = (error: 'activity_name_blank' | 'activity_name_too_long'): WeekActions => ({
   ...actions, renameActivity: () => Promise.resolve({ ok: false as const, error }),
 });
+const clearName = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+  await openFirstActivity({ canvasElement });
+  [...canvasElement.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Rename')?.click();
+  await new Promise((r) => setTimeout(r, 50));
+  const input = canvasElement.querySelector('.act-manage input') as HTMLInputElement;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '');
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 100));
+};
 const tryRename = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
   await openFirstActivity({ canvasElement });
   const click = (text: string) => [...canvasElement.querySelectorAll('button')].find((b) => b.textContent === text)?.click();
@@ -119,9 +128,9 @@ export const RenameTooLong: Story = {
   play: tryRename,
 };
 export const RenameBlank: Story = {
-  name: 'With Activities: rename refused, blank',
+  name: 'With Activities: rename, blank name',
   args: { entries: withActivities, activities, actions: renameFails('activity_name_blank') },
-  play: tryRename,
+  play: clearName,
 };
 export const ActivitiesOffline: Story = {
   name: 'With Activities: offline',

@@ -12,6 +12,8 @@ export type ActivityActions = {
 
 type Mode = 'rename' | 'merge' | undefined;
 
+const NAME_ERRORS = ['activity_name_taken', 'activity_name_blank', 'activity_name_too_long'];
+
 const messageFor = (error: string) =>
   error === 'activity_name_taken' ? 'You already have an Activity with that name.'
   : error === 'activity_name_blank' ? 'Write a name.'
@@ -45,6 +47,7 @@ function Manage({ activity, others, online, actions }: {
   const [name, setName] = useState(activity.name);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>();
+  const [onName, setOnName] = useState(false); // the message is about the name: it shows under the field
 
   // A done write refreshes the Local copy, which re-renders the panel; a refusal keeps the form open with its message.
   const run = async (call: () => Promise<Result<unknown>>) => {
@@ -52,13 +55,17 @@ function Manage({ activity, others, online, actions }: {
     if (!online) { setMessage('Needs a connection.'); return; }
     setBusy(true);
     setMessage(undefined);
+    setOnName(false);
     const r = await call();
     setBusy(false);
     if (r.ok) { setMode(undefined); return; }
     if (r.error === 'session_lost') return; // the Signed out banner already says it
     setMessage(messageFor(r.error));
+    setOnName(NAME_ERRORS.includes(r.error));
   };
-  const close = () => { setMode(undefined); setMessage(undefined); };
+  const close = () => { setMode(undefined); setMessage(undefined); setOnName(false); };
+  // Under the name field: the Server's answer about the name, or the blank it would refuse.
+  const nameMessage = mode === 'rename' ? (onName ? message : name.trim() === '' ? messageFor('activity_name_blank') : undefined) : undefined;
 
   return (
     <div className="act-manage">
@@ -72,8 +79,10 @@ function Manage({ activity, others, online, actions }: {
         <form onSubmit={(e) => { e.preventDefault(); void run(() => actions.renameActivity(activity.id, name)); }}>
           <label>
             <span className="sr-only">Activity name</span>
-            <input className="text" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} aria-invalid={message ? true : undefined} />
+            <input className="text" value={name} onChange={(e) => { setName(e.target.value); setOnName(false); setMessage(undefined); }} maxLength={60}
+              aria-invalid={nameMessage ? true : undefined} aria-describedby={nameMessage ? 'rename-error' : undefined} />
           </label>
+          {nameMessage && <p id="rename-error" className="error" role="alert">{nameMessage}</p>}
           <div className="row-actions">
             <button className="secondary" type="submit" disabled={busy || !online || name.trim() === ''}>Save</button>
             <button className="secondary" type="button" onClick={close}>Cancel</button>
@@ -95,7 +104,7 @@ function Manage({ activity, others, online, actions }: {
           </div>
         </>
       )}
-      {message && <p className="error" role="alert">{message}</p>}
+      {message && !(mode === 'rename' && onName) && <p className="error" role="alert">{message}</p>}
     </div>
   );
 }

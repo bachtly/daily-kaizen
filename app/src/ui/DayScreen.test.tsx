@@ -98,7 +98,7 @@ describe('DayScreen', () => {
     fireEvent.click(await screen.findByLabelText('Fill 08:00–09:30'));
     expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('08:00');
     expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('09:30');
-    fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'Commute' } });
+    fireEvent.change(screen.getByLabelText('What I did'), { target: { value: 'Commute' } });
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText('Saved.');
     expect(screen.queryByRole('dialog')).toBeNull();

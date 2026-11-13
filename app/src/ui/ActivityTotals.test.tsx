@@ -98,7 +98,17 @@ describe('ActivityTotals', () => {
     fireEvent.click(screen.getByText('Rename'));
     fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: 'Game' } });
     fireEvent.click(screen.getByText('Save'));
-    await screen.findByText(text);
+    const msg = await screen.findByText(text);
+    expect(screen.getByLabelText('Activity name').getAttribute('aria-describedby')).toBe(msg.id);
+    expect(msg.compareDocumentPosition(screen.getByText('Save')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // above Save
+  });
+
+  it('says why a blank name cannot be saved, under the field', () => {
+    mount();
+    openCompanyA();
+    fireEvent.click(screen.getByText('Rename'));
+    fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: '' } });
+    expect(screen.getByLabelText('Activity name').getAttribute('aria-describedby')).toBe(screen.getByText('Write a name.').id);
   });
 
   it('merges into a picked Active Activity, never a merged one or itself', async () => {

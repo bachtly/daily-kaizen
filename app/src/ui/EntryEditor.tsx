@@ -52,6 +52,7 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
   const [activity, setActivity] = useState(activityName);
   const [busy, setBusy] = useState<'saving' | 'deleting' | null>(null);
   const [problem, setProblem] = useState<string>();
+  const [activityProblem, setActivityProblem] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const timeError =
@@ -68,10 +69,12 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
   const run = async (kind: 'saving' | 'deleting', call: () => Promise<Result<unknown>>) => {
     setBusy(kind);
     setProblem(undefined);
+    setActivityProblem(undefined);
     const r = await call();
     setBusy(null);
     if (r.ok) onClose();
     // Session lost: the banner says it and the edit stays. Entry gone: the week page says so, as this row goes away.
+    else if (r.error === 'activity_name_blank' || r.error === 'activity_name_too_long') setActivityProblem(explain(r.error));
     else if (r.error !== 'session_lost' && r.error !== 'entry_not_found') setProblem(explain(r.error));
   };
   // The Activity goes after the text: an edited text clears an AI label, and a label I set must stay.
@@ -86,7 +89,7 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
   const disabled = busy !== null;
   return (
     <div className="entry-edit" role="group" aria-label={`Edit ${entry.text}`}>
-      <label className="field-label" htmlFor={`edit-text-${entry.id}`}>Activity</label>
+      <label className="field-label" htmlFor={`edit-text-${entry.id}`}>What I did</label>
       <input
         id={`edit-text-${entry.id}`} className="text" autoFocus value={text} readOnly={disabled}
         aria-invalid={!!textError} aria-describedby={textError ? `edit-text-error-${entry.id}` : undefined}
@@ -94,7 +97,10 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
         onKeyDown={(e) => e.key === 'Enter' && !textError && !timeError && online && !disabled && void save()}
       />
       {textError && <p id={`edit-text-error-${entry.id}`} className="error" role="alert">{textError}</p>}
-      {onSetActivity && <ActivityPicker value={activity} activities={activities} onChange={setActivity} disabled={disabled} />}
+      {onSetActivity && <ActivityPicker
+        value={activity} activities={activities} disabled={disabled} error={activityProblem}
+        onChange={(name) => { setActivity(name); setActivityProblem(undefined); }}
+      />}
       <div className="times">
         <TimeChip
           label="From" value={hhmm(from, tz)} disabled={disabled} invalid={!!timeError && from >= to}

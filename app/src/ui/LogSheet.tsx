@@ -203,7 +203,7 @@ export function LogSheet({
           </p>
         )}
 
-        <label className="field-label" htmlFor="entry-text">Activity</label>
+        <label className="field-label" htmlFor="entry-text">What I did</label>
         <input
           id="entry-text" className="text" autoFocus enterKeyHint="done" placeholder="e.g. Email triage"
           value={text} readOnly={saving} aria-invalid={!!textError} aria-describedby={textError ? 'text-error' : undefined}
