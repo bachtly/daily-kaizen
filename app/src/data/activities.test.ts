@@ -54,6 +54,34 @@ const e = (start: string, end: string, activity: string | null, category: string
 describe('activityTotals', () => {
   const bounds = weekBounds('2026-11-02', 'UTC');
 
+  it('splits an Entry equally among its Activities and the rows add up to the logged time (#79)', () => {
+    const multi = (ids: string[], start: string, end: string): ActivityEntry => ({ ...e(start, end, null, 'work'), activity_ids: ids });
+    const rows = activityTotals(
+      [
+        multi(['a', 'b'], '2026-11-03T01:00:00Z', '2026-11-03T02:00:00Z'),
+        multi(['a', 'b', 'c'], '2026-11-03T03:00:00Z', '2026-11-03T04:00:00Z'),
+        multi([], '2026-11-03T05:00:00Z', '2026-11-03T05:30:00Z'),
+      ],
+      bounds,
+    );
+    const by = Object.fromEntries(rows.map((r) => [r.activityId, r]));
+    expect(by.a.totalMs).toBeCloseTo(H / 2 + H / 3);
+    expect(by.c.totalMs).toBeCloseTo(H / 3);
+    expect(by.a.byCategory.work).toBeCloseTo(H / 2 + H / 3);
+    expect(by.null.totalMs).toBe(H / 2);
+    expect(rows.reduce((s, r) => s + r.totalMs, 0)).toBeCloseTo(2.5 * H);
+  });
+  it('1 h with two Activities is 30 min each, and a repeated Activity counts once', () => {
+    const rows = activityTotals(
+      [
+        { ...e('2026-11-03T01:00:00Z', '2026-11-03T02:00:00Z', null, null), activity_ids: ['a', 'b'] },
+        { ...e('2026-11-03T03:00:00Z', '2026-11-03T04:00:00Z', null, null), activity_ids: ['a', 'a'] },
+      ],
+      bounds,
+    );
+    expect(rows.map((r) => [r.activityId, r.totalMs])).toEqual([['a', H + H / 2], ['b', H / 2]]);
+  });
+
   it('splits Activity x Category, largest first, "(no Activity)" last', () => {
     const rows = activityTotals(
       [

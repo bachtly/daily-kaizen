@@ -36,7 +36,13 @@ export function activityChips(
   return ids.map((id) => active.get(id)!);
 }
 
-export type ActivityEntry = WeekEntry & Partial<Pick<Entry, 'activity_id'>>;
+export type ActivityEntry = WeekEntry & Partial<Pick<Entry, 'activity_id'>> & { activity_ids?: string[] };
+
+/** The Entry's distinct Activities; falls back to the single `activity_id` for a copy that has no list yet. */
+function activitiesOf(entry: ActivityEntry): string[] {
+  const ids = entry.activity_ids ?? (entry.activity_id ? [entry.activity_id] : []);
+  return [...new Set(ids)];
+}
 
 export type ActivityTotal = {
   /** null = Entries with no Activity */
@@ -51,7 +57,8 @@ export type ActivityTotal = {
 /**
  * Time per Activity, split by Category, for one week (AC-8.5), counted as in AC-5.1: past time only (to `now`, default the
  * window end), an Entry crossing a boundary counts its part inside, overlaps count once for the Entry created last.
- * Largest first; the "(no Activity)" row (`activityId` null) comes last and only when it has time. Unlogged time is not here.
+ * An Entry with several Activities splits its time equally among them (1 h with two = 30 min each), so the rows add up
+ * to the logged time (#79). Largest first; the "(no Activity)" row (`activityId` null) comes last and only when it has time. Unlogged time is not here.
  */
 export function activityTotals(
   entries: readonly ActivityEntry[],
@@ -60,12 +67,16 @@ export function activityTotals(
 ): ActivityTotal[] {
   const rows = new Map<string | null, ActivityTotal>();
   for (const { ms, entry } of ownedSegments(entries, bounds.start, Math.min(bounds.end, now))) {
-    const key = entry.activity_id ?? null;
-    let row = rows.get(key);
-    if (!row) rows.set(key, (row = { activityId: key, totalMs: 0, byCategory: {}, untaggedMs: 0 }));
-    row.totalMs += ms;
-    if (entry.category_id) row.byCategory[entry.category_id] = (row.byCategory[entry.category_id] ?? 0) + ms;
-    else row.untaggedMs += ms;
+    const ids = activitiesOf(entry);
+    const keys: (string | null)[] = ids.length ? ids : [null];
+    const share = ms / keys.length;
+    for (const key of keys) {
+      let row = rows.get(key);
+      if (!row) rows.set(key, (row = { activityId: key, totalMs: 0, byCategory: {}, untaggedMs: 0 }));
+      row.totalMs += share;
+      if (entry.category_id) row.byCategory[entry.category_id] = (row.byCategory[entry.category_id] ?? 0) + share;
+      else row.untaggedMs += share;
+    }
   }
   const none = rows.get(null);
   rows.delete(null);

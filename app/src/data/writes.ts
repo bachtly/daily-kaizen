@@ -90,6 +90,9 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
     // The one widening: generated types can't express the null the SQL function accepts.
     return rpc((signal) => supabase.rpc('set_entry_activity', args as SetEntryActivityGenerated).abortSignal(signal));
   };
+  /** Set the Entry's Activities (0 to 3 names; none = empty list), source me. Needs a connection. */
+  const setEntryActivities = (entryId: string, names: string[]) =>
+    rpc((signal) => supabase.rpc('set_entry_activities', { p_entry_id: entryId, p_names: names }).abortSignal(signal));
   const renameActivity = (id: string, name: string) =>
     rpc((signal) => supabase.rpc('rename_activity', { p_id: id, p_name: name }).abortSignal(signal));
   /** Moves `from`'s Entries and names into `into`. Repeating a done merge is fine. */
@@ -138,6 +141,7 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
     approveCategory,
     rejectCategory,
     setEntryActivity,
+    setEntryActivities,
     renameActivity,
     mergeActivity,
     reviewDone,

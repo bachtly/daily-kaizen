@@ -51,7 +51,10 @@ beforeEach(async () => {
 
 describe('refresh', () => {
   it('reads six sources and replaces the copy with refreshed_at', async () => {
-    replies.entries = ok([entry('a'), entry('b')]);
+    replies.entries = ok([
+      { ...entry('a'), entry_activities: [{ activity_id: 'z', created_at: '2026-11-03T02:00:02Z' }, { activity_id: 'y', created_at: '2026-11-03T02:00:01Z' }] },
+      { ...entry('b'), entry_activities: [] },
+    ]);
     replies.categories = ok([{ id: 'c', name: 'Work', description: 'd', status: 'active' }]);
     replies.activities = ok([{ id: 'a1', name: 'Email', status: 'active', merged_into_id: null }]);
     replies.activity_slots = ok([{ activity_id: 'a1', dow: 1, hour: 9, n: 4 }]);
@@ -65,10 +68,12 @@ describe('refresh', () => {
     expect(calls.find((c) => c.table === 'weekly_reviews')!.ops).toContainEqual(['gte', ['week_start', '2026-11-02']]);
     const copy = await readLocalCopy();
     expect(copy.entries.map((e) => e.id)).toEqual(['a', 'b']);
+    expect(copy.entries.map((e) => e.activity_ids)).toEqual([['y', 'z'], []]);
+    expect(copy.entries.every((e) => !('entry_activities' in e))).toBe(true);
     expect(copy.categories).toHaveLength(1);
     expect(copy.activities).toEqual([{ id: 'a1', name: 'Email', status: 'active', merged_into_id: null }]);
     expect(copy.slots).toEqual([{ activity_id: 'a1', dow: 1, hour: 9, n: 4 }]);
-    expect(entryOps.find(([m]) => m === 'select')![1][0]).toContain('activity_id, activity_source');
+    expect(entryOps.find(([m]) => m === 'select')![1][0]).toContain('entry_activities(activity_id, created_at)');
     expect(copy.settings).toEqual({ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00', nudge_gap_hours: 5 });
     expect(copy.reviews).toEqual([{ week_start: '2026-11-02' }]);
     expect(copy.refreshedAt).toBe(r.ok ? r.data.refreshedAt : '');
