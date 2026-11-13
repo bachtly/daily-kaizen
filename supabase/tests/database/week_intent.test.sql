@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(29);
 
 insert into auth.users (id) values
   ('00000000-0000-0000-0000-0000000000a1'), ('00000000-0000-0000-0000-0000000000a2');
@@ -38,9 +38,24 @@ select lives_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac
 select lives_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac01', null, 4800)$$, 'upper bound 4800');
 select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac01', null, 29)$$, 'P0001', 'target_out_of_range', 'below 30');
 select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac01', null, 4801)$$, 'P0001', 'target_out_of_range', 'above 4800');
-select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac03', null, 60)$$, 'P0001', 'activity_not_found', 'another user''s Activity looks missing');
-select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac01', (select id from cats where who = 'theirs'), 60)$$, 'P0001', 'category_not_found', 'another user''s Category looks missing');
-select is((select count(*)::int from activity_targets where user_id = '00000000-0000-0000-0000-0000000000a2'), 0, 'a2 sees none of a1''s rows and a1 wrote none for a2');
+select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac03', null, 60)$$, 'P0001', 'activity_not_found', 'a1: another user''s Activity looks missing');
+select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac01', (select id from cats where who = 'theirs'), 60)$$, 'P0001', 'category_not_found', 'a1: another user''s Category looks missing');
+
+-- direct writes are refused
+select throws_ok($$insert into activity_targets (activity_id, minutes) values ('00000000-0000-0000-0000-00000000ac02', 60)$$, '42501', null, 'direct insert is refused');
+select throws_ok($$update activity_targets set minutes = 60 where activity_id = '00000000-0000-0000-0000-00000000ac01'$$, '42501', null, 'direct update is refused');
+select throws_ok($$delete from activity_targets where activity_id = '00000000-0000-0000-0000-00000000ac01'$$, '42501', null, 'direct delete is refused');
+
+-- only an Active Category
+reset role;
+update categories set status = 'suggested' where id = (select id from cats where who = 'mine2');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac01', (select id from cats where who = 'mine2'), 60)$$, 'P0001', 'category_not_found', 'a suggested Category looks missing');
+reset role;
+update categories set status = 'active' where id = (select id from cats where who = 'mine2');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 
 -- null clears only the matching key
 select set_activity_target('00000000-0000-0000-0000-00000000ac01', (select id from cats where who = 'mine'), null);
@@ -56,11 +71,25 @@ select is((select minutes from activity_targets where activity_id = '00000000-00
 select is((select minutes from activity_targets where activity_id = '00000000-0000-0000-0000-00000000ac02' and category_id = (select id from cats where who = 'mine2')), 45, 'merge: a non-clashing target moves');
 select is((select count(*)::int from activity_targets where activity_id = '00000000-0000-0000-0000-00000000ac04'), 0, 'merge: nothing stays on the merged Activity');
 
+-- as a2: a1's Activity and Category look missing, a1's targets are untouched
+reset role;
+create temp table before_targets as select * from activity_targets where user_id = '00000000-0000-0000-0000-0000000000a1';
+grant select on before_targets to authenticated;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}', true);
+select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac01', null, 60)$$, 'P0001', 'activity_not_found', 'a2: a1''s Activity looks missing');
+select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac03', (select id from cats where who = 'mine'), 60)$$, 'P0001', 'category_not_found', 'a2: a1''s Category looks missing');
+select throws_ok($$select set_activity_target('00000000-0000-0000-0000-00000000ac01', null, null)$$, 'P0001', 'activity_not_found', 'a2 cannot clear a1''s target');
+select is((select count(*)::int from activity_targets), 0, 'a2 reads none of a1''s targets');
+reset role;
+select is((select count(*)::int from (select * from activity_targets where user_id = '00000000-0000-0000-0000-0000000000a1' except select * from before_targets) x), 0, 'a1''s targets are unchanged');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+
 -- Review done note
 select lives_ok($$insert into weekly_reviews (week_start, next_change) values ('2026-11-02', repeat('x', 140))$$, 'insert grant covers next_change, 140 allowed');
 select throws_ok($$insert into weekly_reviews (week_start, next_change) values ('2026-11-09', repeat('x', 141))$$, '23514', null, 'next_change over 140 is a check violation');
 reset role;
-select is((select count(*)::int from activity_targets where user_id = '00000000-0000-0000-0000-0000000000a2'), 0, 'another user''s rows untouched');
 
 select * from finish();
 rollback;

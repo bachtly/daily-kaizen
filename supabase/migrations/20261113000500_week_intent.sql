@@ -39,7 +39,7 @@ begin
     raise exception 'activity_not_found';
   end if;
   if p_category_id is not null then
-    perform 1 from public.categories c where c.id = p_category_id and c.user_id = uid;
+    perform 1 from public.categories c where c.id = p_category_id and c.user_id = uid and c.status = 'active';
     if not found then
       raise exception 'category_not_found';
     end if;
