@@ -1,7 +1,7 @@
 # daily-kaizen MVP: requirements
 
 Direction: [D3](03-data-model.md#decisions) (every write needs a connection; the phone keeps a read-only Local copy)
-and [D2](#decisions) (Tagging check). Sources: [`docs/mvp-design.md`](../../mvp-design.md) (`mvp-design §…`), [`README.md`](../../../README.md)
+and [D2](#decisions) (Tagging check). Sources: [`docs/mvp-design.md`](mvp-design.md) (`mvp-design §…`), [`README.md`](../../../README.md)
 §Categories, and [01-research.md](01-research.md) "Our system today" items 1 to 8 (`R1` to `R8`). Terms follow the
 [00-brief.md](00-brief.md) Glossary. (judgement) marks points not in an approved doc. Each rule is stated once, in its
 AC; use cases refer to it.
