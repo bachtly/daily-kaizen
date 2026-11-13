@@ -3,7 +3,7 @@ import type { ActivityRow, EntryRow } from '../data/db';
 import { findOverlaps } from '../data/prefill';
 import type { Result } from '../data/request';
 import type { EntryFields } from '../data/writes';
-import { ActivityPicker, activityKey } from './ActivityPicker';
+import { ActivityPicker, activityList } from './ActivityPicker';
 import { OverlapNote } from './OverlapNote';
 import { TimeChip } from './TimeChip';
 import { hhmm, withTime } from './weekFormat';
@@ -26,7 +26,7 @@ type Known = keyof typeof messages;
  * The AC-1.2 checks apply; an overlap only warns. No form-open time is sent for an edit.
  * Changing the text re-tags the Entry unless its Tag source is me (the Server clears the Tag).
  */
-export function EntryEditor({ entry, siblings, now, timeZone, online, activities = [], activityName = '', onSave, onSetActivity, onDelete, onClose }: {
+export function EntryEditor({ entry, siblings, now, timeZone, online, activities = [], activityNames = [], onSave, onSetActivities, onDelete, onClose }: {
   entry: EntryRow;
   /** Other Entries of the week, for the overlap warning. */
   siblings: readonly EntryRow[];
@@ -34,13 +34,13 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
   /** The device zone, as the row shows it, so the row and its editor agree after a zone change. */
   timeZone: string;
   online: boolean;
-  /** All of mine; the picker offers the Active ones. Without `onSetActivity` there is no picker. */
+  /** All of mine; the picker offers the Active ones. Without `onSetActivities` there is no picker. */
   activities?: readonly ActivityRow[];
-  /** The Entry's current Activity name, '' for none. */
-  activityName?: string;
+  /** The Entry's current Activity names (0 to 3), oldest first. */
+  activityNames?: readonly string[];
   onSave: (fields: EntryFields) => Promise<Result<unknown>>;
-  /** Called after the fields are saved, and only when the Activity changed; null = none. */
-  onSetActivity?: (name: string | null) => Promise<Result<unknown>>;
+  /** Called after the fields are saved, and only when the list changed; empty = none. */
+  onSetActivities?: (names: string[]) => Promise<Result<unknown>>;
   onDelete: () => Promise<Result<unknown>>;
   /** Called after a confirmed save or delete, and on Cancel. */
   onClose: () => void;
@@ -49,7 +49,7 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
   const [text, setText] = useState(entry.text);
   const [from, setFrom] = useState(Date.parse(entry.started_at));
   const [to, setTo] = useState(Date.parse(entry.ended_at));
-  const [activity, setActivity] = useState(activityName);
+  const [activity, setActivity] = useState<string[]>(() => [...activityNames]);
   const [busy, setBusy] = useState<'saving' | 'deleting' | null>(null);
   const [problem, setProblem] = useState<string>();
   const [activityProblem, setActivityProblem] = useState<string>();
@@ -78,12 +78,13 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
     else if (r.error !== 'session_lost' && r.error !== 'entry_not_found') setProblem(explain(r.error));
   };
   // The Activity goes after the text: an edited text clears an AI label, and a label I set must stay.
-  const activityChanged = !!onSetActivity && activityKey(activity).toLowerCase() !== activityKey(activityName).toLowerCase();
+  const lower = (names: readonly string[]) => activityList(names).map((n) => n.toLowerCase()).join('|');
+  const activityChanged = !!onSetActivities && lower(activity) !== lower(activityNames);
   const save = () =>
     run('saving', async () => {
       const r = await onSave({ text: text.trim(), started_at: new Date(from).toISOString(), ended_at: new Date(to).toISOString(), time_zone: tz });
       if (!r.ok || !activityChanged) return r;
-      return onSetActivity(activityKey(activity) || null);
+      return onSetActivities!(activityList(activity));
     });
 
   const disabled = busy !== null;
@@ -97,9 +98,9 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, activities
         onKeyDown={(e) => e.key === 'Enter' && !textError && !timeError && online && !disabled && void save()}
       />
       {textError && <p id={`edit-text-error-${entry.id}`} className="error" role="alert">{textError}</p>}
-      {onSetActivity && <ActivityPicker
+      {onSetActivities && <ActivityPicker
         value={activity} activities={activities} disabled={disabled} error={activityProblem}
-        onChange={(name) => { setActivity(name); setActivityProblem(undefined); }}
+        onChange={(names) => { setActivity(names); setActivityProblem(undefined); }}
       />}
       <div className="times">
         <TimeChip

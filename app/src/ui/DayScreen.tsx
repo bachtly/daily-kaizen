@@ -24,8 +24,8 @@ export type DayActions = {
   editEntry: (id: string, fields: EntryFields) => Promise<Result<unknown>>;
   deleteEntry: (id: string) => Promise<Result<unknown>>;
   setEntryTag: (entryId: string, categoryId: string) => Promise<Result<unknown>>;
-  /** `null` clears the Activity. Without it the editor has no Activity picker. */
-  setEntryActivity?: (entryId: string, name: string | null) => Promise<Result<unknown>>;
+  /** Replaces the Entry's Activities (0 to 3 names; empty clears). Without it the editor has no Activity picker. */
+  setEntryActivities?: (entryId: string, names: string[]) => Promise<Result<unknown>>;
 };
 
 export type DayViewProps = {
@@ -108,7 +108,7 @@ export function DayView({
       editEntry: watch(liveActions.editEntry),
       deleteEntry: watch(liveActions.deleteEntry),
       setEntryTag: watch(liveActions.setEntryTag),
-      setEntryActivity: liveActions.setEntryActivity && watch(liveActions.setEntryActivity),
+      setEntryActivities: liveActions.setEntryActivities && watch(liveActions.setEntryActivities),
     };
   }, [liveActions, date]);
 
@@ -127,6 +127,9 @@ export function DayView({
   }), [monday, tz, entries, now]);
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const actById = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities]);
+  /** The Entry's Activities, oldest first; a copy without the list yet falls back to the single `activity_id`. */
+  const entryActivities = (e: EntryRow) =>
+    [...new Set(e.activity_ids ?? (e.activity_id ? [e.activity_id] : []))].flatMap((id) => actById.get(id) ?? []);
   const pickerEntry = picker && entries.find((e) => e.id === picker.id);
   const refreshedLabel = refreshedAt ? hhmm(Date.parse(refreshedAt), tz) : null;
   const span = bounds.end - bounds.start;
@@ -228,15 +231,15 @@ export function DayView({
               return e.id === editId ? (
                 <EntryEditor
                   key={e.id} entry={e} siblings={entries} now={now} timeZone={tz} online={online}
-                  activities={activities} activityName={e.activity_id ? actById.get(e.activity_id)?.name : undefined}
-                  onSetActivity={actions.setEntryActivity && ((name) => actions.setEntryActivity!(e.id, name))}
+                  activities={activities} activityNames={entryActivities(e).map((a) => a.name)}
+                  onSetActivities={actions.setEntryActivities && ((names) => actions.setEntryActivities!(e.id, names))}
                   onSave={(fields) => actions.editEntry(e.id, fields)} onDelete={() => actions.deleteEntry(e.id)}
                   onClose={() => setEditId(undefined)}
                 />
               ) : (
                 <EntryLine
                   key={e.id} entry={e} category={e.category_id ? catById.get(e.category_id) : undefined}
-                  activity={e.activity_id ? actById.get(e.activity_id) : undefined} timeZone={tz}
+                  activities={entryActivities(e)} timeZone={tz}
                   onEdit={() => setEditId(e.id)} onTag={(opener) => setPicker({ id: e.id, opener })}
                 />
               );
@@ -288,7 +291,7 @@ export function DayScreen() {
     editEntry: async (id, fields) => week.afterWrite(await writes.editEntry(id, fields)),
     deleteEntry: async (id) => week.afterWrite(await writes.deleteEntry(id)),
     setEntryTag: async (entryId, categoryId) => week.afterWrite(await writes.setEntryTag(entryId, categoryId)),
-    setEntryActivity: async (entryId, name) => week.afterWrite(await writes.setEntryActivity(entryId, name)),
+    setEntryActivities: async (entryId, names) => week.afterWrite(await writes.setEntryActivities(entryId, names)),
   };
   const known = week.inLocalCopy ? copy.entries : [...copy.entries, ...week.entries];
 

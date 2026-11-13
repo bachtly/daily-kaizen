@@ -14,12 +14,12 @@ const activities: ActivityRow[] = [
   { id: 'gm', name: 'Game', status: 'active', merged_into_id: null },
   { id: 'old', name: 'Old name', status: 'merged', merged_into_id: 'ca' },
 ];
-const entry = (id: string, from: string, to: string, activity: string | null): EntryRow => ({
+const entry = (id: string, from: string, to: string, activity: string[]): EntryRow => ({
   id, text: `Entry ${id}`, started_at: `2026-11-04T${from}:00Z`, ended_at: `2026-11-04T${to}:00Z`, created_at: `2026-11-04T${to}:00Z`,
   time_zone: 'UTC', category_id: 'deep', tag_source: 'ai', suggested_category_id: null, tagging_gave_up_at: null,
-  activity_id: activity, activity_source: activity ? 'ai' : null,
+  activity_id: activity[0] ?? null, activity_ids: activity, activity_source: activity.length ? 'ai' : null,
 });
-const entries = [entry('a', '09:00', '09:40', 'ca'), entry('b', '09:40', '10:20', null)];
+const entries = [entry('a', '09:00', '09:40', ['ca']), entry('b', '09:40', '10:20', [])];
 // Wednesday is Postgres dow 3; the sheet opens at 10:20 (hour 10)
 const slots: SlotRow[] = [
   { activity_id: 'gm', dow: 3, hour: 10, n: 4 },
@@ -30,7 +30,7 @@ const ok: Result<unknown> = { ok: true, data: null };
 const fail = (error: string) => ({ ok: false, error }) as Result<unknown>;
 const acts = (over: Partial<DayActions> = {}) => ({
   createEntry: vi.fn(async () => ok), editEntry: vi.fn(async () => ok), deleteEntry: vi.fn(async () => ok), setEntryTag: vi.fn(async () => ok),
-  setEntryActivity: vi.fn<(id: string, name: string | null) => Promise<Result<unknown>>>(async () => ok), ...over,
+  setEntryActivities: vi.fn<(id: string, names: string[]) => Promise<Result<unknown>>>(async () => ok), ...over,
 });
 function day(a: ReturnType<typeof acts>, props: Partial<React.ComponentProps<typeof DayView>> = {}) {
   return render(
@@ -43,110 +43,143 @@ function day(a: ReturnType<typeof acts>, props: Partial<React.ComponentProps<typ
   );
 }
 const openEditor = (id: string) => fireEvent.click(screen.getByLabelText(new RegExp(`^Edit Entry ${id},`)));
-const label = () => screen.getByLabelText('Activity') as HTMLInputElement;
 
 afterEach(() => { cleanup(); clearDrafts(); });
 
-describe('Day view: Activity on each Entry', () => {
-  it('shows the Activity under the text, and nothing for an Entry without one', () => {
-    day(acts());
-    expect(within(screen.getByLabelText(/^Edit Entry a,/)).getByText('Company A')).toBeTruthy();
+describe('Day view: Activities on each Entry', () => {
+  it('shows the Activities as "A · B" after the text, and nothing for an Entry without any', () => {
+    day(acts(), { entries: [entry('a', '09:00', '09:40', ['ca', 'gm']), entry('b', '09:40', '10:20', [])] });
+    const row = screen.getByLabelText(/^Edit Entry a,/);
+    expect(row.querySelector('.act')?.textContent).toBe('Company A · Game');
+    expect(row.getAttribute('aria-label')).toContain('Company A · Game');
     expect(screen.getByLabelText(/^Edit Entry b,/).querySelector('.act')).toBeNull();
   });
 
-  it('shows no picker when the writes cannot set an Activity', () => {
-    day(acts({ setEntryActivity: undefined }));
+  it('shows no picker when the writes cannot set Activities', () => {
+    day(acts({ setEntryActivities: undefined }));
     openEditor('a');
-    expect(screen.queryByLabelText('Activity')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Activities' })).toBeNull();
   });
 });
 
-describe('EntryEditor: Activity', () => {
-  it('starts with the current Activity and offers Active ones only', () => {
+describe('EntryEditor: Activities', () => {
+  const picker = () => screen.getByRole('group', { name: 'Activities' });
+  const names = () => within(picker()).getAllByRole('button', { name: /^Remove / }).map((b) => b.getAttribute('aria-label'));
+  const addByChip = (name: string) => {
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Pick an Activity' })).getByText(name));
+  };
+  const addTyped = (name: string) => {
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: name } });
+    fireEvent.click(within(picker()).getByRole('button', { name: 'Add' }));
+  };
+
+  it('starts with the current Activities as chips with a remove ×, and + Add', () => {
     day(acts());
     openEditor('a');
-    expect(label().value).toBe('Company A');
+    expect(names()).toEqual(['Remove Company A']);
+    expect(screen.getByText('+ Add')).toBeTruthy();
+    expect(screen.getByText('Activities (up to 3)')).toBeTruthy();
+  });
+
+  it('offers Active ones not already on the Entry', () => {
+    day(acts());
+    openEditor('a');
+    fireEvent.click(screen.getByText('+ Add'));
     const group = screen.getByRole('group', { name: 'Pick an Activity' });
-    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual(['None', 'Company A', 'Game']);
-    expect(within(group).getByText('Company A').getAttribute('aria-pressed')).toBe('true');
+    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual(['Game']);
   });
 
-  it('saves the fields first, then the picked Activity', async () => {
+  it('saves the fields first, then the new list', async () => {
     const a = acts();
     day(a);
     openEditor('a');
-    fireEvent.click(within(screen.getByRole('group', { name: 'Pick an Activity' })).getByText('Game'));
+    addByChip('Game');
+    expect(names()).toEqual(['Remove Company A', 'Remove Game']);
     fireEvent.click(screen.getByText('Save'));
-    await waitFor(() => expect(a.setEntryActivity).toHaveBeenCalledWith('a', 'Game'));
-    expect(vi.mocked(a.editEntry).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(a.setEntryActivity).mock.invocationCallOrder[0]);
+    await waitFor(() => expect(a.setEntryActivities).toHaveBeenCalledWith('a', ['Company A', 'Game']));
+    expect(vi.mocked(a.editEntry).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(a.setEntryActivities).mock.invocationCallOrder[0]);
   });
 
-  it('takes a new typed name, trimmed', async () => {
+  it('takes a new typed name, trimmed, and ignores one already on the Entry', async () => {
     const a = acts();
     day(a);
     openEditor('b');
-    fireEvent.change(label(), { target: { value: '  Side   project ' } });
+    addTyped('  Side   project ');
+    addTyped('side PROJECT');
+    expect(names()).toEqual(['Remove Side project']);
     fireEvent.click(screen.getByText('Save'));
-    await waitFor(() => expect(a.setEntryActivity).toHaveBeenCalledWith('b', 'Side project'));
+    await waitFor(() => expect(a.setEntryActivities).toHaveBeenCalledWith('b', ['Side project']));
   });
 
-  it('caps the Activity field at 60 characters', () => {
+  it('caps the typed name at 60 characters', () => {
     day(acts());
     openEditor('a');
-    expect(label().getAttribute('maxlength')).toBe('60');
+    fireEvent.click(screen.getByText('+ Add'));
+    expect(screen.getByLabelText('Activity name').getAttribute('maxlength')).toBe('60');
   });
 
-  it.each([
-    ['activity_name_blank', 'Write an Activity name, or choose None.'],
-    ['activity_name_too_long', 'Use 60 characters or fewer.'],
-  ] as const)('shows a message when the Server answers %s, and keeps the editor open', async (error, text) => {
-    const a = acts({ setEntryActivity: vi.fn(async () => fail(error)) });
-    day(a);
-    openEditor('b');
-    fireEvent.change(label(), { target: { value: 'Side project' } });
-    fireEvent.click(screen.getByText('Save'));
-    const msg = await screen.findByText(text);
-    expect(label().getAttribute('aria-describedby')).toBe(msg.id);
-    expect(msg.previousElementSibling).toBe(label()); // right under the Activity field
+  it('stops at 3: + Add goes away', () => {
+    const sp: ActivityRow = { id: 'sp', name: 'Side project', status: 'active', merged_into_id: null };
+    day(acts(), { entries: [entry('a', '09:00', '09:40', ['ca', 'gm', 'sp']), entry('b', '09:40', '10:20', [])], activities: [...activities, sp] });
+    openEditor('a');
+    expect(names()).toHaveLength(3);
+    expect(screen.queryByText('+ Add')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Remove Game'));
+    expect(screen.getByText('+ Add')).toBeTruthy();
   });
 
-  it('None clears the Activity', async () => {
+  it('× removes one, and removing all clears the list', async () => {
     const a = acts();
     day(a);
     openEditor('a');
-    fireEvent.click(screen.getByText('None'));
+    fireEvent.click(screen.getByLabelText('Remove Company A'));
     fireEvent.click(screen.getByText('Save'));
-    await waitFor(() => expect(a.setEntryActivity).toHaveBeenCalledWith('a', null));
+    await waitFor(() => expect(a.setEntryActivities).toHaveBeenCalledWith('a', []));
   });
 
-  it('leaves the Activity alone when it did not change, so a text edit can be re-labelled by the AI', async () => {
+  it('leaves the Activities alone when they did not change, so a text edit can be re-labelled by the AI', async () => {
     const a = acts();
     day(a);
     openEditor('a');
     fireEvent.change(screen.getByLabelText('What I did'), { target: { value: 'New text' } });
     fireEvent.click(screen.getByText('Save'));
     await waitFor(() => expect(a.editEntry).toHaveBeenCalled());
-    expect(a.setEntryActivity).not.toHaveBeenCalled();
+    expect(a.setEntryActivities).not.toHaveBeenCalled();
   });
 
-  it('keeps the editor open with a message when the Activity write fails', async () => {
-    const a = acts({ setEntryActivity: vi.fn(async () => fail('server')) });
+  it.each([
+    ['activity_name_blank', 'Write an Activity name, or choose None.'],
+    ['activity_name_too_long', 'Use 60 characters or fewer.'],
+  ] as const)('shows a message when the Server answers %s, and keeps the editor open', async (error, text) => {
+    const a = acts({ setEntryActivities: vi.fn(async () => fail(error)) });
+    day(a);
+    openEditor('b');
+    addTyped('Side project');
+    fireEvent.click(screen.getByText('Save'));
+    expect(await within(picker()).findByText(text)).toBeTruthy();
+    expect(screen.getByText('Save')).toBeTruthy();
+  });
+
+  it('keeps the editor open with a message when the Activities write fails', async () => {
+    const a = acts({ setEntryActivities: vi.fn(async () => fail('server')) });
     day(a);
     openEditor('a');
-    fireEvent.click(screen.getByText('Game'));
+    addByChip('Game');
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText("Couldn't save. Try again.");
-    expect(label().value).toBe('Game');
+    expect(names()).toEqual(['Remove Company A', 'Remove Game']);
   });
 
-  it('does not set the Activity when saving the fields fails', async () => {
+  it('does not set the Activities when saving the fields fails', async () => {
     const a = acts({ editEntry: vi.fn(async () => fail('unknown')) });
     day(a);
     openEditor('a');
-    fireEvent.click(screen.getByText('Game'));
+    addByChip('Game');
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText('Needs a connection.');
-    expect(a.setEntryActivity).not.toHaveBeenCalled();
+    expect(a.setEntryActivities).not.toHaveBeenCalled();
   });
 });
 
