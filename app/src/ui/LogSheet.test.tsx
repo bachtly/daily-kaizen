@@ -19,7 +19,7 @@ function mount(onSave: (e: NewEntry) => Promise<Result<unknown>>, extra = {}) {
     </MemoryRouter>,
   );
 }
-const type = (v: string) => fireEvent.change(screen.getByLabelText('Activity'), { target: { value: v } });
+const type = (v: string) => fireEvent.change(screen.getByLabelText('What I did'), { target: { value: v } });
 
 const saved = vi.fn();
 const closed = vi.fn();
@@ -58,7 +58,7 @@ describe('LogSheet: Log now', () => {
     await savedOk();
     const sent = onSave.mock.calls[0][0];
     expect(sent).toMatchObject({ text: 'Reading', started_at: '2026-11-04T09:40:00.000Z', ended_at: '2026-11-04T10:52:00.000Z', time_zone: 'UTC' });
-    expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('What I did') as HTMLInputElement).value).toBe('');
   });
 
   it('keeps the text and resends with the same id after an unknown result (AC-2.2)', async () => {
@@ -69,7 +69,7 @@ describe('LogSheet: Log now', () => {
     type('Reading');
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText(/Needs a connection/);
-    expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('Reading');
+    expect((screen.getByLabelText('What I did') as HTMLInputElement).value).toBe('Reading');
     fireEvent.click(screen.getByText('Save'));
     await savedOk();
     expect(onSave.mock.calls[1][0].id).toBe(onSave.mock.calls[0][0].id);
@@ -129,7 +129,7 @@ describe('LogSheet: Log now', () => {
     type('Reading');
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText(/Signed out/);
-    expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('Reading');
+    expect((screen.getByLabelText('What I did') as HTMLInputElement).value).toBe('Reading');
   });
 
   it('maps field error keys to messages on the field', async () => {
@@ -188,7 +188,7 @@ describe('LogSheet: Log now', () => {
     cleanup();
     mount(vi.fn());
     fireEvent.click(screen.getByRole('button', { name: 'Standup' }));
-    expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('Standup');
+    expect((screen.getByLabelText('What I did') as HTMLInputElement).value).toBe('Standup');
   });
 });
 
@@ -232,7 +232,7 @@ describe('LogSheet: closing', () => {
     cleanup();
     onSave.mockResolvedValueOnce(ok);
     mount(onSave);
-    expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('Half typed');
+    expect((screen.getByLabelText('What I did') as HTMLInputElement).value).toBe('Half typed');
     fireEvent.click(screen.getByText('Save'));
     await savedOk();
     expect(onSave.mock.calls[1][0].id).toBe(onSave.mock.calls[0][0].id);

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { dateOf, dayBounds, lastSlot } from '../data/day';
 import { activityChips } from '../data/activities';
+import { dateOf, dayBounds, lastSlot } from '../data/day';
 import type { ActivityRow, EntryRow, SlotRow } from '../data/db';
 import { findOverlaps, prefill, recentTexts } from '../data/prefill';
 import type { Result } from '../data/request';
+import { zonedParts } from '../data/week';
 import type { NewEntry } from '../data/writes';
 import { ActivityChips, insertActivity } from './ActivityChips';
 import { ConnectionBanner, type Connection } from './ConnectionBanner';
@@ -12,7 +13,6 @@ import { OverlapNote } from './OverlapNote';
 import { RecentChips } from './RecentChips';
 import { SaveStatus, type SaveState } from './SaveStatus';
 import { TimeChip } from './TimeChip';
-import { zonedParts } from '../data/week';
 import { dayHint, formatDuration, hhmm, latestAt, shortDate, withTime } from './weekFormat';
 
 type LogEntry = Pick<EntryRow, 'id' | 'text' | 'started_at' | 'ended_at' | 'created_at'>;
@@ -203,7 +203,7 @@ export function LogSheet({
           </p>
         )}
 
-        <label className="field-label" htmlFor="entry-text">Activity</label>
+        <label className="field-label" htmlFor="entry-text">What I did</label>
         <input
           id="entry-text" className="text" autoFocus enterKeyHint="done" placeholder="e.g. Email triage"
           value={text} readOnly={saving} aria-invalid={!!textError} aria-describedby={textError ? 'text-error' : undefined}

@@ -68,13 +68,13 @@ describe('EntryEditor', () => {
     const a = actions();
     view(a);
     openEditor('a');
-    fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'Deep work' } });
+    fireEvent.change(screen.getByLabelText('What I did'), { target: { value: 'Deep work' } });
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '10:30' } });
     fireEvent.click(screen.getByText('Save'));
     await waitFor(() => expect(a.editEntry).toHaveBeenCalledWith('a', {
       text: 'Deep work', started_at: '2026-11-02T09:00:00.000Z', ended_at: '2026-11-02T10:30:00.000Z', time_zone: 'UTC',
     }));
-    await waitFor(() => expect(screen.queryByLabelText('Activity')).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText('What I did')).toBeNull());
   });
 
   it('keeps the editor and says so when the result is unknown, and maps entry_not_found', async () => {
@@ -83,7 +83,7 @@ describe('EntryEditor', () => {
     openEditor('a');
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText('Needs a connection.');
-    expect(screen.getByLabelText('Activity')).toBeTruthy();
+    expect(screen.getByLabelText('What I did')).toBeTruthy();
     a.editEntry.mockResolvedValueOnce(fail('entry_not_found'));
     fireEvent.click(screen.getByText('Save'));
     await screen.findByText('This Entry was deleted.');
@@ -92,10 +92,10 @@ describe('EntryEditor', () => {
   it('blocks Save for an empty text or To later than now, and warns about an overlap', () => {
     view(actions());
     openEditor('a');
-    fireEvent.change(screen.getByLabelText('Activity'), { target: { value: ' ' } });
+    fireEvent.change(screen.getByLabelText('What I did'), { target: { value: ' ' } });
     expect(screen.getByText('Write what you did.')).toBeTruthy();
     expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'x' } });
+    fireEvent.change(screen.getByLabelText('What I did'), { target: { value: 'x' } });
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '10:30' } });
     expect(screen.getByText(/Overlaps "Entry b 10:00–11:00"/)).toBeTruthy();
     expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(false);
@@ -166,8 +166,8 @@ describe('EntryEditor', () => {
     view(actions());
     openEditor('a');
     openEditor('b');
-    expect(screen.getAllByLabelText('Activity')).toHaveLength(1);
-    expect((screen.getByLabelText('Activity') as HTMLInputElement).value).toBe('Entry b');
+    expect(screen.getAllByLabelText('What I did')).toHaveLength(1);
+    expect((screen.getByLabelText('What I did') as HTMLInputElement).value).toBe('Entry b');
   });
 });
 

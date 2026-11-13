@@ -43,7 +43,7 @@ function day(a: ReturnType<typeof acts>, props: Partial<React.ComponentProps<typ
   );
 }
 const openEditor = (id: string) => fireEvent.click(screen.getByLabelText(new RegExp(`^Edit Entry ${id},`)));
-const label = () => screen.getByLabelText('Activity label') as HTMLInputElement;
+const label = () => screen.getByLabelText('Activity') as HTMLInputElement;
 
 afterEach(() => { cleanup(); clearDrafts(); });
 
@@ -57,7 +57,7 @@ describe('Day view: Activity on each Entry', () => {
   it('shows no picker when the writes cannot set an Activity', () => {
     day(acts({ setEntryActivity: undefined }));
     openEditor('a');
-    expect(screen.queryByLabelText('Activity label')).toBeNull();
+    expect(screen.queryByLabelText('Activity')).toBeNull();
   });
 });
 
@@ -90,6 +90,26 @@ describe('EntryEditor: Activity', () => {
     await waitFor(() => expect(a.setEntryActivity).toHaveBeenCalledWith('b', 'Side project'));
   });
 
+  it('caps the Activity field at 60 characters', () => {
+    day(acts());
+    openEditor('a');
+    expect(label().getAttribute('maxlength')).toBe('60');
+  });
+
+  it.each([
+    ['activity_name_blank', 'Write an Activity name, or choose None.'],
+    ['activity_name_too_long', 'Use 60 characters or fewer.'],
+  ] as const)('shows a message when the Server answers %s, and keeps the editor open', async (error, text) => {
+    const a = acts({ setEntryActivity: vi.fn(async () => fail(error)) });
+    day(a);
+    openEditor('b');
+    fireEvent.change(label(), { target: { value: 'Side project' } });
+    fireEvent.click(screen.getByText('Save'));
+    const msg = await screen.findByText(text);
+    expect(label().getAttribute('aria-describedby')).toBe(msg.id);
+    expect(msg.previousElementSibling).toBe(label()); // right under the Activity field
+  });
+
   it('None clears the Activity', async () => {
     const a = acts();
     day(a);
@@ -103,7 +123,7 @@ describe('EntryEditor: Activity', () => {
     const a = acts();
     day(a);
     openEditor('a');
-    fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'New text' } });
+    fireEvent.change(screen.getByLabelText('What I did'), { target: { value: 'New text' } });
     fireEvent.click(screen.getByText('Save'));
     await waitFor(() => expect(a.editEntry).toHaveBeenCalled());
     expect(a.setEntryActivity).not.toHaveBeenCalled();
@@ -140,7 +160,7 @@ describe('Log sheet: Activity chips', () => {
         />
       </MemoryRouter>,
     );
-  const text = () => (screen.getByLabelText('Activity') as HTMLInputElement).value;
+  const text = () => (screen.getByLabelText('What I did') as HTMLInputElement).value;
 
   it('replaces Recent with the Activities for this slot, then the most used overall', () => {
     mount();
@@ -153,7 +173,7 @@ describe('Log sheet: Activity chips', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Game' }));
     expect(text()).toBe('Game ');
-    fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'Standup' } });
+    fireEvent.change(screen.getByLabelText('What I did'), { target: { value: 'Standup' } });
     fireEvent.click(screen.getByRole('button', { name: 'Company A' }));
     expect(text()).toBe('Standup Company A ');
   });

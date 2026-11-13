@@ -18,10 +18,10 @@ export function EntryRow({ entry, category, activity, timeZone, onEdit, onTag }:
   const to = hhmm(Date.parse(entry.ended_at), timeZone);
   return (
     <div className="entry">
-      <button className="what" onClick={onEdit} aria-label={`Edit ${entry.text}, ${from}–${to}${activity ? `, ${activity.name}` : ""}`}>
+      <button className="what" onClick={onEdit} aria-label={`Edit ${entry.text}, ${from}–${to}${activity ? `, ${activity.name}` : ''}`}>
         <span className="text">{entry.text}</span>{' '}
         <span className="when">{from}–{to}</span>
-        {activity && <>{" "}<span className="act">{activity.name}</span></>}
+        {activity && <>{' '}<span className="act">{activity.name}</span></>}
       </button>
       <button
         className={category ? 'tag' : 'tag neutral'} style={category ? { background: categoryColour(category.name) } : undefined}

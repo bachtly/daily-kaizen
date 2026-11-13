@@ -105,6 +105,30 @@ export const LogNowActivityChips: Story = {
   name: 'With Activities: Log now chips',
   args: { ...withActivities, initialSheet: { kind: 'now' } },
 };
+const setActivityFails = (error: 'activity_name_blank' | 'activity_name_too_long'): DayActions => ({
+  ...actions, editEntry: () => Promise.resolve({ ok: true as const, data: null }),
+  setEntryActivity: () => Promise.resolve({ ok: false as const, error }),
+});
+const saveWithNewActivity = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+  await new Promise((r) => setTimeout(r, 100));
+  const input = canvasElement.querySelector('.activity-picker input') as HTMLInputElement;
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  set.call(input, 'Side project');
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  [...canvasElement.querySelectorAll<HTMLButtonElement>('.entry-edit button')].find((b) => b.textContent === 'Save')?.click();
+  await new Promise((r) => setTimeout(r, 100));
+};
+export const EditActivityTooLong: Story = {
+  name: 'With Activities: edit refused, name too long',
+  args: { ...withActivities, initialEditId: 't2', actions: setActivityFails('activity_name_too_long') },
+  play: saveWithNewActivity,
+};
+export const EditActivityBlank: Story = {
+  name: 'With Activities: edit refused, name blank',
+  args: { ...withActivities, initialEditId: 't2', actions: setActivityFails('activity_name_blank') },
+  play: saveWithNewActivity,
+};
 export const EditActivity: Story = {
   name: 'With Activities: edit an Entry',
   args: { ...withActivities, initialEditId: 't2' },
