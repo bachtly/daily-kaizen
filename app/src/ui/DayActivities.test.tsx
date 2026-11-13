@@ -90,6 +90,25 @@ describe('EntryEditor: Activity', () => {
     await waitFor(() => expect(a.setEntryActivity).toHaveBeenCalledWith('b', 'Side project'));
   });
 
+  it('caps the Activity field at 60 characters', () => {
+    day(acts());
+    openEditor('a');
+    expect(label().getAttribute('maxlength')).toBe('60');
+  });
+
+  it.each([
+    ['activity_name_blank', 'Write an Activity name, or choose None.'],
+    ['activity_name_too_long', 'Use 60 characters or fewer.'],
+  ] as const)('shows a message when the Server answers %s, and keeps the editor open', async (error, text) => {
+    const a = acts({ setEntryActivity: vi.fn(async () => fail(error)) });
+    day(a);
+    openEditor('b');
+    fireEvent.change(label(), { target: { value: 'Side project' } });
+    fireEvent.click(screen.getByText('Save'));
+    await screen.findByText(text);
+    expect(screen.getByLabelText('Activity label')).toBeTruthy();
+  });
+
   it('None clears the Activity', async () => {
     const a = acts();
     day(a);

@@ -102,6 +102,27 @@ export const ActivityOpen: Story = {
   args: { entries: withActivities, activities },
   play: openFirstActivity,
 };
+const renameFails = (error: 'activity_name_blank' | 'activity_name_too_long'): WeekActions => ({
+  ...actions, renameActivity: () => Promise.resolve({ ok: false as const, error }),
+});
+const tryRename = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+  await openFirstActivity({ canvasElement });
+  const click = (text: string) => [...canvasElement.querySelectorAll('button')].find((b) => b.textContent === text)?.click();
+  click('Rename');
+  await new Promise((r) => setTimeout(r, 50));
+  click('Save');
+  await new Promise((r) => setTimeout(r, 100));
+};
+export const RenameTooLong: Story = {
+  name: 'With Activities: rename refused, too long',
+  args: { entries: withActivities, activities, actions: renameFails('activity_name_too_long') },
+  play: tryRename,
+};
+export const RenameBlank: Story = {
+  name: 'With Activities: rename refused, blank',
+  args: { entries: withActivities, activities, actions: renameFails('activity_name_blank') },
+  play: tryRename,
+};
 export const ActivitiesOffline: Story = {
   name: 'With Activities: offline',
   args: { entries: withActivities, activities, connection: 'offline' },
