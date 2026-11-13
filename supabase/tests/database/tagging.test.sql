@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(38);
 
 insert into auth.users (id) values ('00000000-0000-0000-0000-0000000000a1');
 select seed_account('00000000-0000-0000-0000-0000000000a1');
@@ -21,12 +21,12 @@ create function eid(n int) returns uuid language sql as $$
 create function upd(n int) returns timestamptz language sql as $$ select updated_at from entries where id = eid(n) $$;
 
 -- Privileges: service_role only
-select is((select count(*)::int from pg_proc where proname in ('untagged_due', 'save_ai_tag', 'record_tag_failure')
+select is((select count(*)::int from pg_proc where proname in ('untagged_due', 'save_ai_labels', 'record_tag_failure')
   and has_function_privilege('service_role', oid, 'execute')
   and not has_function_privilege('authenticated', oid, 'execute')
   and not has_function_privilege('anon', oid, 'execute')), 3, 'helpers execute for service_role only');
 select ok(not has_function_privilege('authenticated', 'public.entries_notify_tagging()', 'execute'), 'trigger function not executable by authenticated');
-select is((select count(*)::int from pg_proc where proname in ('untagged_due', 'save_ai_tag', 'record_tag_failure', 'entries_notify_tagging')
+select is((select count(*)::int from pg_proc where proname in ('untagged_due', 'save_ai_labels', 'record_tag_failure', 'entries_notify_tagging')
   and prosecdef and proconfig = array['search_path=""']), 4, 'all security definer with empty search_path');
 
 -- untagged_due: oldest first, over 2 min old, not given up, untagged
@@ -37,17 +37,35 @@ select mk(4, interval '40 minutes');                     -- oldest
 select mk(5, interval '25 minutes');                     -- given up
 update entries set tagging_gave_up_at = now() where id = eid(5);
 select mk(6, interval '15 minutes');                     -- tagged
-update entries set category_id = (select id from deep), tag_source = 'me', tagged_at = now() where id = eid(6);
-select is((select array_agg(id order by created_at) from untagged_due()), array[eid(4), eid(1), eid(2)], 'untagged_due: oldest first, skips new, given up and tagged');
+update entries set category_id = (select id from deep), tag_source = 'me', tagged_at = now(), activity_source = 'ai' where id = eid(6);
+select is((select array_agg(id order by created_at) from untagged_due()), array[eid(4), eid(1), eid(2)], 'untagged_due: oldest first, skips new, given up and fully labelled');
+delete from entries;
+
+-- untagged_due also returns an Entry missing only one label (the Activities switch-on)
+select mk(7, interval '30 minutes');                     -- Category set, no Activity label yet
+update entries set category_id = (select id from deep), tag_source = 'ai', tagged_at = now() where id = eid(7);
+select mk(8, interval '29 minutes');                     -- Activity labelled, no Category
+update entries set activity_source = 'ai' where id = eid(8);
+select mk(9, interval '28 minutes');                     -- both set
+update entries set category_id = (select id from deep), tag_source = 'ai', tagged_at = now(), activity_source = 'ai' where id = eid(9);
+select mk(10, interval '27 minutes');                    -- Activity missing but given up
+update entries set category_id = (select id from deep), tag_source = 'ai', tagged_at = now(), tagging_gave_up_at = now() where id = eid(10);
+select mk(11, interval '26 minutes');                    -- both mine
+update entries set category_id = (select id from deep), tag_source = 'me', tagged_at = now(), activity_source = 'me' where id = eid(11);
+select mk(12, interval '1 minute');                      -- Activity missing but too new
+update entries set category_id = (select id from deep), tag_source = 'ai', tagged_at = now() where id = eid(12);
+select is((select array_agg(id order by created_at) from untagged_due()), array[eid(7), eid(8)], 'untagged_due: Entries missing either label, oldest first; skips both-set, mine, given up, too new');
+select is((select count(*)::int from pg_proc where proname = 'save_ai_tag'), 0, 'save_ai_tag is gone');
+select ok(exists (select 1 from pg_indexes where indexname = 'entries_activity_due_idx'), 'partial index for Entries missing an Activity label');
 delete from entries;
 select mk(n, interval '10 minutes' + n * interval '1 minute') from generate_series(1, 22) n;
 select is((select count(*)::int from untagged_due()), 20, 'untagged_due returns at most 20');
 select is((select id from untagged_due() limit 1), eid(22), 'untagged_due oldest of 22 first');
 delete from entries;
 
--- save_ai_tag: new Suggested category
+-- save_ai_labels (Category part): new Suggested category
 select mk(1);
-select is(save_ai_tag(eid(1), upd(1), (select id from deep), 'Admin', 'Paperwork'), true, 'new Suggested category returns true');
+select is(save_ai_labels(eid(1), upd(1), (select id from deep), 'Admin', 'Paperwork', null), true, 'new Suggested category returns true');
 select results_eq($$select category_id, tag_source::text, tagged_at is not null, tag_attempts from entries where id = eid(1)$$,
   $$values ((select id from deep), 'ai', true, 0)$$, 'Entry tagged ai');
 select is((select status::text from categories where name = 'Admin'), 'suggested', 'proposed category inserted as suggested');
@@ -55,34 +73,34 @@ select is((select suggested_category_id from entries where id = eid(1)), (select
 
 -- guard misses: stale updated_at / tag_source me. Nothing inserted.
 select mk(2);
-select is(save_ai_tag(eid(2), upd(2) - interval '1 second', (select id from deep), 'Stale', 'x'), false, 'stale updated_at saves nothing');
+select is(save_ai_labels(eid(2), upd(2) - interval '1 second', (select id from deep), 'Stale', 'x', null), false, 'stale updated_at saves nothing');
 select is((select count(*)::int from categories where name = 'Stale'), 0, 'no category inserted when the guard misses');
 select is((select category_id from entries where id = eid(2)), null, 'Entry still Untagged after guard miss');
 select mk(3);
 update entries set category_id = (select id from shallow), tag_source = 'me', tagged_at = now() where id = eid(3);
-select is(save_ai_tag(eid(3), upd(3), (select id from deep), 'Mine', 'x'), false, 'tag_source me is never overwritten');
+select is(save_ai_labels(eid(3), upd(3), (select id from deep), 'Mine', 'x', null), false, 'tag_source me is never overwritten');
 select is((select category_id from entries where id = eid(3)), (select id from shallow), 'me Tag intact');
-select is(save_ai_tag(eid(99), now(), (select id from deep), null, null), false, 'missing Entry saves nothing');
+select is(save_ai_labels(eid(99), now(), (select id from deep), null, null, null), false, 'missing Entry saves nothing');
 
 -- race: two runs with the same read value, only the first applies
 select mk(4);
 create temp table t4 as select upd(4) as ts;
-select is(save_ai_tag(eid(4), (select ts from t4), (select id from deep), 'Race', 'r'), true, 'first run applies');
-select is(save_ai_tag(eid(4), (select ts from t4), (select id from shallow), 'Race2', 'r'), false, 'second run with the same read value is refused');
+select is(save_ai_labels(eid(4), (select ts from t4), (select id from deep), 'Race', 'r', null), true, 'first run applies');
+select is(save_ai_labels(eid(4), (select ts from t4), (select id from shallow), 'Race2', 'r', null), false, 'second run with the same read value is refused');
 select is((select count(*)::int from categories where name = 'Race2'), 0, 'second run inserted nothing');
 
 -- name already exists: Suggested -> linked, no new; Rejected -> no suggestion
 select mk(5);
-select is(save_ai_tag(eid(5), upd(5), (select id from deep), 'admin', 'again'), false, 'existing Suggested name (any case) is not new');
+select is(save_ai_labels(eid(5), upd(5), (select id from deep), 'admin', 'again', null), false, 'existing Suggested name (any case) is not new');
 select is((select suggested_category_id from entries where id = eid(5)), (select id from categories where name = 'Admin'), 'Entry links the existing Suggested category');
 insert into categories (user_id, name, description, status) values ('00000000-0000-0000-0000-0000000000a1', 'Nope', 'd', 'rejected');
 select mk(6);
-select is(save_ai_tag(eid(6), upd(6), (select id from deep), 'nope', 'again'), false, 'Rejected name not re-proposed');
+select is(save_ai_labels(eid(6), upd(6), (select id from deep), 'nope', 'again', null), false, 'Rejected name not re-proposed');
 select is((select suggested_category_id from entries where id = eid(6)), null, 'no suggestion for a Rejected name');
 select mk(7);
-select is(save_ai_tag(eid(7), upd(7), (select id from deep), null, null), false, 'no proposal returns false');
+select is(save_ai_labels(eid(7), upd(7), (select id from deep), null, null, null), false, 'no proposal returns false');
 select is((select tag_source::text from entries where id = eid(7)), 'ai', 'still tagged');
-select throws_ok($$select save_ai_tag(eid(7), (select updated_at from entries where id = eid(7)), (select id from categories where name = 'Admin'), null, null)$$, 'P0001', 'category_not_active', 'Tag must point at an active Category');
+select throws_ok($$select save_ai_labels(eid(7), (select updated_at from entries where id = eid(7)), (select id from categories where name = 'Admin'), null, null, null)$$, 'P0001', 'category_not_active', 'Tag must point at an active Category');
 
 -- record_tag_failure
 select mk(8);
