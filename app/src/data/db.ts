@@ -5,7 +5,7 @@ type Tables = Database['public']['Tables'];
 
 /** Columns the refresh reads (04-api Local copy refresh). */
 export const ENTRY_COLUMNS =
-  'id, text, started_at, ended_at, time_zone, category_id, tag_source, activity_id, activity_source, suggested_category_id, tagging_gave_up_at, created_at, entry_activities(activity_id, created_at)' as const;
+  'id, text, started_at, ended_at, time_zone, category_id, tag_source, activity_source, suggested_category_id, tagging_gave_up_at, created_at, entry_activities(activity_id, created_at)' as const;
 export const CATEGORY_COLUMNS = 'id, name, description, status' as const;
 export const ACTIVITY_COLUMNS = 'id, name, status, merged_into_id' as const;
 export const SETTINGS_COLUMNS = 'time_zone, quiet_start, quiet_end, nudge_gap_hours' as const;
@@ -25,8 +25,7 @@ export type EntryRow = Pick<
   | 'created_at'
 > &
   // Optional until the UI fixtures and `useLocalCopy` carry them (they live in app/src/ui); a refresh always stores them.
-  // `activity_id` is the first Activity, mirrored by the old column until the UI reads `activity_ids` (#79).
-  Partial<Pick<Tables['entries']['Row'], 'activity_id' | 'activity_source'>> & {
+  Partial<Pick<Tables['entries']['Row'], 'activity_source'>> & {
     /** The Entry's Activities (0 to 3), oldest first */
     activity_ids?: string[];
   };

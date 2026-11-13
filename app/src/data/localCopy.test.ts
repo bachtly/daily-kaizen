@@ -35,7 +35,6 @@ const entry = (id: string) => ({
   time_zone: 'UTC',
   category_id: null,
   tag_source: null,
-  activity_id: null,
   activity_source: null,
   suggested_category_id: null,
   tagging_gave_up_at: null,
@@ -73,7 +72,10 @@ describe('refresh', () => {
     expect(copy.categories).toHaveLength(1);
     expect(copy.activities).toEqual([{ id: 'a1', name: 'Email', status: 'active', merged_into_id: null }]);
     expect(copy.slots).toEqual([{ activity_id: 'a1', dow: 1, hour: 9, n: 4 }]);
-    expect(entryOps.find(([m]) => m === 'select')![1][0]).toContain('entry_activities(activity_id, created_at)');
+    const select = entryOps.find(([m]) => m === 'select')![1][0] as string;
+    expect(select).toContain('entry_activities(activity_id, created_at)');
+    // The old column must not be named, so dropping it cannot break a refresh (#79).
+    expect(select.replace('entry_activities(activity_id, created_at)', '')).not.toContain('activity_id');
     expect(copy.settings).toEqual({ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00', nudge_gap_hours: 5 });
     expect(copy.reviews).toEqual([{ week_start: '2026-11-02' }]);
     expect(copy.refreshedAt).toBe(r.ok ? r.data.refreshedAt : '');
