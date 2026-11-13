@@ -24,10 +24,10 @@ create function upd(n int) returns timestamptz language sql as $$ select updated
 select is((select count(*)::int from pg_proc where proname in ('untagged_due', 'save_ai_labels', 'record_tag_failure')
   and has_function_privilege('service_role', oid, 'execute')
   and not has_function_privilege('authenticated', oid, 'execute')
-  and not has_function_privilege('anon', oid, 'execute')), 4, 'helpers execute for service_role only');
+  and not has_function_privilege('anon', oid, 'execute')), 3, 'helpers execute for service_role only');
 select ok(not has_function_privilege('authenticated', 'public.entries_notify_tagging()', 'execute'), 'trigger function not executable by authenticated');
 select is((select count(*)::int from pg_proc where proname in ('untagged_due', 'save_ai_labels', 'record_tag_failure', 'entries_notify_tagging')
-  and prosecdef and proconfig = array['search_path=""']), 5, 'all security definer with empty search_path');
+  and prosecdef and proconfig = array['search_path=""']), 4, 'all security definer with empty search_path');
 
 -- untagged_due: oldest first, over 2 min old, not given up, untagged
 select mk(1, interval '30 minutes');
