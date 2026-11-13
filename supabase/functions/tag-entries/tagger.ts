@@ -31,6 +31,7 @@ export async function tagEntry(
   const active = cats.filter((c) => c.status === "active");
   const rejected = cats.filter((c) => c.status === "rejected");
   const activities = await db.getActiveActivityNames(entry.user_id);
+  const corrections = await db.getCorrections(entry.user_id);
 
   let categoryId: string | null = null;
   let proposed: { name: string; description: string } | null = null;
@@ -38,7 +39,7 @@ export async function tagEntry(
   let ok = false;
   try {
     const raw = await classify(
-      buildPrompt(entry.text, active, rejected, activities),
+      buildPrompt(entry.text, active, rejected, activities, corrections),
       deps.anthropicApiKey,
       deps.fetchFn,
     );
@@ -81,7 +82,9 @@ export async function tagEntry(
         name: proposed.name,
       });
     } catch (e) {
-      console.error(`tag-entries: suggestion push failed: ${(e as Error).message}`);
+      console.error(
+        `tag-entries: suggestion push failed: ${(e as Error).message}`,
+      );
     }
   }
   return "tagged";

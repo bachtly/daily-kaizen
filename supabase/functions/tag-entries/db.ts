@@ -37,6 +37,30 @@ export function dbFromClient(client: SupabaseClient): TagDb {
       if (error) throw new Error(`get activities: ${error.message}`);
       return (data ?? []).map((a: { name: string }) => a.name);
     },
+    async getCorrections(userId) {
+      const { data, error } = await client
+        .from("entries")
+        .select(
+          "text,tag_source,activity_source,category:categories!category_id(name),activity:activities!activity_id(name,status,target:activities!merged_into_id(name))",
+        )
+        .eq("user_id", userId)
+        .or("tag_source.eq.me,activity_source.eq.me")
+        .order("updated_at", { ascending: false })
+        .limit(100);
+      if (error) throw new Error(`get corrections: ${error.message}`);
+      // deno-lint-ignore no-explicit-any
+      return (data ?? []).map((r: any) => ({
+        text: r.text,
+        tag_source: r.tag_source,
+        activity_source: r.activity_source,
+        category_name: r.category?.name ?? null,
+        activity_name: r.activity
+          ? (r.activity.status === "merged"
+            ? r.activity.target?.name
+            : r.activity.name) ?? null
+          : null,
+      }));
+    },
     async saveAiLabels(a) {
       const { data, error } = await client.rpc("save_ai_labels", {
         p_entry_id: a.entryId,
