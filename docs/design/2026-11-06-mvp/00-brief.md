@@ -27,7 +27,7 @@ Me, the only user, on an iPhone · job: log what I did in seconds and see each w
 
 ## Constraints
 
-- **Stack:** keep the choices in [`docs/mvp-design.md`](../../mvp-design.md) (React + Vite,
+- **Stack:** keep the choices in [`docs/mvp-design.md`](mvp-design.md) (React + Vite,
   Cloudflare Pages, Supabase, Claude Haiku 5.5, Resend, Web Push) unless research finds a blocker.
 - **Cost:** running costs stay under about $5 a month.
 - **Maintenance:** Claude writes most of the code and I review it, so prefer well-documented,
