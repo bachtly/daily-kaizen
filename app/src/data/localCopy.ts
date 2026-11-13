@@ -7,7 +7,9 @@ import {
   SETTINGS_COLUMNS,
   type ActivityRow,
   type CategoryRow,
+  toEntryRow,
   type EntryRow,
+  type EntryWithLinks,
   type ReviewRow,
   type SettingsRow,
   type SlotRow,
@@ -81,7 +83,7 @@ async function doRefresh({ since, sinceDate }: RefreshWindow): Promise<Result<{ 
         db.activity_slots.clear(),
         db.settings.clear(), db.weekly_reviews.clear(),
       ]);
-      await db.entries.bulkPut(entries.data);
+      await db.entries.bulkPut((entries.data as EntryWithLinks[]).map(toEntryRow));
       await db.categories.bulkPut(categories.data);
       await db.activities.bulkPut(activities.data);
       await db.activity_slots.bulkPut(slots.data);
@@ -150,8 +152,8 @@ export async function onOpen(window: RefreshWindow, timeZone: string) {
 }
 
 /** An earlier week: same Entry read bounded by the week; shown but not stored. `start`/`end` are ISO. */
-export function fetchWeek(range: { start: string; end: string }): Promise<Result<EntryRow[]>> {
-  return request((signal) =>
+export async function fetchWeek(range: { start: string; end: string }): Promise<Result<EntryRow[]>> {
+  const r = await request((signal) =>
     supabase
       .from('entries')
       .select(ENTRY_COLUMNS)
@@ -160,4 +162,5 @@ export function fetchWeek(range: { start: string; end: string }): Promise<Result
       .order('started_at')
       .abortSignal(signal),
   );
+  return r.ok ? { ok: true, data: (r.data as EntryWithLinks[]).map(toEntryRow) } : r;
 }

@@ -188,6 +188,17 @@ describe('activity rpcs', () => {
     expect(refresh).toHaveBeenCalledTimes(4);
     expect(recordTiming).toHaveBeenCalledTimes(4);
   });
+  it('sets the list of Activities with one rpc, refreshing after', async () => {
+    await w.setEntryActivities('e1', ['Email', 'Gym']);
+    await w.setEntryActivities('e1', []);
+    expect(rpcCalls).toEqual([
+      { name: 'set_entry_activities', args: { p_entry_id: 'e1', p_names: ['Email', 'Gym'] } },
+      { name: 'set_entry_activities', args: { p_entry_id: 'e1', p_names: [] } },
+    ]);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    rpcReply = { data: null, error: { message: 'too_many_activities' }, status: 400 };
+    expect((await w.setEntryActivities('e1', ['a', 'b', 'c', 'd'])).ok).toBe(false);
+  });
   it('passes the error keys through and does not refresh', async () => {
     rpcReply = { data: null, error: { message: 'activity_name_taken' }, status: 400 };
     expect(await w.renameActivity('a1', 'Mail')).toEqual({ ok: false, error: 'activity_name_taken' });
@@ -215,6 +226,7 @@ describe('every update and delete carries a filter (CLAUDE.md)', () => {
   });
   it('the Activity writes are rpcs, so they send no table update or delete', async () => {
     await w.setEntryActivity('e1', 'Email');
+    await w.setEntryActivities('e1', ['Email']);
     await w.renameActivity('a1', 'Mail');
     await w.mergeActivity('a1', 'a2');
     expect(calls).toHaveLength(0);
