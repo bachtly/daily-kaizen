@@ -16,7 +16,7 @@ const activities: ActivityRow[] = [
 ];
 const entry = (id: string, from: string, to: string, category: string | null, activity: string | null): EntryRow => ({
   id, text: `Entry ${id}`, started_at: `2026-11-02T${from}:00Z`, ended_at: `2026-11-02T${to}:00Z`, created_at: `2026-11-02T${to}:00Z`,
-  time_zone: 'UTC', category_id: category, tag_source: null, suggested_category_id: null, tagging_gave_up_at: null, activity_id: activity,
+  time_zone: 'UTC', category_id: category, tag_source: null, suggested_category_id: null, tagging_gave_up_at: null, activity_ids: activity ? [activity] : [],
 });
 const bounds = { start: Date.parse('2026-11-02T00:00:00Z'), end: Date.parse('2026-11-09T00:00:00Z') };
 const entries = [

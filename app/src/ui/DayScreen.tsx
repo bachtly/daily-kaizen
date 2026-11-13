@@ -127,9 +127,9 @@ export function DayView({
   }), [monday, tz, entries, now]);
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const actById = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities]);
-  /** The Entry's Activities, oldest first; a copy without the list yet falls back to the single `activity_id`. */
+  /** The Entry's Activities, oldest first. */
   const entryActivities = (e: EntryRow) =>
-    [...new Set(e.activity_ids ?? (e.activity_id ? [e.activity_id] : []))].flatMap((id) => actById.get(id) ?? []);
+    [...new Set(e.activity_ids ?? [])].flatMap((id) => actById.get(id) ?? []);
   const pickerEntry = picker && entries.find((e) => e.id === picker.id);
   const refreshedLabel = refreshedAt ? hhmm(Date.parse(refreshedAt), tz) : null;
   const span = bounds.end - bounds.start;

@@ -17,7 +17,7 @@ const activities: ActivityRow[] = [
 const entry = (id: string, from: string, to: string, activity: string[]): EntryRow => ({
   id, text: `Entry ${id}`, started_at: `2026-11-04T${from}:00Z`, ended_at: `2026-11-04T${to}:00Z`, created_at: `2026-11-04T${to}:00Z`,
   time_zone: 'UTC', category_id: 'deep', tag_source: 'ai', suggested_category_id: null, tagging_gave_up_at: null,
-  activity_id: activity[0] ?? null, activity_ids: activity, activity_source: activity.length ? 'ai' : null,
+  activity_ids: activity, activity_source: activity.length ? 'ai' : null,
 });
 const entries = [entry('a', '09:00', '09:40', ['ca']), entry('b', '09:40', '10:20', [])];
 // Wednesday is Postgres dow 3; the sheet opens at 10:20 (hour 10)

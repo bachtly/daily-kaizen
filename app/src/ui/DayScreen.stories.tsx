@@ -30,7 +30,7 @@ const activities: ActivityRow[] = [
 ];
 // t2 is multitasking: two Activities (#79)
 const activityOf: Record<string, string[]> = { t1: ['ca'], t2: ['ca', 'sp'], t4: ['lu'], t6: ['ca'], m1: ['sp'] };
-const labelled: EntryRow[] = entries.map((e) => ({ ...e, activity_id: activityOf[e.id]?.[0] ?? null, activity_ids: activityOf[e.id] ?? [] }));
+const labelled: EntryRow[] = entries.map((e) => ({ ...e, activity_ids: activityOf[e.id] ?? [] }));
 // Tuesday is Postgres dow 2
 const slots: SlotRow[] = [
   { activity_id: 'ca', dow: 2, hour: 14, n: 6 },

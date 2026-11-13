@@ -175,13 +175,13 @@ describe('tag and category rpcs', () => {
 
 describe('activity rpcs', () => {
   it('sets, clears, renames and merges, refreshing after each', async () => {
-    await w.setEntryActivity('e1', 'Email');
-    await w.setEntryActivity('e1', null);
+    await w.setEntryActivities('e1', ['Email']);
+    await w.setEntryActivities('e1', []);
     await w.renameActivity('a1', 'Mail');
     await w.mergeActivity('a1', 'a2');
     expect(rpcCalls).toEqual([
-      { name: 'set_entry_activity', args: { p_entry_id: 'e1', p_name: 'Email' } },
-      { name: 'set_entry_activity', args: { p_entry_id: 'e1', p_name: null } },
+      { name: 'set_entry_activities', args: { p_entry_id: 'e1', p_names: ['Email'] } },
+      { name: 'set_entry_activities', args: { p_entry_id: 'e1', p_names: [] } },
       { name: 'rename_activity', args: { p_id: 'a1', p_name: 'Mail' } },
       { name: 'merge_activity', args: { p_from: 'a1', p_into: 'a2' } },
     ]);
@@ -205,11 +205,11 @@ describe('activity rpcs', () => {
     rpcReply = { data: null, error: { message: 'activity_name_blank' }, status: 400 };
     expect(await w.renameActivity('a1', ' ')).toEqual({ ok: false, error: 'activity_name_blank' });
     rpcReply = { data: null, error: { message: 'activity_name_too_long' }, status: 400 };
-    expect(await w.setEntryActivity('e1', 'x'.repeat(61))).toEqual({ ok: false, error: 'activity_name_too_long' });
+    expect(await w.setEntryActivities('e1', ['x'.repeat(61)])).toEqual({ ok: false, error: 'activity_name_too_long' });
     rpcReply = { data: null, error: { message: 'activity_not_found' }, status: 400 };
     expect(await w.mergeActivity('a1', 'a1')).toEqual({ ok: false, error: 'activity_not_found' });
     rpcReply = { data: null, error: { message: 'entry_not_found' }, status: 400 };
-    expect(await w.setEntryActivity('e1', 'x')).toEqual({ ok: false, error: 'entry_not_found' });
+    expect(await w.setEntryActivities('e1', ['x'])).toEqual({ ok: false, error: 'entry_not_found' });
     expect(refresh).not.toHaveBeenCalled();
   });
 });
@@ -225,7 +225,6 @@ describe('every update and delete carries a filter (CLAUDE.md)', () => {
     expect(writes.map((c) => c.filter)).toEqual([['id', 'e1'], ['id', 'e1'], ['user_id', 'u1']]);
   });
   it('the Activity writes are rpcs, so they send no table update or delete', async () => {
-    await w.setEntryActivity('e1', 'Email');
     await w.setEntryActivities('e1', ['Email']);
     await w.renameActivity('a1', 'Mail');
     await w.mergeActivity('a1', 'a2');

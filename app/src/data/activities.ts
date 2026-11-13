@@ -1,8 +1,5 @@
 import type { ActivityRow, SlotRow } from './db';
-import type { Database } from './database.types';
 import { ownedSegments, type WeekEntry } from './week';
-
-type Entry = Database['public']['Tables']['entries']['Row'];
 
 export const MAX_CHIPS = 3;
 /** Label of the row for Entries without an Activity (AC-8.5). */
@@ -36,12 +33,11 @@ export function activityChips(
   return ids.map((id) => active.get(id)!);
 }
 
-export type ActivityEntry = WeekEntry & Partial<Pick<Entry, 'activity_id'>> & { activity_ids?: string[] };
+export type ActivityEntry = WeekEntry & { activity_ids?: string[] };
 
-/** The Entry's distinct Activities; falls back to the single `activity_id` for a copy that has no list yet. */
+/** The Entry's distinct Activities. */
 function activitiesOf(entry: ActivityEntry): string[] {
-  const ids = entry.activity_ids ?? (entry.activity_id ? [entry.activity_id] : []);
-  return [...new Set(ids)];
+  return [...new Set(entry.activity_ids ?? [])];
 }
 
 export type ActivityTotal = {

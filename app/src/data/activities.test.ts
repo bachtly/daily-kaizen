@@ -48,7 +48,7 @@ const e = (start: string, end: string, activity: string | null, category: string
   ended_at: end,
   created_at: new Date(Date.UTC(2026, 10, 1, 0, 0, created)).toISOString(),
   category_id: category,
-  activity_id: activity,
+  activity_ids: activity ? [activity] : [],
 });
 
 describe('activityTotals', () => {

@@ -37,7 +37,7 @@ const activities: ActivityRow[] = [
 ];
 const withActivities: EntryRow[] = entries.map((e) => ({
   ...e,
-  activity_id: ['e1', 'e2', 'e4', 'e5'].includes(e.id) ? 'ca' : e.id === 'e3' ? 'dn' : e.id === 'e8' ? 'gm' : null,
+  activity_ids: ['e1', 'e2', 'e4', 'e5'].includes(e.id) ? ['ca'] : e.id === 'e3' ? ['dn'] : e.id === 'e8' ? ['gm'] : [],
 }));
 const openFirstActivity = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
   (canvasElement.querySelector('.act-row') as HTMLButtonElement | null)?.click();
