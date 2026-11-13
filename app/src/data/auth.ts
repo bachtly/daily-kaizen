@@ -62,8 +62,9 @@ export async function signOut(): Promise<{ ok: true } | { ok: false; error: Erro
   } catch {
     return { ok: false, error: 'unknown' };
   }
-  await db.transaction('rw', [db.entries, db.categories, db.settings, db.weekly_reviews, db.meta], () =>
-    Promise.all([db.entries.clear(), db.categories.clear(), db.settings.clear(), db.weekly_reviews.clear(), db.meta.clear()]),
-  ).catch(() => {}); // the Local copy is disposable; the next sign-in's refresh replaces it anyway
+  // every table, so one added later can't be missed
+  await db
+    .transaction('rw', db.tables, () => Promise.all(db.tables.map((t) => t.clear())))
+    .catch(() => {}); // the Local copy is disposable; the next sign-in's refresh replaces it anyway
   return { ok: true };
 }
