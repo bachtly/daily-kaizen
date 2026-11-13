@@ -10,6 +10,45 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      activities: {
+        Row: {
+          created_at: string;
+          id: string;
+          merged_into_id: string | null;
+          name: string;
+          status: Database["public"]["Enums"]["activity_status"];
+          updated_at: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: string;
+          merged_into_id?: string | null;
+          name: string;
+          status?: Database["public"]["Enums"]["activity_status"];
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          merged_into_id?: string | null;
+          name?: string;
+          status?: Database["public"]["Enums"]["activity_status"];
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activities_merged_into_id_fkey";
+            columns: ["merged_into_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       categories: {
         Row: {
           description: string;
@@ -37,6 +76,8 @@ export type Database = {
       };
       entries: {
         Row: {
+          activity_id: string | null;
+          activity_source: Database["public"]["Enums"]["tag_source"] | null;
           category_id: string | null;
           created_at: string;
           ended_at: string;
@@ -55,6 +96,8 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          activity_id?: string | null;
+          activity_source?: Database["public"]["Enums"]["tag_source"] | null;
           category_id?: string | null;
           created_at?: string;
           ended_at: string;
@@ -72,6 +115,8 @@ export type Database = {
           user_id?: string;
         };
         Update: {
+          activity_id?: string | null;
+          activity_source?: Database["public"]["Enums"]["tag_source"] | null;
           category_id?: string | null;
           created_at?: string;
           ended_at?: string;
@@ -89,6 +134,13 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "entries_activity_id_fkey";
+            columns: ["activity_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "entries_category_id_fkey";
             columns: ["category_id"];
@@ -228,6 +280,15 @@ export type Database = {
       };
     };
     Functions: {
+      activity_slots: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          activity_id: string;
+          dow: number;
+          hour: number;
+          n: number;
+        }[];
+      };
       approve_category: { Args: { category_id: string }; Returns: Json };
       claim_due_notifications: {
         Args: { p_now?: string };
@@ -244,12 +305,26 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      merge_activity: { Args: { p_from: string; p_into: string }; Returns: Json };
       post_job: { Args: { p_url_secret: string }; Returns: undefined };
       record_tag_failure: {
         Args: { p_entry_id: string; p_read_updated_at: string };
         Returns: undefined;
       };
       reject_category: { Args: { category_id: string }; Returns: Json };
+      rename_activity: { Args: { p_id: string; p_name: string }; Returns: Json };
+      resolve_activity: { Args: { p_name: string; p_user_id: string }; Returns: string };
+      save_ai_labels: {
+        Args: {
+          p_activity_name: string;
+          p_category_id: string;
+          p_entry_id: string;
+          p_proposed_description: string;
+          p_proposed_name: string;
+          p_read_updated_at: string;
+        };
+        Returns: boolean;
+      };
       save_ai_tag: {
         Args: {
           p_category_id: string;
@@ -261,10 +336,13 @@ export type Database = {
         Returns: boolean;
       };
       seed_account: { Args: { uid: string }; Returns: undefined };
+      set_entry_activity: { Args: { p_entry_id: string; p_name: string }; Returns: Json };
       set_entry_tag: { Args: { category_id: string; entry_id: string }; Returns: Json };
       untagged_due: {
         Args: Record<PropertyKey, never>;
         Returns: {
+          activity_id: string | null;
+          activity_source: Database["public"]["Enums"]["tag_source"] | null;
           category_id: string | null;
           created_at: string;
           ended_at: string;
@@ -290,6 +368,7 @@ export type Database = {
       };
     };
     Enums: {
+      activity_status: "active" | "merged";
       category_status: "active" | "suggested" | "rejected";
       notification_kind: "nudge" | "review_reminder";
       tag_source: "ai" | "me";
@@ -408,6 +487,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      activity_status: ["active", "merged"],
       category_status: ["active", "suggested", "rejected"],
       notification_kind: ["nudge", "review_reminder"],
       tag_source: ["ai", "me"],
