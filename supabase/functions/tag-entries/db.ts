@@ -41,9 +41,10 @@ export function dbFromClient(client: SupabaseClient): TagDb {
       const { data, error } = await client
         .from("entries")
         .select(
-          "text,tag_source,activity_source,category:categories!category_id(name),activity:activities!activity_id(name,status,target:activities!merged_into_id(name))",
+          "text,tag_source,activity_source,category:categories!category_id(name),entry_activities(activity:activities(name,status,target:activities!merged_into_id(name)))",
         )
         .eq("user_id", userId)
+        .eq("entry_activities.user_id", userId)
         .or("tag_source.eq.me,activity_source.eq.me")
         .order("updated_at", { ascending: false })
         .limit(100);
@@ -54,11 +55,15 @@ export function dbFromClient(client: SupabaseClient): TagDb {
         tag_source: r.tag_source,
         activity_source: r.activity_source,
         category_name: r.category?.name ?? null,
-        activity_name: r.activity
-          ? (r.activity.status === "merged"
-            ? r.activity.target?.name
-            : r.activity.name) ?? null
-          : null,
+        activity_names: (r.entry_activities ?? [])
+          // deno-lint-ignore no-explicit-any
+          .map((ea: any) =>
+            ea.activity?.status === "merged"
+              ? ea.activity.target?.name
+              : ea.activity?.name
+          )
+          .filter((n: unknown): n is string => typeof n === "string")
+          .sort(),
       }));
     },
     async saveAiLabels(a) {
@@ -68,7 +73,7 @@ export function dbFromClient(client: SupabaseClient): TagDb {
         p_category_id: a.categoryId,
         p_proposed_name: a.proposedName,
         p_proposed_description: a.proposedDescription,
-        p_activity_name: a.activityName,
+        p_activity_names: a.activityNames,
       });
       if (error) throw new Error(`save_ai_labels: ${error.message}`);
       return data === true;

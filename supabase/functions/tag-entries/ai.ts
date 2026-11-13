@@ -5,7 +5,7 @@ export const AI_TIMEOUT_MS = 20_000;
 
 const TOOL = {
   name: "tag_entry",
-  description: "Record the Category and the Activity for the Entry.",
+  description: "Record the Category and the Activities for the Entry.",
   input_schema: {
     type: "object",
     properties: {
@@ -28,13 +28,15 @@ const TOOL = {
           },
         ],
       },
-      activity_name: {
+      activity_names: {
+        type: "array",
+        maxItems: 3,
+        items: { type: "string" },
         description:
-          "What the time was for, in a few words (e.g. a project, person, meal or game). Reuse a listed Activity name when the Entry is about it; otherwise a short new name; null when no clear activity.",
-        anyOf: [{ type: "null" }, { type: "string" }],
+          "What the time was for, one short name each (e.g. a project, person, meal or game); at most 3, and more than one only when the Entry clearly does several things at once. Reuse a listed Activity name when the Entry is about it; otherwise a short new name; an empty list when no clear activity.",
       },
     },
-    required: ["category_name", "proposed", "activity_name"],
+    required: ["category_name", "proposed", "activity_names"],
   },
 };
 
@@ -64,7 +66,7 @@ function exampleLine(r: CorrectionRow): string {
     parts.push(`Category: ${r.category_name}`);
   }
   if (r.activity_source === "me") {
-    parts.push(`Activity: ${r.activity_name ?? "none"}`);
+    parts.push(`Activity: ${r.activity_names.join(", ") || "none"}`);
   }
   return parts.length
     ? `- ${JSON.stringify(r.text.trim())} -> ${parts.join(", ")}`
@@ -95,7 +97,7 @@ export function buildPrompt(
       examples.map(exampleLine).join("\n")
     }`
     : "";
-  return `Classify this time-log Entry into exactly one Category and name its Activity.\n\nCategories:\n${list}${no}${acts}${ex}\n\nEntry:\n${text}`;
+  return `Classify this time-log Entry into exactly one Category and name its Activities (0 to 3).\n\nCategories:\n${list}${no}${acts}${ex}\n\nEntry:\n${text}`;
 }
 
 /** Calls Anthropic with a 20 s timeout; throws on timeout, non-2xx or a missing tool call. Never logs the text. */
@@ -132,19 +134,37 @@ export async function classify(
 const str = (v: unknown): v is string =>
   typeof v === "string" && v.trim() !== "";
 
+export const MAX_ACTIVITIES = 3;
+
+function parseNames(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const n of v) {
+    if (!str(n)) continue;
+    const name = n.trim();
+    const key = normalise(name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length === MAX_ACTIVITIES) break;
+  }
+  return out;
+}
+
 /** Returns a typed reply or null when the shape is wrong. */
 export function parseReply(raw: unknown): TagReply | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
   if (!str(r.category_name)) return null;
-  // A missing, empty or non-string activity_name means "no Activity" (#57).
-  const activity_name = str(r.activity_name) ? r.activity_name.trim() : null;
+  // Anything but a list of names means "no Activity"; blanks and repeats are dropped, extras beyond 3 too (#79).
+  const activity_names = parseNames(r.activity_names);
   const p = r.proposed;
   if (p === null || p === undefined) {
     return {
       category_name: r.category_name.trim(),
       proposed: null,
-      activity_name,
+      activity_names,
     };
   }
   if (typeof p !== "object") return null;
@@ -153,6 +173,6 @@ export function parseReply(raw: unknown): TagReply | null {
   return {
     category_name: r.category_name.trim(),
     proposed: { name: name.trim(), description: description.trim() },
-    activity_name,
+    activity_names,
   };
 }

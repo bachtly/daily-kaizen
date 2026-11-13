@@ -127,7 +127,7 @@ Deno.test("202 at once, tags with the matching Active category", async () => {
         aiReply({
           category_name: "deep",
           proposed: null,
-          activity_name: "Company A",
+          activity_names: ["Company A"],
         }),
       ),
   });
@@ -139,7 +139,7 @@ Deno.test("202 at once, tags with the matching Active category", async () => {
     categoryId: "c-deep",
     proposedName: null,
     proposedDescription: null,
-    activityName: "Company A",
+    activityNames: ["Company A"],
   }]);
 });
 
@@ -249,23 +249,34 @@ Deno.test("parseReply validates shape", () => {
   assertEquals(parseReply({ category_name: " Deep ", proposed: null }), {
     category_name: "Deep",
     proposed: null,
-    activity_name: null,
+    activity_names: [],
   });
   assertEquals(
     parseReply({
       category_name: "Deep",
       proposed: null,
-      activity_name: " Lunch ",
-    })?.activity_name,
-    "Lunch",
+      activity_names: [" Lunch "],
+    })?.activity_names,
+    ["Lunch"],
   );
-  for (const bad of [undefined, null, "", "  ", 5]) {
+  for (
+    const bad of [undefined, null, "", "  ", 5, "Lunch", [], [" ", 5, null]]
+  ) {
     assertEquals(
-      parseReply({ category_name: "Deep", proposed: null, activity_name: bad })
-        ?.activity_name,
-      null,
+      parseReply({ category_name: "Deep", proposed: null, activity_names: bad })
+        ?.activity_names,
+      [],
     );
   }
+  // Blanks and repeats are dropped, extras beyond 3 too, in order.
+  assertEquals(
+    parseReply({
+      category_name: "Deep",
+      proposed: null,
+      activity_names: [" A ", "a", "", "B", "C", "D"],
+    })?.activity_names,
+    ["A", "B", "C"],
+  );
   assertEquals(parseReply({ category_name: "", proposed: null }), null);
   assertEquals(
     parseReply({ category_name: "Deep", proposed: { name: "x" } }),
@@ -331,7 +342,7 @@ Deno.test("the prompt sent to the AI carries the user's Active Activity names", 
     fetchFn: (_u, init) => {
       sent = String(init?.body);
       return Promise.resolve(
-        aiReply({ category_name: "Deep", proposed: null, activity_name: null }),
+        aiReply({ category_name: "Deep", proposed: null, activity_names: [] }),
       );
     },
   });
@@ -346,12 +357,12 @@ Deno.test("both labels missing: both are saved in one call", async () => {
     fetchFn: AI_ACT({
       category_name: "Deep",
       proposed: null,
-      activity_name: "Company A",
+      activity_names: ["Company A"],
     }),
   });
   assertEquals(res, "tagged");
   assertEquals(saves[0].categoryId, "c-deep");
-  assertEquals(saves[0].activityName, "Company A");
+  assertEquals(saves[0].activityNames, ["Company A"]);
 });
 
 Deno.test("activity-only: Category already set, so categoryId is null and no proposal is sent", async () => {
@@ -364,7 +375,7 @@ Deno.test("activity-only: Category already set, so categoryId is null and no pro
     fetchFn: AI_ACT({
       category_name: "Deep",
       proposed: { name: "Social", description: "people" },
-      activity_name: "Game A",
+      activity_names: ["Game A"],
     }),
   });
   assertEquals(res, "tagged");
@@ -374,7 +385,7 @@ Deno.test("activity-only: Category already set, so categoryId is null and no pro
     categoryId: null,
     proposedName: null,
     proposedDescription: null,
-    activityName: "Game A",
+    activityNames: ["Game A"],
   }]);
 });
 
@@ -388,11 +399,11 @@ Deno.test("activity-only: an unusable category_name is not a failure when the Ca
     fetchFn: AI_ACT({
       category_name: "Rejected one",
       proposed: null,
-      activity_name: "Lunch",
+      activity_names: ["Lunch"],
     }),
   });
   assertEquals(failures.length, 0);
-  assertEquals(saves[0].activityName, "Lunch");
+  assertEquals(saves[0].activityNames, ["Lunch"]);
 });
 
 Deno.test("Category missing, Activity already set: only the Category is asked for and saved", async () => {
@@ -403,13 +414,13 @@ Deno.test("Category missing, Activity already set: only the Category is asked fo
     fetchFn: AI_ACT({
       category_name: "Waste",
       proposed: null,
-      activity_name: "Ignored",
+      activity_names: ["Ignored"],
     }),
   });
   assertEquals(saves[0].categoryId, "c-waste");
 });
 
-Deno.test("null activity_name is saved as no Activity", async () => {
+Deno.test("an empty activity_names is saved as no Activity", async () => {
   const { db, saves } = fakeDb([entry()]);
   await tagEntry(ID, {
     db,
@@ -417,10 +428,10 @@ Deno.test("null activity_name is saved as no Activity", async () => {
     fetchFn: AI_ACT({
       category_name: "Deep",
       proposed: null,
-      activity_name: null,
+      activity_names: [],
     }),
   });
-  assertEquals(saves[0].activityName, null);
+  assertEquals(saves[0].activityNames, []);
 });
 
 Deno.test("an Activity-only Entry still counts a failed attempt when the AI call fails", async () => {
@@ -447,7 +458,7 @@ const corr = (
   tag_source: "me",
   activity_source: "me",
   category_name: "Deep",
-  activity_name: "Company A",
+  activity_names: ["Company A"],
   ...over,
 });
 
@@ -455,7 +466,7 @@ Deno.test("pickExamples dedups by normalised text, newest first wins", () => {
   const rows = [
     corr("  Lunch  with  Sam ", {
       category_name: "Waste",
-      activity_name: null,
+      activity_names: [],
     }),
     corr("lunch with sam", { category_name: "Deep" }),
     corr("Standup"),
@@ -475,12 +486,15 @@ Deno.test("pickExamples caps at 20 different texts", () => {
 
 Deno.test("examples show only labels set by me; none when cleared", () => {
   const p = buildPrompt("x", CATS.slice(0, 2), [], [], [
-    corr("only category", { activity_source: "ai", activity_name: "AI Pick" }),
+    corr("only category", {
+      activity_source: "ai",
+      activity_names: ["AI Pick"],
+    }),
     corr("only activity", { tag_source: "ai", category_name: "Waste" }),
     corr("cleared", {
       tag_source: null,
       category_name: null,
-      activity_name: null,
+      activity_names: [],
     }),
     corr("ai only", { tag_source: "ai", activity_source: "ai" }),
   ]);
@@ -512,7 +526,7 @@ Deno.test("tagEntry puts the user's corrections in the prompt", async () => {
     fetchFn: (_u, init) => {
       sent = JSON.parse(String((init as RequestInit).body)).messages[0].content;
       return Promise.resolve(
-        aiReply({ category_name: "Deep", proposed: null, activity_name: null }),
+        aiReply({ category_name: "Deep", proposed: null, activity_names: [] }),
       );
     },
   });
@@ -530,14 +544,19 @@ Deno.test("getCorrections filters by user_id, orders newest first, caps at 100, 
       tag_source: "me",
       activity_source: "me",
       category: { name: "Deep" },
-      activity: { name: "Old", status: "merged", target: { name: "New" } },
+      entry_activities: [
+        {
+          activity: { name: "Old", status: "merged", target: { name: "New" } },
+        },
+        { activity: { name: "Alpha", status: "active", target: null } },
+      ],
     },
     {
       text: "b",
       tag_source: null,
       activity_source: "me",
       category: null,
-      activity: null,
+      entry_activities: [],
     },
   ];
   const q: Record<string, unknown> = {};
@@ -551,7 +570,10 @@ Deno.test("getCorrections filters by user_id, orders newest first, caps at 100, 
   // deno-lint-ignore no-explicit-any
   const client = { from: (t: string) => (calls.push(["from", t]), q) } as any;
   const out = await dbFromClient(client).getCorrections("u1");
-  assertEquals(calls.find((c) => c[0] === "eq"), ["eq", "user_id", "u1"]);
+  assertEquals(calls.filter((c) => c[0] === "eq"), [
+    ["eq", "user_id", "u1"],
+    ["eq", "entry_activities.user_id", "u1"],
+  ]);
   assertEquals(calls.find((c) => c[0] === "from"), ["from", "entries"]);
   assertEquals(calls.find((c) => c[0] === "or"), [
     "or",
@@ -561,8 +583,63 @@ Deno.test("getCorrections filters by user_id, orders newest first, caps at 100, 
     ascending: false,
   }]);
   assertEquals(calls.find((c) => c[0] === "limit"), ["limit", 100]);
-  assertEquals(out.map((r) => [r.category_name, r.activity_name]), [[
+  assertEquals(out.map((r) => [r.category_name, r.activity_names]), [[
     "Deep",
-    "New",
-  ], [null, null]]);
+    ["Alpha", "New"],
+  ], [null, []]]);
+});
+
+Deno.test("several Activities: the tool asks for activity_names and the list is saved as is", async () => {
+  const { db, saves } = fakeDb([entry()]);
+  let tool:
+    | { input_schema: { properties: Record<string, unknown> } }
+    | undefined;
+  await tagEntry(ID, {
+    db,
+    anthropicApiKey: "ak",
+    fetchFn: (_u, init) => {
+      tool = JSON.parse(String((init as RequestInit).body)).tools[0];
+      return Promise.resolve(aiReply({
+        category_name: "Deep",
+        proposed: null,
+        activity_names: ["Company A", "Side project"],
+      }));
+    },
+  });
+  assertEquals("activity_names" in (tool?.input_schema.properties ?? {}), true);
+  assertEquals("activity_name" in (tool?.input_schema.properties ?? {}), false);
+  assertEquals(saves[0].activityNames, ["Company A", "Side project"]);
+});
+
+Deno.test("examples show the whole list I set", () => {
+  const p = buildPrompt("x", CATS.slice(0, 2), [], [], [
+    corr("standup + slack", { activity_names: ["Company A", "Side project"] }),
+  ]);
+  assertEquals(
+    p.includes(
+      '"standup + slack" -> Category: Deep, Activity: Company A, Side project',
+    ),
+    true,
+  );
+});
+
+Deno.test("saveAiLabels calls the list version by its argument name", async () => {
+  let args: Record<string, unknown> = {};
+  const client = {
+    rpc: (
+      _n: string,
+      a: Record<string, unknown>,
+    ) => (args = a, Promise.resolve({ data: true, error: null })),
+    // deno-lint-ignore no-explicit-any
+  } as any;
+  await dbFromClient(client).saveAiLabels({
+    entryId: ID,
+    readUpdatedAt: "t",
+    categoryId: null,
+    proposedName: null,
+    proposedDescription: null,
+    activityNames: ["A", "B"],
+  });
+  assertEquals(args.p_activity_names, ["A", "B"]);
+  assertEquals("p_activity_name" in args, false);
 });
