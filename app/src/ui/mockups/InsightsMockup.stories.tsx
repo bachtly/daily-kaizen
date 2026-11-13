@@ -16,6 +16,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = { name: 'Insights' };
+export const AllInsights: Story = { name: 'All insights (See more)', args: { expanded: true } };
 export const EvidenceOpen: Story = { name: 'Evidence open (mixed)', args: { openEvidence: 'focus-length' } };
 export const Accepted: Story = { name: 'Made next week’s change', args: { acceptedId: 'late-waste', openEvidence: 'late-waste' } };
 export const NextWeek: Story = {
