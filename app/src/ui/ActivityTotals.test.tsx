@@ -77,6 +77,30 @@ describe('ActivityTotals', () => {
     await waitFor(() => expect(screen.queryByLabelText('Activity name')).toBeNull());
   });
 
+  it('blocks a blank rename and caps the field at 60', () => {
+    mount();
+    openCompanyA();
+    fireEvent.click(screen.getByText('Rename'));
+    const input = screen.getByLabelText('Activity name');
+    expect(input.getAttribute('maxlength')).toBe('60');
+    fireEvent.change(input, { target: { value: '   ' } });
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
+    expect(rename).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['activity_name_blank', 'Write a name.'],
+    ['activity_name_too_long', 'Use 60 characters or fewer.'],
+  ] as const)('shows a message for %s', async (error, text) => {
+    rename.mockResolvedValueOnce({ ok: false, error });
+    mount();
+    openCompanyA();
+    fireEvent.click(screen.getByText('Rename'));
+    fireEvent.change(screen.getByLabelText('Activity name'), { target: { value: 'Game' } });
+    fireEvent.click(screen.getByText('Save'));
+    await screen.findByText(text);
+  });
+
   it('merges into a picked Active Activity, never a merged one or itself', async () => {
     merge.mockResolvedValueOnce({ ok: true, data: null });
     mount();

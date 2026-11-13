@@ -16,6 +16,8 @@ const messages = {
   entry_end_not_after_start: 'From must be before To.',
   entry_end_in_future: "To can't be later than now.",
   time_zone_unknown: "Couldn't save. Try again.",
+  activity_name_blank: 'Write an Activity name, or choose None.',
+  activity_name_too_long: 'Use 60 characters or fewer.',
 } as const;
 type Known = keyof typeof messages;
 

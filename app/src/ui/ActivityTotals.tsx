@@ -14,6 +14,8 @@ type Mode = 'rename' | 'merge' | undefined;
 
 const messageFor = (error: string) =>
   error === 'activity_name_taken' ? 'You already have an Activity with that name.'
+  : error === 'activity_name_blank' ? 'Write a name.'
+  : error === 'activity_name_too_long' ? 'Use 60 characters or fewer.'
   : error === 'activity_not_found' ? 'That Activity is gone.'
   : error === 'unknown' ? 'Needs a connection.'
   : "Couldn't save. Try again.";
