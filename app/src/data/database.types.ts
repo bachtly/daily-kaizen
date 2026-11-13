@@ -157,6 +157,50 @@ export type Database = {
           },
         ];
       };
+      entry_activities: {
+        Row: {
+          activity_id: string;
+          created_at: string;
+          entry_id: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          activity_id: string;
+          created_at?: string;
+          entry_id: string;
+          user_id: string;
+        };
+        Update: {
+          activity_id?: string;
+          created_at?: string;
+          entry_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "entry_activities_activity_id_fkey";
+            columns: ["activity_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entry_activities_entry_id_fkey";
+            columns: ["entry_id"];
+            isOneToOne: false;
+            referencedRelation: "entries";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entry_activities_entry_id_fkey";
+            columns: ["entry_id"];
+            isOneToOne: false;
+            referencedRelation: "nfr_report";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notifications_sent: {
         Row: {
           about: string;
@@ -305,6 +349,8 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      cut_long_activity_names: { Args: Record<PropertyKey, never>; Returns: undefined };
+      entry_json: { Args: { p_entry_id: string; p_user_id: string }; Returns: Json };
       merge_activity: { Args: { p_from: string; p_into: string }; Returns: Json };
       post_job: { Args: { p_url_secret: string }; Returns: undefined };
       record_tag_failure: {
@@ -314,29 +360,42 @@ export type Database = {
       reject_category: { Args: { category_id: string }; Returns: Json };
       rename_activity: { Args: { p_id: string; p_name: string }; Returns: Json };
       resolve_activity: { Args: { p_name: string; p_user_id: string }; Returns: string };
-      save_ai_labels: {
-        Args: {
-          p_activity_name: string;
-          p_category_id: string;
-          p_entry_id: string;
-          p_proposed_description: string;
-          p_proposed_name: string;
-          p_read_updated_at: string;
-        };
-        Returns: boolean;
-      };
-      save_ai_tag: {
-        Args: {
-          p_category_id: string;
-          p_entry_id: string;
-          p_proposed_description: string;
-          p_proposed_name: string;
-          p_read_updated_at: string;
-        };
-        Returns: boolean;
-      };
+      resolve_activity_list: { Args: { p_names: string[]; p_user_id: string }; Returns: string[] };
+      save_ai_labels:
+        | {
+            Args: {
+              p_activity_name: string;
+              p_category_id: string;
+              p_entry_id: string;
+              p_proposed_description: string;
+              p_proposed_name: string;
+              p_read_updated_at: string;
+            };
+            Returns: boolean;
+          }
+        | {
+            Args: {
+              p_activity_names: string[];
+              p_category_id: string;
+              p_entry_id: string;
+              p_proposed_description: string;
+              p_proposed_name: string;
+              p_read_updated_at: string;
+            };
+            Returns: boolean;
+          };
       seed_account: { Args: { uid: string }; Returns: undefined };
+      set_entry_activities: { Args: { p_entry_id: string; p_names: string[] }; Returns: Json };
       set_entry_activity: { Args: { p_entry_id: string; p_name: string }; Returns: Json };
+      set_entry_activity_rows: {
+        Args: {
+          p_entry_id: string;
+          p_ids: string[];
+          p_source: Database["public"]["Enums"]["tag_source"];
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
       set_entry_tag: { Args: { category_id: string; entry_id: string }; Returns: Json };
       untagged_due: {
         Args: Record<PropertyKey, never>;
