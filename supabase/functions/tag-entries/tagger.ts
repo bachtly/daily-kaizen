@@ -35,7 +35,7 @@ export async function tagEntry(
 
   let categoryId: string | null = null;
   let proposed: { name: string; description: string } | null = null;
-  let activityName: string | null = null;
+  let activityNames: string[] = [];
   let ok = false;
   try {
     const raw = await classify(
@@ -53,7 +53,7 @@ export async function tagEntry(
       categoryId = match.id;
       proposed = reply.proposed;
     }
-    activityName = reply.activity_name;
+    activityNames = reply.activity_names;
     ok = true;
   } catch (e) {
     console.error(
@@ -72,7 +72,7 @@ export async function tagEntry(
     proposedName: proposed?.name ?? null,
     proposedDescription: proposed?.description ?? null,
     // save_ai_labels ignores it when activity_source is me.
-    activityName,
+    activityNames,
   });
   if (inserted && proposed) {
     try {

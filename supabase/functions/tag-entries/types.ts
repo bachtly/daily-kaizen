@@ -22,25 +22,26 @@ export interface CorrectionRow {
   tag_source: string | null;
   activity_source: string | null;
   category_name: string | null;
-  /** Already the merge target's name for a merged Activity; null = none. */
-  activity_name: string | null;
+  /** The Activities I set, each already the merge target's name for a merged one; [] = none. */
+  activity_names: string[];
 }
 
 export interface TagReply {
   category_name: string;
   proposed: { name: string; description: string } | null;
-  /** A listed Active name, an alias, a new name, or null for none (#57). */
-  activity_name: string | null;
+  /** 0 to 3 names, each a listed Active name, an alias or a new name (#57, #79). */
+  activity_names: string[];
 }
 
 /**
  * Arguments of the `save_ai_labels()` database helper (service_role only; db-activities).
  *   save_ai_labels(p_entry_id uuid, p_read_updated_at timestamptz, p_category_id uuid,
- *                  p_proposed_name text, p_proposed_description text, p_activity_name text)
+ *                  p_proposed_name text, p_proposed_description text, p_activity_names text[])
  *   returns boolean
+ *   (the 6-arg version with p_activity_name text still exists for the old function; the argument name picks it)
  * - one tx; the Category part runs only when p_category_id is not null and tag_source isn't 'me'
  *   (inserts the Suggested category if proposed and new); the Activity part runs only when
- *   activity_source isn't 'me' and sets activity_source 'ai' with the resolved id (null name = none).
+ *   activity_source isn't 'me' and sets activity_source 'ai' with the resolved, deduped ids, at most 3 ([] = none).
  *   Both guarded by updated_at = p_read_updated_at. Returns true only when a new Suggested
  *   category was inserted.
  * Failure path is separate:
@@ -54,7 +55,8 @@ export interface SaveAiLabelsArgs {
   categoryId: string | null;
   proposedName: string | null;
   proposedDescription: string | null;
-  activityName: string | null;
+  /** 0 to 3 names; the helper resolves and dedupes them. */
+  activityNames: string[];
 }
 
 export interface TagDb {
