@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { CategoryRow, EntryRow } from '../data/db';
+import type { ActivityRow, CategoryRow, EntryRow, SlotRow } from '../data/db';
 import type { Result } from '../data/request';
 import { DayView, type DayActions } from './DayScreen';
 
@@ -22,8 +22,22 @@ const entries = [
   entry('t6', '10', 'Code review', '13:05', '14:25', 'deep'),
 ];
 
+const activities: ActivityRow[] = [
+  { id: 'ca', name: 'Company A', status: 'active', merged_into_id: null },
+  { id: 'lu', name: 'Lunch', status: 'active', merged_into_id: null },
+  { id: 'sp', name: 'Side project', status: 'active', merged_into_id: null },
+];
+const activityOf: Record<string, string> = { t1: 'ca', t2: 'ca', t4: 'lu', t6: 'ca', m1: 'sp' };
+const labelled: EntryRow[] = entries.map((e) => ({ ...e, activity_id: activityOf[e.id] ?? null }));
+// Tuesday is Postgres dow 2
+const slots: SlotRow[] = [
+  { activity_id: 'ca', dow: 2, hour: 14, n: 6 },
+  { activity_id: 'lu', dow: 2, hour: 14, n: 3 },
+  { activity_id: 'sp', dow: 1, hour: 20, n: 2 },
+];
+
 const later = (r: Result<unknown> = { ok: true, data: null }) => () => new Promise<Result<unknown>>((res) => setTimeout(() => res(r), 600));
-const actions: DayActions = { createEntry: later(), editEntry: later(), deleteEntry: later(), setEntryTag: later() };
+const actions: DayActions = { createEntry: later(), editEntry: later(), deleteEntry: later(), setEntryTag: later(), setEntryActivity: later() };
 const at = (iso: string) => Date.parse(iso);
 
 const meta = {
@@ -62,3 +76,14 @@ export const EarlierDayOffline: Story = { name: 'Earlier day: offline', args: { 
 export const EarlierDaySignedOut: Story = { name: 'Earlier day: signed out', args: { date: '2026-10-21', entries: [], load: 'session-lost-earlier-week', connection: 'signed-out' } };
 export const Offline: Story = { args: { connection: 'offline' } };
 export const SignedOut: Story = { args: { connection: 'signed-out' } };
+
+const withActivities = { entries: labelled, activities, slots };
+export const WithActivities: Story = { name: 'With Activities: shown on each Entry', args: withActivities };
+export const LogNowActivityChips: Story = {
+  name: 'With Activities: Log now chips',
+  args: { ...withActivities, initialSheet: { kind: 'now' } },
+};
+export const EditActivity: Story = {
+  name: 'With Activities: edit an Entry',
+  args: { ...withActivities, initialEditId: 't2' },
+};

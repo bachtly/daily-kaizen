@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dateOf, dayBounds, lastSlot } from '../data/day';
-import type { EntryRow } from '../data/db';
+import { activityChips } from '../data/activities';
+import type { ActivityRow, EntryRow, SlotRow } from '../data/db';
 import { findOverlaps, prefill, recentTexts } from '../data/prefill';
 import type { Result } from '../data/request';
 import type { NewEntry } from '../data/writes';
+import { ActivityChips, insertActivity } from './ActivityChips';
 import { ConnectionBanner, type Connection } from './ConnectionBanner';
 import { drafts, newDraft, type Draft } from './logDrafts';
 import { OverlapNote } from './OverlapNote';
 import { RecentChips } from './RecentChips';
 import { SaveStatus, type SaveState } from './SaveStatus';
 import { TimeChip } from './TimeChip';
+import { zonedParts } from '../data/week';
 import { dayHint, formatDuration, hhmm, latestAt, shortDate, withTime } from './weekFormat';
 
 type LogEntry = Pick<EntryRow, 'id' | 'text' | 'started_at' | 'ended_at' | 'created_at'>;
@@ -29,6 +32,9 @@ export type LogSheetProps = {
   connection?: Connection;
   /** The Local copy hasn't been read yet: From and Recent show a Skeleton and Save waits. */
   loading?: boolean;
+  /** All of mine, and the slot counts: Activity chips replace Recent while an Active Activity exists. */
+  activities?: readonly ActivityRow[];
+  slots?: readonly SlotRow[];
   /** Resolves when the Server answers; `unknown` means the result is not known and a resend is safe. */
   onSave: (entry: NewEntry) => Promise<Result<unknown>>;
   /** After a confirmed save. */
@@ -59,7 +65,7 @@ const keyOf = (m: SheetMode) => (m.kind === 'now' ? 'now' : `fill:${m.start}`);
  * that day. From is always the latest such time before To, so an Entry can cross midnight.
  */
 export function LogSheet({
-  mode, day: startDay, entries, timeZone, now, connection = 'online', loading, onSave, onSaved, onClose, returnFocusTo, frozen,
+  mode, day: startDay, entries, timeZone, now, connection = 'online', loading, activities = [], slots = [], onSave, onSaved, onClose, returnFocusTo, frozen,
   initialText, initialFrom, initialTo,
 }: LogSheetProps) {
   const key = keyOf(mode);
@@ -117,6 +123,10 @@ export function LogSheet({
   const overlapLabel =
     overlap && `${overlap.text} ${hhmm(Date.parse(overlap.started_at), timeZone)}–${hhmm(Date.parse(overlap.ended_at), timeZone)}`;
   const recent = useMemo(() => recentTexts(entries), [entries]);
+  const chips = useMemo(() => {
+    const p = zonedParts(from, timeZone);
+    return activityChips(slots, activities, p.weekday, p.hour);
+  }, [slots, activities, from, timeZone]);
 
   const save = async () => {
     if (saving || loading || frozen || !text.trim() || timeError) return;
@@ -202,7 +212,9 @@ export function LogSheet({
         />
         {textError && <p id="text-error" className="error" role="alert">{fieldMessage[textError]}</p>}
 
-        <RecentChips loading={loading} texts={recent} onPick={edit} disabled={saving} />
+        {loading || chips.length === 0
+          ? <RecentChips loading={loading} texts={recent} onPick={edit} disabled={saving} />
+          : <ActivityChips activities={chips} onPick={(name) => edit(insertActivity(text, name))} disabled={saving} />}
 
         <div className="time day-field">
           <label className="field-label" htmlFor="entry-day">Day</label>

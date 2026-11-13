@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { EntryRow } from '../data/db';
+import type { ActivityRow, EntryRow } from '../data/db';
 import { findOverlaps } from '../data/prefill';
 import type { Result } from '../data/request';
 import type { EntryFields } from '../data/writes';
+import { ActivityPicker, activityKey } from './ActivityPicker';
 import { OverlapNote } from './OverlapNote';
 import { TimeChip } from './TimeChip';
 import { hhmm, withTime } from './weekFormat';
@@ -23,7 +24,7 @@ type Known = keyof typeof messages;
  * The AC-1.2 checks apply; an overlap only warns. No form-open time is sent for an edit.
  * Changing the text re-tags the Entry unless its Tag source is me (the Server clears the Tag).
  */
-export function EntryEditor({ entry, siblings, now, timeZone, online, onSave, onDelete, onClose }: {
+export function EntryEditor({ entry, siblings, now, timeZone, online, activities = [], activityName = '', onSave, onSetActivity, onDelete, onClose }: {
   entry: EntryRow;
   /** Other Entries of the week, for the overlap warning. */
   siblings: readonly EntryRow[];
@@ -31,7 +32,13 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, onSave, on
   /** The device zone, as the row shows it, so the row and its editor agree after a zone change. */
   timeZone: string;
   online: boolean;
+  /** All of mine; the picker offers the Active ones. Without `onSetActivity` there is no picker. */
+  activities?: readonly ActivityRow[];
+  /** The Entry's current Activity name, '' for none. */
+  activityName?: string;
   onSave: (fields: EntryFields) => Promise<Result<unknown>>;
+  /** Called after the fields are saved, and only when the Activity changed; null = none. */
+  onSetActivity?: (name: string | null) => Promise<Result<unknown>>;
   onDelete: () => Promise<Result<unknown>>;
   /** Called after a confirmed save or delete, and on Cancel. */
   onClose: () => void;
@@ -40,6 +47,7 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, onSave, on
   const [text, setText] = useState(entry.text);
   const [from, setFrom] = useState(Date.parse(entry.started_at));
   const [to, setTo] = useState(Date.parse(entry.ended_at));
+  const [activity, setActivity] = useState(activityName);
   const [busy, setBusy] = useState<'saving' | 'deleting' | null>(null);
   const [problem, setProblem] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -64,8 +72,14 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, onSave, on
     // Session lost: the banner says it and the edit stays. Entry gone: the week page says so, as this row goes away.
     else if (r.error !== 'session_lost' && r.error !== 'entry_not_found') setProblem(explain(r.error));
   };
+  // The Activity goes after the text: an edited text clears an AI label, and a label I set must stay.
+  const activityChanged = !!onSetActivity && activityKey(activity).toLowerCase() !== activityKey(activityName).toLowerCase();
   const save = () =>
-    run('saving', () => onSave({ text: text.trim(), started_at: new Date(from).toISOString(), ended_at: new Date(to).toISOString(), time_zone: tz }));
+    run('saving', async () => {
+      const r = await onSave({ text: text.trim(), started_at: new Date(from).toISOString(), ended_at: new Date(to).toISOString(), time_zone: tz });
+      if (!r.ok || !activityChanged) return r;
+      return onSetActivity(activityKey(activity) || null);
+    });
 
   const disabled = busy !== null;
   return (
@@ -78,6 +92,7 @@ export function EntryEditor({ entry, siblings, now, timeZone, online, onSave, on
         onKeyDown={(e) => e.key === 'Enter' && !textError && !timeError && online && !disabled && void save()}
       />
       {textError && <p id={`edit-text-error-${entry.id}`} className="error" role="alert">{textError}</p>}
+      {onSetActivity && <ActivityPicker value={activity} activities={activities} onChange={setActivity} disabled={disabled} />}
       <div className="times">
         <TimeChip
           label="From" value={hhmm(from, tz)} disabled={disabled} invalid={!!timeError && from >= to}

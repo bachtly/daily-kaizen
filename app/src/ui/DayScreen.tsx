@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { coverage, dateOf, dayBounds, dayItems, loggedMs, shiftDate } from '../data/day';
-import type { CategoryRow, EntryRow } from '../data/db';
+import type { ActivityRow, CategoryRow, EntryRow, SlotRow } from '../data/db';
 import type { Result } from '../data/request';
 import { mondayOf } from '../data/week';
 import type { EntryFields, NewEntry } from '../data/writes';
@@ -24,6 +24,8 @@ export type DayActions = {
   editEntry: (id: string, fields: EntryFields) => Promise<Result<unknown>>;
   deleteEntry: (id: string) => Promise<Result<unknown>>;
   setEntryTag: (entryId: string, categoryId: string) => Promise<Result<unknown>>;
+  /** `null` clears the Activity. Without it the editor has no Activity picker. */
+  setEntryActivity?: (entryId: string, name: string | null) => Promise<Result<unknown>>;
 };
 
 export type DayViewProps = {
@@ -36,6 +38,9 @@ export type DayViewProps = {
   /** Every Entry known on the phone, for the Log sheet's prefill, Recent chips and overlap check. */
   known?: readonly EntryRow[];
   categories: readonly CategoryRow[];
+  /** All of mine, Active and merged, and the slot counts for the Log sheet's chips. */
+  activities?: readonly ActivityRow[];
+  slots?: readonly SlotRow[];
   /** ISO time of the last Local copy refresh; null = never. */
   refreshedAt: string | null;
   connection?: Connection;
@@ -69,7 +74,7 @@ const rangeLabel = (monday: string, tz: string) => {
  * Unlogged slots to Fill, inline edit and Tag, and a floating + to log now.
  */
 export function DayView({
-  date, timeZone: tz, now, entries, known = entries, categories, refreshedAt, connection = 'online', load = 'ready',
+  date, timeZone: tz, now, entries, known = entries, categories, activities = [], slots = [], refreshedAt, connection = 'online', load = 'ready',
   actions: liveActions, onPickDay, onRetry, initialSheet, initialText, initialEditId, initialPickerId,
 }: DayViewProps) {
   const [sheet, setSheet] = useState<{ mode: SheetMode; opener: HTMLElement | null } | null>(
@@ -103,6 +108,7 @@ export function DayView({
       editEntry: watch(liveActions.editEntry),
       deleteEntry: watch(liveActions.deleteEntry),
       setEntryTag: watch(liveActions.setEntryTag),
+      setEntryActivity: liveActions.setEntryActivity && watch(liveActions.setEntryActivity),
     };
   }, [liveActions, date]);
 
@@ -120,6 +126,7 @@ export function DayView({
     return { date: d, start: b.start, logged: loggedMs(entries, b, now), span: b.end - b.start };
   }), [monday, tz, entries, now]);
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+  const actById = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities]);
   const pickerEntry = picker && entries.find((e) => e.id === picker.id);
   const refreshedLabel = refreshedAt ? hhmm(Date.parse(refreshedAt), tz) : null;
   const span = bounds.end - bounds.start;
@@ -131,6 +138,7 @@ export function DayView({
     <LogSheet
       key={sheet.mode.kind === 'now' ? 'now' : `fill:${sheet.mode.start}`}
       mode={sheet.mode} day={date} entries={known} timeZone={tz} now={now} connection={connection} loading={load === 'loading'}
+      activities={activities} slots={slots}
       initialText={initialText} returnFocusTo={sheet.opener}
       onSave={actions.createEntry} onSaved={() => { setSheet(null); setSaved(true); }} onClose={() => setSheet(null)}
     />
@@ -220,12 +228,15 @@ export function DayView({
               return e.id === editId ? (
                 <EntryEditor
                   key={e.id} entry={e} siblings={entries} now={now} timeZone={tz} online={online}
+                  activities={activities} activityName={e.activity_id ? actById.get(e.activity_id)?.name : undefined}
+                  onSetActivity={actions.setEntryActivity && ((name) => actions.setEntryActivity!(e.id, name))}
                   onSave={(fields) => actions.editEntry(e.id, fields)} onDelete={() => actions.deleteEntry(e.id)}
                   onClose={() => setEditId(undefined)}
                 />
               ) : (
                 <EntryLine
-                  key={e.id} entry={e} category={e.category_id ? catById.get(e.category_id) : undefined} timeZone={tz}
+                  key={e.id} entry={e} category={e.category_id ? catById.get(e.category_id) : undefined}
+                  activity={e.activity_id ? actById.get(e.activity_id) : undefined} timeZone={tz}
                   onEdit={() => setEditId(e.id)} onTag={(opener) => setPicker({ id: e.id, opener })}
                 />
               );
@@ -277,13 +288,14 @@ export function DayScreen() {
     editEntry: async (id, fields) => week.afterWrite(await writes.editEntry(id, fields)),
     deleteEntry: async (id) => week.afterWrite(await writes.deleteEntry(id)),
     setEntryTag: async (entryId, categoryId) => week.afterWrite(await writes.setEntryTag(entryId, categoryId)),
+    setEntryActivity: async (entryId, name) => week.afterWrite(await writes.setEntryActivity(entryId, name)),
   };
   const known = week.inLocalCopy ? copy.entries : [...copy.entries, ...week.entries];
 
   return (
     <DayView
       key={date} date={date} timeZone={tz} now={now} entries={week.entries} known={known} categories={copy.categories}
-      refreshedAt={copy.refreshedAt} load={week.load} actions={actions}
+      activities={copy.activities} slots={copy.slots} refreshedAt={copy.refreshedAt} load={week.load} actions={actions}
       connection={week.sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
       initialSheet={nudged && date === today ? { kind: 'now' } : undefined}
       onPickDay={(d) => void navigate(d === today ? '/' : `/day/${d}`)}
