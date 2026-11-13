@@ -250,10 +250,13 @@ input.text[aria-invalid="true"], select.text[aria-invalid="true"] { border-color
 }
 
 /* Floating + (05-ui D5): docked just above the TabBar, on every screen. The body gets room so it never covers the last control. */
-.phone-body.with-fab { padding-bottom: 96px; }
+.phone { --fab-size: 60px; --fab-margin: 16px; }
+/* Room = the + height plus its margin above the TabBar, plus the same margin again as air under the last row. Derived from the
+   same variables that place the +, so the two cannot drift apart. */
+.phone-body.with-fab { padding-bottom: calc(var(--fab-size) + var(--fab-margin) * 2); }
 .fab-dock { position: relative; height: 0; flex: none; }
 .fab {
-  position: absolute; right: max(20px, env(safe-area-inset-right)); bottom: 16px; width: 60px; height: 60px; border-radius: 30px;
+  position: absolute; right: max(20px, env(safe-area-inset-right)); bottom: var(--fab-margin); width: var(--fab-size); height: var(--fab-size); border-radius: calc(var(--fab-size) / 2);
   border: 0; background: var(--accent); color: var(--accent-text); display: flex; align-items: center; justify-content: center;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); cursor: pointer; z-index: 1;
   transition: transform 0.2s ease, opacity 0.2s ease;
