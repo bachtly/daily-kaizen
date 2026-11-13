@@ -114,7 +114,8 @@ G1 counts a day as logged when at least one Entry starts that day in my time zon
 An Activity says what the time was for (Company A, Lunch, Game B); a Category says the kind of time. They are independent: Company A can be Deep in one Entry and Shallow in the next, and neither label sets the other. Both are optional. Activities start empty for every account (no seeded set); the AI creates them.
 - AC-8.1 When the Server tags an Entry (AC-3.1), it shall in the same AI call also pick the Entry's Activity, and save it with Activity source AI:
   - the AI sees the Active Activity names; a name that matches one (ignoring case and extra spaces) or an alias is that Activity; any other name creates an Active Activity directly, with no approval step;
-  - no clear activity, or the AI call failed → no Activity (shown as "(no Activity)"), retried by the Tagging check like an Untagged entry (AC-3.2), sharing its attempt limit;
+  - no clear activity → no Activity (shown as "(no Activity)"), recorded as labelled by the AI and not asked again;
+  - the AI call failed → not labelled, retried by the Tagging check like an Untagged entry (AC-3.2), sharing its attempt limit;
   - the Entry's text is stored as typed; the AI only labels it.
 - AC-8.2 When I change an Entry's Activity on the Day view (pick an Active one, type a new name, or choose none), the Server shall save it with Activity source me. The Server shall never change an Activity whose source is me. A text edit clears an Activity whose source isn't me, so it is labelled again; this is the AC-3.2 rule for Activity.
 - AC-8.3 When I rename an Activity on the Week page, the Server shall change its name everywhere; a name another Activity has is refused. When I merge Activity A into B, the Server shall move A's Entries to B and keep A's name as an alias of B, so the AI and anything I type with that name resolve to B (chains resolve to the end). Repeating a rename or merge changes nothing more.
