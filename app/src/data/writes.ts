@@ -80,6 +80,16 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
   const rejectCategory = (categoryId: string) =>
     rpc((signal) => supabase.rpc('reject_category', { category_id: categoryId }).abortSignal(signal));
 
+  /** `name` is free text, or null for none (04-api); the Server resolves it to an Activity.
+   * The generated type says `string` because the arg has no default; the SQL function accepts null. */
+  const setEntryActivity = (entryId: string, name: string | null) =>
+    rpc((signal) => supabase.rpc('set_entry_activity', { p_entry_id: entryId, p_name: name as string }).abortSignal(signal));
+  const renameActivity = (id: string, name: string) =>
+    rpc((signal) => supabase.rpc('rename_activity', { p_id: id, p_name: name }).abortSignal(signal));
+  /** Moves `from`'s Entries and names into `into`. Repeating a done merge is fine. */
+  const mergeActivity = (from: string, into: string) =>
+    rpc((signal) => supabase.rpc('merge_activity', { p_from: from, p_into: into }).abortSignal(signal));
+
   /** Both the new row (`201`) and an already-done week (`[]`) mean done. */
   async function reviewDone(weekStart: string) {
     const started = performance.now();
@@ -121,6 +131,9 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
     setEntryTag,
     approveCategory,
     rejectCategory,
+    setEntryActivity,
+    renameActivity,
+    mergeActivity,
     reviewDone,
     saveSettings,
     upsertPushSubscription,

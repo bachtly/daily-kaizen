@@ -97,6 +97,37 @@ export type WeekTotals = {
 };
 
 /**
+ * Covered time in [winStart, winEnd) cut into pieces, each owned by one Entry: an Entry crossing a boundary counts its part
+ * inside; overlapping time belongs to the Entry created last (AC-5.1). Shared by the Category and Activity totals.
+ */
+export function ownedSegments<E extends WeekEntry>(
+  entries: readonly E[],
+  winStart: number,
+  winEnd: number,
+): { ms: number; entry: E }[] {
+  const clipped = entries
+    .map((entry) => ({
+      s: Math.max(Date.parse(entry.started_at), winStart),
+      e: Math.min(Date.parse(entry.ended_at), winEnd),
+      created: Date.parse(entry.created_at),
+      entry,
+    }))
+    .filter((c) => c.e > c.s);
+  const points = [...new Set([winStart, winEnd, ...clipped.flatMap((c) => [c.s, c.e])])].sort((a, b) => a - b);
+  const out: { ms: number; entry: E }[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    let owner: (typeof clipped)[number] | undefined;
+    for (const c of clipped) {
+      if (c.s <= a && c.e >= b && (!owner || c.created > owner.created)) owner = c;
+    }
+    if (owner) out.push({ ms: b - a, entry: owner.entry });
+  }
+  return out;
+}
+
+/**
  * Time per Category, Untagged and Unlogged for one week (AC-5.1).
  * Only past time counts (window ends at `now`); an Entry crossing a boundary counts its part inside;
  * overlapping time counts once, for the Entry created last.
@@ -111,28 +142,11 @@ export function weekTotals(
   const out: WeekTotals = { byCategory: {}, untaggedMs: 0, unloggedMs: 0, elapsedMs: Math.max(0, winEnd - winStart) };
   if (out.elapsedMs === 0) return out;
 
-  const clipped = entries
-    .map((e) => ({
-      s: Math.max(Date.parse(e.started_at), winStart),
-      e: Math.min(Date.parse(e.ended_at), winEnd),
-      created: Date.parse(e.created_at),
-      category: e.category_id,
-    }))
-    .filter((c) => c.e > c.s);
-
-  const points = [...new Set([winStart, winEnd, ...clipped.flatMap((c) => [c.s, c.e])])].sort((a, b) => a - b);
   let covered = 0;
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    let owner: (typeof clipped)[number] | undefined;
-    for (const c of clipped) {
-      if (c.s <= a && c.e >= b && (!owner || c.created > owner.created)) owner = c;
-    }
-    if (!owner) continue;
-    covered += b - a;
-    if (owner.category) out.byCategory[owner.category] = (out.byCategory[owner.category] ?? 0) + (b - a);
-    else out.untaggedMs += b - a;
+  for (const { ms, entry } of ownedSegments(entries, winStart, winEnd)) {
+    covered += ms;
+    if (entry.category_id) out.byCategory[entry.category_id] = (out.byCategory[entry.category_id] ?? 0) + ms;
+    else out.untaggedMs += ms;
   }
   out.unloggedMs = out.elapsedMs - covered;
   return out;
