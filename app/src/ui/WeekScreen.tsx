@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useInRouterContext, useNavigate, useParams } from 'react-router';
+import { activityTotals } from '../data/activities';
 import { dateOf, dayBounds, loggedMs, shiftDate } from '../data/day';
-import type { CategoryRow, EntryRow } from '../data/db';
+import type { ActivityRow, CategoryRow, EntryRow } from '../data/db';
 import type { Result } from '../data/request';
 import { mondayOf, weekBounds, weekTotals } from '../data/week';
+import { ActivityTotals, type ActivityActions } from './ActivityTotals';
 import { CategoryTotals } from './CategoryTotals';
 import { deviceZone, writes } from './liveWrites';
 import { useLogNow } from './LogNow';
@@ -20,7 +22,7 @@ import { countMoves, formatDuration, hhmm, shortDate } from './weekFormat';
 export type WeekActions = {
   approveCategory: (categoryId: string) => Promise<Result<unknown>>;
   rejectCategory: (categoryId: string) => Promise<Result<unknown>>;
-};
+} & Partial<ActivityActions>;
 
 export type WeekViewProps = {
   /** The week shown: its Monday, `YYYY-MM-DD`. */
@@ -31,6 +33,8 @@ export type WeekViewProps = {
   /** Entries that touch this week. */
   entries: readonly EntryRow[];
   categories: readonly CategoryRow[];
+  /** All of mine, Active and merged; the Activity panel is hidden while there are none. */
+  activities?: readonly ActivityRow[];
   /** `undefined` when unknown (an earlier week outside the Local copy): the badge and button are hidden. */
   reviewDone?: boolean;
   /** ISO time of the last Local copy refresh; null = never. */
@@ -96,12 +100,13 @@ function DayTotals({ monday, entries, timeZone: tz, now }: { monday: string; ent
 
 /** Week page: time per Category and per day, Suggested categories, Review done (UC-4). Entries are edited on the Day view. */
 export function WeekView({
-  monday, timeZone, now, isCurrentWeek, entries, categories, reviewDone, refreshedAt,
+  monday, timeZone, now, isCurrentWeek, entries, categories, activities = [], reviewDone, refreshedAt,
   connection = 'online', load = 'ready', onPrev, onNext, onRetry, onReviewDone, actions, moveCounts = {}, fab, sheet,
 }: WeekViewProps) {
   const online = connection !== 'offline';
   const bounds = useMemo(() => weekBounds(monday, timeZone), [monday, timeZone]);
   const totals = useMemo(() => weekTotals(entries, bounds, now), [entries, bounds, now]);
+  const actTotals = useMemo(() => activityTotals(entries, bounds, now), [entries, bounds, now]);
   const refreshedLabel = refreshedAt ? hhmm(Date.parse(refreshedAt), timeZone) : null;
   const suggested = categories.filter((c) => c.status === 'suggested');
 
@@ -147,6 +152,10 @@ export function WeekView({
         <>
           {entries.length === 0 && <div className="empty">Nothing logged this week yet.</div>}
           <CategoryTotals totals={totals} categories={categories} hasEntries={entries.length > 0} />
+          <ActivityTotals
+            totals={actTotals} activities={activities} categories={categories} online={online}
+            actions={actions?.renameActivity && actions.mergeActivity ? { renameActivity: actions.renameActivity, mergeActivity: actions.mergeActivity } : undefined}
+          />
           <DayTotals monday={monday} entries={entries} timeZone={timeZone} now={now} />
 
           {actions && suggested.map((c) => (
@@ -199,13 +208,15 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
   const actions: WeekActions = {
     approveCategory: async (id) => w.afterWrite(await writes.approveCategory(id)),
     rejectCategory: async (id) => w.afterWrite(await writes.rejectCategory(id)),
+    renameActivity: async (id, name) => w.afterWrite(await writes.renameActivity(id, name)),
+    mergeActivity: async (from, into) => w.afterWrite(await writes.mergeActivity(from, into)),
   };
   const goto = (m: string) => void navigate(m === currentMonday ? '/week' : `/week/${m}`);
 
   return (
     <WeekView
       monday={monday} timeZone={tz} now={now} isCurrentWeek={monday >= currentMonday}
-      entries={w.entries} categories={copy.categories} refreshedAt={copy.refreshedAt}
+      entries={w.entries} categories={copy.categories} activities={copy.activities} refreshedAt={copy.refreshedAt}
       reviewDone={w.inLocalCopy && copyReady ? copy.reviews.some((r) => r.week_start === monday) : undefined}
       connection={w.sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
       load={w.load} actions={actions} moveCounts={countMoves(copy.entries)}
