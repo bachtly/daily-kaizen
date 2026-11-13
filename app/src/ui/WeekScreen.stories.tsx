@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { CategoryRow, EntryRow } from '../data/db';
+import type { ActivityRow, CategoryRow, EntryRow } from '../data/db';
 import type { Result } from '../data/request';
 import { LogFab } from './LogFab';
 import { WeekView, type WeekActions } from './WeekScreen';
@@ -30,10 +30,23 @@ const entries = [
   entry('e8', '04', 'Scrolled reddit', '13:00', '13:20', 'waste'),
 ];
 
+const activities: ActivityRow[] = [
+  { id: 'ca', name: 'Company A', status: 'active', merged_into_id: null },
+  { id: 'dn', name: 'Dinner', status: 'active', merged_into_id: null },
+  { id: 'gm', name: 'Game A', status: 'active', merged_into_id: null },
+];
+const withActivities: EntryRow[] = entries.map((e) => ({
+  ...e,
+  activity_id: ['e1', 'e2', 'e4', 'e5'].includes(e.id) ? 'ca' : e.id === 'e3' ? 'dn' : e.id === 'e8' ? 'gm' : null,
+}));
+const openFirstActivity = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+  (canvasElement.querySelector('.act-row') as HTMLButtonElement | null)?.click();
+};
+
 const weekEarlier = (iso: string) => new Date(Date.parse(iso) - 7 * 86_400_000).toISOString();
 const ok = () => Promise.resolve({ ok: true as const, data: null });
 const later = (r: Result<unknown> = { ok: true, data: null }) => () => new Promise<Result<unknown>>((res) => setTimeout(() => res(r), 600));
-const actions: WeekActions = { approveCategory: later(), rejectCategory: later() };
+const actions: WeekActions = { approveCategory: later(), rejectCategory: later(), renameActivity: later(), mergeActivity: later() };
 
 const meta = {
   title: 'Screens/2 Week',
@@ -77,4 +90,20 @@ export const NoSuggestion: Story = {
 export const EarlierWeekSignedOut: Story = {
   name: 'Earlier week: signed out',
   args: { monday: '2026-10-19', isCurrentWeek: false, reviewDone: undefined, load: 'session-lost-earlier-week', connection: 'signed-out' },
+};
+
+export const WithActivities: Story = {
+  name: 'With Activities',
+  args: { entries: withActivities, activities },
+  parameters: { docs: { description: { story: 'Tap a row for the Category split, Rename and Merge into…. Hidden while there are no Activities (Default).' } } },
+};
+export const ActivityOpen: Story = {
+  name: 'With Activities: row open',
+  args: { entries: withActivities, activities },
+  play: openFirstActivity,
+};
+export const ActivitiesOffline: Story = {
+  name: 'With Activities: offline',
+  args: { entries: withActivities, activities, connection: 'offline' },
+  play: openFirstActivity,
 };
