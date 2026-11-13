@@ -49,7 +49,7 @@ beforeEach(async () => {
 });
 
 describe('refresh', () => {
-  it('reads six sources and replaces the copy with refreshed_at', async () => {
+  it('reads seven sources and replaces the copy with refreshed_at', async () => {
     replies.entries = ok([
       { ...entry('a'), entry_activities: [{ activity_id: 'z', created_at: '2026-11-03T02:00:02Z' }, { activity_id: 'y', created_at: '2026-11-03T02:00:01Z' }] },
       { ...entry('b'), entry_activities: [] },
@@ -57,11 +57,12 @@ describe('refresh', () => {
     replies.categories = ok([{ id: 'c', name: 'Work', description: 'd', status: 'active' }]);
     replies.activities = ok([{ id: 'a1', name: 'Email', status: 'active', merged_into_id: null }]);
     replies.activity_slots = ok([{ activity_id: 'a1', dow: 1, hour: 9, n: 4 }]);
+    replies.activity_targets = ok([{ id: 't1', activity_id: 'a1', category_id: null, minutes: 900 }]);
     replies.settings = ok([{ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00', nudge_gap_hours: 5 }]);
-    replies.weekly_reviews = ok([{ week_start: '2026-11-02' }]);
+    replies.weekly_reviews = ok([{ week_start: '2026-11-02', next_change: 'No games' }]);
     const r = await refresh(window);
     expect(r.ok).toBe(true);
-    expect(calls.map((c) => c.table).sort()).toEqual(['activities', 'activity_slots', 'categories', 'entries', 'settings', 'weekly_reviews']);
+    expect(calls.map((c) => c.table).sort()).toEqual(['activities', 'activity_slots', 'activity_targets', 'categories', 'entries', 'settings', 'weekly_reviews']);
     const entryOps = calls.find((c) => c.table === 'entries')!.ops;
     expect(entryOps).toContainEqual(['gt', ['ended_at', window.since]]);
     expect(calls.find((c) => c.table === 'weekly_reviews')!.ops).toContainEqual(['gte', ['week_start', '2026-11-02']]);
@@ -77,7 +78,9 @@ describe('refresh', () => {
     // The old column must not be named, so dropping it cannot break a refresh (#79).
     expect(select.replace('entry_activities(activity_id, created_at)', '')).not.toContain('activity_id');
     expect(copy.settings).toEqual({ time_zone: 'UTC', quiet_start: '22:00', quiet_end: '07:00', nudge_gap_hours: 5 });
-    expect(copy.reviews).toEqual([{ week_start: '2026-11-02' }]);
+    expect(copy.reviews).toEqual([{ week_start: '2026-11-02', next_change: 'No games' }]);
+    expect(copy.targets).toEqual([{ id: 't1', activity_id: 'a1', category_id: null, minutes: 900 }]);
+    expect(calls.find((c) => c.table === 'weekly_reviews')!.ops).toContainEqual(['select', ['week_start, next_change']]);
     expect(copy.refreshedAt).toBe(r.ok ? r.data.refreshedAt : '');
   });
 

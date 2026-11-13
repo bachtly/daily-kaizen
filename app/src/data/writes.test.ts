@@ -199,6 +199,26 @@ describe('activity rpcs', () => {
     rpcReply = { data: null, error: { message: 'too_many_activities' }, status: 400 };
     expect((await w.setEntryActivities('e1', ['a', 'b', 'c', 'd'])).ok).toBe(false);
   });
+  it('sets and clears a target, any Category (null) or one Category, refreshing after each', async () => {
+    await w.setActivityTarget('a1', null, 900);
+    await w.setActivityTarget('a1', 'c1', 600);
+    await w.setActivityTarget('a1', null, null);
+    expect(rpcCalls.slice(-3)).toEqual([
+      { name: 'set_activity_target', args: { p_activity_id: 'a1', p_category_id: null, p_minutes: 900 } },
+      { name: 'set_activity_target', args: { p_activity_id: 'a1', p_category_id: 'c1', p_minutes: 600 } },
+      { name: 'set_activity_target', args: { p_activity_id: 'a1', p_category_id: null, p_minutes: null } },
+    ]);
+    expect(refresh).toHaveBeenCalledTimes(3);
+  });
+  it('passes the target error keys through and does not refresh', async () => {
+    rpcReply = { data: null, error: { message: 'target_out_of_range' }, status: 400 };
+    expect(await w.setActivityTarget('a1', null, 5)).toEqual({ ok: false, error: 'target_out_of_range' });
+    rpcReply = { data: null, error: { message: 'category_not_found' }, status: 400 };
+    expect(await w.setActivityTarget('a1', 'nope', 60)).toEqual({ ok: false, error: 'category_not_found' });
+    rpcReply = { data: null, error: { message: 'activity_not_found' }, status: 400 };
+    expect(await w.setActivityTarget('nope', null, 60)).toEqual({ ok: false, error: 'activity_not_found' });
+    expect(refresh).not.toHaveBeenCalled();
+  });
   it('passes the error keys through and does not refresh', async () => {
     rpcReply = { data: null, error: { message: 'activity_name_taken' }, status: 400 };
     expect(await w.renameActivity('a1', 'Mail')).toEqual({ ok: false, error: 'activity_name_taken' });
@@ -228,6 +248,7 @@ describe('every update and delete carries a filter (CLAUDE.md)', () => {
     await w.setEntryActivities('e1', ['Email']);
     await w.renameActivity('a1', 'Mail');
     await w.mergeActivity('a1', 'a2');
+    await w.setActivityTarget('a1', null, 60);
     expect(calls).toHaveLength(0);
   });
 });
@@ -238,6 +259,17 @@ describe('reviewDone, settings, push', () => {
     expect(r.ok).toBe(true);
     expect(calls[0]).toMatchObject({ table: 'weekly_reviews', op: 'upsert' });
     expect(calls[0].args).toEqual([{ week_start: '2026-11-02' }, { onConflict: 'user_id,week_start', ignoreDuplicates: true }]);
+  });
+  it('reviewDone sends a trimmed note, and nothing for a blank one', async () => {
+    await w.reviewDone('2026-11-02', '  No games before 21:00 ');
+    await w.reviewDone('2026-11-09', '   ');
+    expect(calls[0].args[0]).toEqual({ week_start: '2026-11-02', next_change: 'No games before 21:00' });
+    expect(calls[1].args[0]).toEqual({ week_start: '2026-11-09' });
+  });
+  it('reviewDone maps a too-long note to next_change_too_long and does not refresh', async () => {
+    server.failNext = { data: null, error: { code: '23514', message: 'violates check constraint "weekly_reviews_next_change_len"' }, status: 400 };
+    expect(await w.reviewDone('2026-11-02', 'x'.repeat(141))).toEqual({ ok: false, error: 'next_change_too_long' });
+    expect(refresh).not.toHaveBeenCalled();
   });
   it('saveSettings sends only the given fields', async () => {
     await w.saveSettings({ quiet_start: '22:00', quiet_end: '07:00' });

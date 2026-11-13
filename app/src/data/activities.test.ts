@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activityChips, activityTotals, MAX_CHIPS, type ActivityEntry } from './activities';
+import { activityChips, activityTotals, lastWeekNote, MAX_CHIPS, type ActivityEntry } from './activities';
 import { weekBounds, weekTotals } from './week';
 
 const act = (id: string, name = id, status: 'active' | 'merged' = 'active') => ({
@@ -94,8 +94,8 @@ describe('activityTotals', () => {
       bounds,
     );
     expect(rows.map((r) => r.activityId)).toEqual(['c', 'a', 'b', null]);
-    expect(rows[1]).toEqual({ activityId: 'a', totalMs: 2 * H, byCategory: { work: H, life: H }, untaggedMs: 0 });
-    expect(rows[2]).toEqual({ activityId: 'b', totalMs: H / 2, byCategory: {}, untaggedMs: H / 2 });
+    expect(rows[1]).toEqual({ activityId: 'a', totalMs: 2 * H, byCategory: { work: H, life: H }, untaggedMs: 0, targetMs: null, categoryTargetMs: {} });
+    expect(rows[2]).toEqual({ activityId: 'b', totalMs: H / 2, byCategory: {}, untaggedMs: H / 2, targetMs: null, categoryTargetMs: {} });
     expect(rows[3].totalMs).toBe(3 * H);
   });
   it('omits "(no Activity)" when every Entry has one', () => {
@@ -160,5 +160,51 @@ describe('activityTotals', () => {
     const wt = weekTotals(entries, bounds, bounds.end);
     expect(sum).toEqual(wt.byCategory);
     expect(untagged).toBe(wt.untaggedMs);
+  });
+});
+
+describe('activityTotals with targets (#74)', () => {
+  const bounds = weekBounds('2026-11-02', 'UTC');
+  const target = (activity_id: string, category_id: string | null, minutes: number) => ({ id: `${activity_id}-${category_id}`, activity_id, category_id, minutes });
+
+  it('carries the any-target and the per-Category targets on the row, in ms', () => {
+    const rows = activityTotals(
+      [e('2026-11-03T01:00:00Z', '2026-11-03T02:00:00Z', 'a', 'work')],
+      bounds, bounds.end, [target('a', null, 1800), target('a', 'work', 900)],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].targetMs).toBe(1800 * 60_000);
+    expect(rows[0].categoryTargetMs).toEqual({ work: 900 * 60_000 });
+  });
+  it('lists an Activity with a target but no time this week at 0, after the ones with time, ties by id', () => {
+    const rows = activityTotals(
+      [e('2026-11-03T01:00:00Z', '2026-11-03T02:00:00Z', 'b', 'work')],
+      bounds, bounds.end, [target('z', null, 180), target('c', null, 60)],
+    );
+    expect(rows.map((r) => [r.activityId, r.totalMs, r.targetMs])).toEqual([['b', H, null], ['c', 0, 3600_000], ['z', 0, 180 * 60_000]]);
+  });
+  it('keeps "(no Activity)" last, and has no targets without any', () => {
+    const rows = activityTotals([e('2026-11-03T01:00:00Z', '2026-11-03T02:00:00Z', null, 'work')], bounds, bounds.end, [target('a', null, 60)]);
+    expect(rows.map((r) => r.activityId)).toEqual(['a', null]);
+    expect(activityTotals([], bounds)).toEqual([]);
+  });
+});
+
+describe('lastWeekNote', () => {
+  const reviews = [
+    { week_start: '2026-10-26', next_change: 'No games before 21:00' },
+    { week_start: '2026-11-02', next_change: null },
+    { week_start: '2026-11-09' },
+  ];
+  it('returns the note saved with the week before the one shown', () => {
+    expect(lastWeekNote(reviews, '2026-11-02')).toBe('No games before 21:00');
+  });
+  it('is null when that week has no note, no review, or the review has no note field', () => {
+    expect(lastWeekNote(reviews, '2026-11-09')).toBeNull();
+    expect(lastWeekNote(reviews, '2026-11-16')).toBeNull();
+    expect(lastWeekNote(reviews, '2026-10-26')).toBeNull();
+  });
+  it('crosses a year end', () => {
+    expect(lastWeekNote([{ week_start: '2025-12-29', next_change: 'x' }], '2026-01-05')).toBe('x');
   });
 });
