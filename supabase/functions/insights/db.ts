@@ -49,6 +49,21 @@ export interface InsightsDb {
   ): Promise<void>;
   /** A run for the week with one of the statuses exists. */
   hasRun(userId: string, week: string, trigger: "schedule" | "me", statuses: RunStatus[]): Promise<boolean>;
+  /** Statuses of the week's runs by a trigger. */
+  runStatuses(userId: string, week: string, trigger: "schedule" | "me"): Promise<RunStatus[]>;
+  /** When I last asked for insights (trigger me), or null. */
+  lastMyRunAt(userId: string): Promise<string | null>;
+  /** Every accepted change, oldest first. */
+  getChanges(userId: string): Promise<
+    { kind: string; try_this: string; week_start: string; active_until: string; result: ChangeResult | null }[]
+  >;
+  getDismissed(userId: string, sinceWeek: string): Promise<{ kind: string; subject: string; week_start: string; reason: string | null }[]>;
+  /** Coach note versions, newest first (up to 20). */
+  getCoachNotes(userId: string): Promise<{ body: string; source: "ai" | "me" }[]>;
+  addCoachNote(userId: string, week: string, body: string): Promise<void>;
+  /** The signed-in user's id for a JWT, or null. */
+  userFromJwt(jwt: string): Promise<string | null>;
+  getUser(userId: string): Promise<UserSettings | null>;
 }
 
 const fail = (what: string, error: { message: string } | null) => {
@@ -200,6 +215,82 @@ export function dbFromClient(client: SupabaseClient): InsightsDb {
         .in("status", statuses);
       fail("has run", error);
       return (count ?? 0) > 0;
+    },
+    async runStatuses(userId, week, trigger) {
+      const { data, error } = await client
+        .from("insight_runs")
+        .select("status")
+        .eq("user_id", userId)
+        .eq("week_start", week)
+        .eq("trigger", trigger);
+      fail("run statuses", error);
+      return (data ?? []).map((r: { status: RunStatus }) => r.status);
+    },
+    async lastMyRunAt(userId) {
+      const { data, error } = await client
+        .from("insight_runs")
+        .select("started_at")
+        .eq("user_id", userId)
+        .eq("trigger", "me")
+        .order("started_at", { ascending: false })
+        .limit(1);
+      fail("last run", error);
+      return data?.[0]?.started_at ?? null;
+    },
+    async getChanges(userId) {
+      const { data, error } = await client
+        .from("insights")
+        .select("kind,try_this,week_start,active_until,result")
+        .eq("user_id", userId)
+        .eq("status", "accepted")
+        .order("week_start", { ascending: true });
+      fail("get changes", error);
+      return data ?? [];
+    },
+    async getDismissed(userId, sinceWeek) {
+      const { data, error } = await client
+        .from("insights")
+        .select("kind,subject_key,facts,week_start,dismiss_reason")
+        .eq("user_id", userId)
+        .eq("status", "dismissed")
+        .gte("week_start", sinceWeek)
+        .order("week_start", { ascending: true });
+      fail("get dismissed", error);
+      // deno-lint-ignore no-explicit-any
+      return (data ?? []).map((r: any) => ({
+        kind: r.kind,
+        subject: r.facts?.activity ?? r.facts?.category ?? "",
+        week_start: r.week_start,
+        reason: r.dismiss_reason,
+      }));
+    },
+    async getCoachNotes(userId) {
+      const { data, error } = await client
+        .from("coach_notes")
+        .select("body,source")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      fail("get coach notes", error);
+      return (data ?? []) as { body: string; source: "ai" | "me" }[];
+    },
+    async addCoachNote(userId, week, body) {
+      const { error } = await client.from("coach_notes").insert({ user_id: userId, week_start: week, body, source: "ai" });
+      fail("add coach note", error);
+    },
+    async userFromJwt(jwt) {
+      const { data, error } = await client.auth.getUser(jwt);
+      if (error || !data?.user) return null;
+      return data.user.id;
+    },
+    async getUser(userId) {
+      const { data, error } = await client
+        .from("settings")
+        .select("user_id,time_zone,quiet_start,quiet_end")
+        .eq("user_id", userId)
+        .maybeSingle();
+      fail("get user", error);
+      return data?.time_zone ? (data as UserSettings) : null;
     },
   };
 }
