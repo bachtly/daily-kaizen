@@ -94,7 +94,7 @@ jobs:
             "APP_URL=$APP_URL"
       - name: Functions
         run: |
-          for f in tag-entries send-notifications; do
+          for f in tag-entries send-notifications insights; do
             supabase functions deploy "$f" --yes --no-verify-jwt --use-api --import-map supabase/functions/deno.json
           done
       - name: Vault and account seed
