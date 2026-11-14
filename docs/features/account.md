@@ -2,7 +2,7 @@
 
 ## What it does
 - **Sign in** with my email and a 6-digit emailed code, in the home-screen app or any browser. A new email creates an account.
-- **/install** explains Add to Home Screen.
+- **/install** explains Add to Home Screen for this phone: Safari or Chrome on iPhone, Chrome on Android. Any other browser or device is told to open the address in one of those.
 - The app keeps a read-only **Local copy** so the Day view and Week page work offline.
 - **Settings → Account → Sign out** signs this device out.
 
@@ -21,6 +21,7 @@
 ## Decisions
 - Anyone can sign up, with the same copy for every email (#48).
 - Sign-in from any browser, with install steps on their own page (#56).
+- Android is supported as a home-screen web app from Chrome, like the iPhone; no native app.
 - Online writes with a read-only Local copy, not an Outbox (D3).
 - Sign-out clears via `db.tables` rather than a hand-kept list (#72).
 

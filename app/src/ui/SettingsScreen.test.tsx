@@ -120,7 +120,7 @@ describe('SettingsScreen', () => {
     turnOnPush.mockResolvedValue({ state: 'denied' });
     mount();
     fireEvent.click(await screen.findByText('Turn on notifications'));
-    await screen.findByText(/Push is off\. Turn it on in iOS Settings/);
+    await screen.findByText(/Push is off\. Allow notifications for daily-kaizen in your phone's Settings/);
     expect(turnOnPush).toHaveBeenCalledOnce();
   });
 

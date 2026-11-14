@@ -11,4 +11,5 @@ type Story = StoryObj<typeof meta>;
 
 export const OpenedInSafari: Story = {};
 export const OpenedInChrome: Story = { args: { browser: 'ios-chrome' } };
+export const OpenedInChromeOnAndroid: Story = { args: { browser: 'android-chrome' } };
 export const OpenedOnAnotherDevice: Story = { args: { browser: 'elsewhere' } };
