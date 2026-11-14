@@ -334,18 +334,26 @@ input.text[aria-invalid="true"], select.text[aria-invalid="true"] { border-color
 .acts { list-style: none; padding: 0; margin: 0; }
 .acts li.neutral { color: var(--muted); }
 .act-row {
-  display: grid; grid-template-columns: 104px minmax(0, 1fr) 72px 14px; align-items: center; gap: 8px;
+  display: grid; grid-template-columns: 84px minmax(0, 1fr) auto 14px; align-items: center; gap: 8px;
   width: 100%; min-height: 44px; background: none; border: 0; padding: 0; font: inherit; font-size: 15px; color: inherit; text-align: left; cursor: pointer;
 }
 .act-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-row .val-target, .act-row .tick { white-space: nowrap; }
 .act-row .stack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; }
-.act-row .val { text-align: right; font-variant-numeric: tabular-nums; }
+.act-row .val { white-space: normal; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .act-split { list-style: none; margin: 0 0 8px; padding: 0 0 0 12px; font-size: 14px; color: var(--muted); }
 .act-split li { display: flex; align-items: center; gap: 8px; min-height: 26px; }
 .act-split li span:nth-child(2) { flex: 1; }
 .act-split .swatch { width: 10px; height: 10px; border-radius: 3px; }
-.act-split .val { font-variant-numeric: tabular-nums; }
+.act-split .val { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .act-manage { margin: 0 0 12px; padding-left: 12px; }
+.act-split .split-line { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.act-split .split-line span:nth-child(2) { flex: 1; }
+.last-note { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); font-size: 15px; overflow-wrap: anywhere; }
+.field-hint { display: block; overflow-wrap: anywhere; font-size: 14px; color: var(--muted); }
+.act-split .split-line:disabled { opacity: 0.55; cursor: default; }
+.review-note { display: block; margin-top: 16px; }
+.review-note .text, .target-editor .text { width: 100%; box-sizing: border-box; margin-top: 6px; }
 .act-pick { list-style: none; margin: 0; padding: 0; }
 .act-pick button { width: 100%; min-height: 44px; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); font: inherit; font-size: 15px; color: var(--text); cursor: pointer; }
 .act-pick button:disabled { color: var(--muted); cursor: default; }
@@ -354,3 +362,10 @@ input.text[aria-invalid="true"], select.text[aria-invalid="true"] { border-color
 .activity-picker { margin-top: 10px; }
 .activity-picker .chip.selected { border-color: var(--accent); font-weight: 600; }
 .activity-picker .activity-add { margin-top: 6px; }
+
+/* 320 px: long labels and "actual / target" wrap instead of pushing the row wider */
+.act-split li, .act-split .split-line { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.act-split li > span:nth-child(2), .act-split .split-line > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.act-split .val { white-space: normal; text-align: right; flex: 0 1 auto; max-width: 55%; overflow-wrap: anywhere; }
+.target-editor, .target-editor label { display: block; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.target-editor .field-hint { overflow-wrap: anywhere; }

@@ -2,13 +2,20 @@ import { useState } from 'react';
 import { NO_ACTIVITY, type ActivityTotal } from '../data/activities';
 import type { ActivityRow, CategoryRow } from '../data/db';
 import type { Result } from '../data/request';
+import { TargetEditor } from './TargetEditor';
 import { categoryColour, formatDuration } from './weekFormat';
 
 /** Phone writes the panel can make. Each resolves when the Server answers. */
 export type ActivityActions = {
   renameActivity: (id: string, name: string) => Promise<Result<unknown>>;
   mergeActivity: (from: string, into: string) => Promise<Result<unknown>>;
+  /** Set (minutes) or clear (null) a weekly target; `categoryId` null = any Category. */
+  setTarget?: (activityId: string, categoryId: string | null, minutes: number | null) => Promise<Result<unknown>>;
 };
+
+/** "actual / target", or just the actual when there is no target. */
+const withTarget = (ms: number, target: number | null | undefined) =>
+  target ? `${formatDuration(ms)} / ${formatDuration(target)}` : formatDuration(ms);
 
 type Mode = 'rename' | 'merge' | undefined;
 
@@ -22,26 +29,37 @@ const messageFor = (error: string) =>
   : error === 'unknown' ? 'Needs a connection.'
   : "Couldn't save. Try again.";
 
-function Split({ total, categories }: { total: ActivityTotal; categories: readonly CategoryRow[] }) {
+function Split({ total, categories, online, onPick }: {
+  total: ActivityTotal; categories: readonly CategoryRow[]; online: boolean; onPick?: (categoryId: string) => void;
+}) {
   const rows = categories
-    .filter((c) => (total.byCategory[c.id] ?? 0) > 0)
-    .map((c) => ({ id: c.id, label: c.name, ms: total.byCategory[c.id], colour: categoryColour(c.name) }));
-  if (total.untaggedMs > 0) rows.push({ id: 'untagged', label: 'Untagged', ms: total.untaggedMs, colour: 'var(--neutral-bar)' });
+    .filter((c) => (total.byCategory[c.id] ?? 0) > 0 || total.categoryTargetMs[c.id])
+    .map((c) => ({ id: c.id, label: c.name, ms: total.byCategory[c.id] ?? 0, target: total.categoryTargetMs[c.id] as number | undefined, colour: categoryColour(c.name), pick: true }));
+  if (total.untaggedMs > 0) rows.push({ id: 'untagged', label: 'Untagged', ms: total.untaggedMs, target: undefined, colour: 'var(--neutral-bar)', pick: false });
   return (
     <ul className="act-split">
-      {rows.map((r) => (
-        <li key={r.id}>
-          <span className="swatch" aria-hidden="true" style={{ background: r.colour }} />
-          <span>{r.label}</span>
-          <span className="val">{formatDuration(r.ms)}</span>
-        </li>
-      ))}
+      {rows.map((r) => {
+        const body = (
+          <>
+            <span className="swatch" aria-hidden="true" style={{ background: r.colour }} />
+            <span>{r.label}</span>
+            <span className="val">{withTarget(r.ms, r.target)}</span>
+          </>
+        );
+        return (
+          <li key={r.id}>
+            {onPick && r.pick
+              ? <button className="split-line" disabled={!online} onClick={() => onPick(r.id)}>{body}</button>
+              : body}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-function Manage({ activity, others, online, actions }: {
-  activity: ActivityRow; others: readonly ActivityRow[]; online: boolean; actions: ActivityActions;
+function Manage({ activity, others, online, actions, onTarget }: {
+  activity: ActivityRow; others: readonly ActivityRow[]; online: boolean; actions: ActivityActions; onTarget?: () => void;
 }) {
   const [mode, setMode] = useState<Mode>();
   const [name, setName] = useState(activity.name);
@@ -73,6 +91,7 @@ function Manage({ activity, others, online, actions }: {
         <div className="row-actions">
           <button className="secondary" disabled={!online} onClick={() => { setName(activity.name); setMessage(undefined); setMode('rename'); }}>Rename</button>
           <button className="secondary" disabled={!online || others.length === 0} onClick={() => { setMessage(undefined); setMode('merge'); }}>Merge into…</button>
+          {onTarget && <button className="secondary" disabled={!online} onClick={onTarget}>Target</button>}
         </div>
       )}
       {mode === 'rename' && (
@@ -109,9 +128,47 @@ function Manage({ activity, others, online, actions }: {
   );
 }
 
+type Editing = { categoryId: string | null } | undefined;
+
+/** The open row: Category split, then Rename / Merge / Target, or the target form. */
+function Open({ total, activity, active, categories, online, actions }: {
+  total: ActivityTotal; activity?: ActivityRow; active: readonly ActivityRow[]; categories: readonly CategoryRow[]; online: boolean; actions?: ActivityActions;
+}) {
+  const [editing, setEditing] = useState<Editing>();
+  const setTarget = actions?.setTarget;
+  const category = editing?.categoryId ? categories.find((c) => c.id === editing.categoryId) : undefined;
+  return (
+    <>
+      <Split
+        total={total} categories={categories} online={online}
+        onPick={activity && setTarget ? (categoryId) => setEditing({ categoryId }) : undefined}
+      />
+      {activity && editing && setTarget && (
+        <div className="act-manage">
+          <TargetEditor
+            key={editing.categoryId ?? 'any'}
+            label={category ? `${activity.name} · ${category.name}` : `${activity.name} · any Category`}
+            currentMs={category ? total.categoryTargetMs[category.id] ?? null : total.targetMs}
+            online={online}
+            onSave={(minutes) => setTarget(activity.id, editing.categoryId, minutes)}
+            onClose={() => setEditing(undefined)}
+          />
+        </div>
+      )}
+      {activity && actions && !editing && (
+        <Manage
+          activity={activity} others={active.filter((a) => a.id !== activity.id)} online={online} actions={actions}
+          onTarget={setTarget ? () => setEditing({ categoryId: null }) : undefined}
+        />
+      )}
+    </>
+  );
+}
+
 /**
- * Time per Activity, each row split by Category (AC-8.5). Tap a row for the split and, for a real Activity, Rename and
- * Merge into… (AC-8.3). Hidden while the user has no Activities. Every bar has its text value, so colour is never the only signal.
+ * Time per Activity, each row split by Category (AC-8.5). Tap a row for the split and, for a real Activity, Rename,
+ * Merge into… (AC-8.3) and Target (#74); a Category line sets that Category's target. A row with a target shows
+ * "actual / target", with a tick once an any-Category target is met. Hidden while the user has no Activities. Every bar has its text value, so colour is never the only signal.
  */
 export function ActivityTotals({ totals, activities, categories, online, actions }: {
   totals: readonly ActivityTotal[];
@@ -146,16 +203,25 @@ export function ActivityTotals({ totals, activities, categories, online, actions
                 <span className="stack" style={{ width: `${(t.totalMs / max) * 100}%` }} aria-hidden="true">
                   {parts(t).map((c, i) => <span key={i} style={{ flex: c.ms, background: c.colour }} />)}
                 </span>
-                <span className="val">{formatDuration(t.totalMs)}</span>
+                <span className="val">
+                  {formatDuration(t.totalMs)}
+                  {t.targetMs ? (
+                    <>
+                      {' '}
+                      <span className="val-target">/ {formatDuration(t.targetMs)}</span>
+                    </>
+                  ) : null}
+                  {t.targetMs !== null && t.totalMs >= t.targetMs && (
+                    <>
+                      <span className="tick" aria-hidden="true"> ✓</span>
+                      <span className="sr-only"> target met</span>
+                    </>
+                  )}
+                </span>
                 <span aria-hidden="true">{isOpen ? '▾' : '›'}</span>
               </button>
               {isOpen && (
-                <>
-                  <Split total={t} categories={categories} />
-                  {activity && actions && (
-                    <Manage activity={activity} others={active.filter((a) => a.id !== activity.id)} online={online} actions={actions} />
-                  )}
-                </>
+                <Open total={t} activity={activity} active={active} categories={categories} online={online} actions={actions} />
               )}
             </li>
           );
