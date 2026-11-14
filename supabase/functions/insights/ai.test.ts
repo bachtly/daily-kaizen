@@ -8,6 +8,7 @@ const SUNDAY_1830 = Date.parse("2026-11-08T11:30:00Z"); // Ho Chi Minh 18:30
 const ENTRIES = [...weekOfEntries("2026-10-26"), ...weekOfEntries("2026-11-02")];
 
 type Ctx = {
+  week_so_far: boolean;
   history: string[];
   my_lines: string[];
   dismissed: { reason: string | null }[];
@@ -160,4 +161,46 @@ Deno.test("phone: signed in, this or last week, once an hour", async () => {
   assertEquals([m.runs[0].week, m.runs[0].trigger], ["2026-10-26", "me"]);
   const opt = await handle(new Request("http://x", { method: "OPTIONS" }), { getEnv: (n) => env[n], makeDb: () => m.db, waitUntil: () => {} });
   assertEquals([opt.status, opt.headers.get("access-control-allow-origin")], [204, "*"]);
+});
+
+Deno.test("phone mid-week: from 2 logged days, worded as so far, the coach note kept", async () => {
+  const env: Record<string, string> = {
+    SUPABASE_URL: "http://db",
+    SUPABASE_SERVICE_ROLE_KEY: "svc",
+    JOB_SECRET: "s",
+    ANTHROPIC_API_KEY: "key",
+  };
+  const WEDNESDAY_2000 = Date.parse("2026-11-04T13:00:00Z"); // Ho Chi Minh 20:00
+  const ask = async (m: ReturnType<typeof memoryDb>, fetchFn: typeof fetch) => {
+    const res = await handle(
+      new Request("http://x", { method: "POST", headers: { authorization: "Bearer good" } }),
+      {
+        getEnv: (n) => env[n],
+        makeDb: () => m.db,
+        waitUntil: () => {},
+        now: () => WEDNESDAY_2000,
+        makeWord: (key, db) => makeWord(key, db, fetchFn),
+      },
+    );
+    return (await res.json()).status;
+  };
+  const seen: Ctx[] = [];
+  const api = fakeApi((ctx) => {
+    seen.push(ctx);
+    return message({ cards: [], coach_note: "A new note." });
+  });
+
+  const one = memoryDb([...weekOfEntries("2026-10-26"), ...weekOfEntries("2026-11-02", 1)]);
+  assertEquals(await ask(one, api.fetchFn), "too_early");
+
+  const m = memoryDb([...weekOfEntries("2026-10-26"), ...weekOfEntries("2026-11-02", 3)]);
+  assertEquals(await ask(m, api.fetchFn), "ok");
+  assertEquals(m.runs.map((r) => [r.week, r.trigger]), [["2026-11-02", "me"]]);
+  assert(m.saved[0].rows.length > 0, "cards from a part week");
+  assertEquals(seen[0].week_so_far, true);
+  assertEquals(m.notes.length, 0, "a mid-week run keeps the note");
+
+  // Sunday's run still happens after a mid-week one (and needs 5 logged days)
+  await runDue(m.db, SUNDAY_1830);
+  assertEquals(m.runs.map((r) => [r.trigger, r.status]), [["me", "ok"], ["schedule", "too_early"]]);
 });

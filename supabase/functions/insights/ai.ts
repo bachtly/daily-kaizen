@@ -24,6 +24,7 @@ Rules:
 - "evidence_id" must be one of the candidate's "allowed_evidence" ids.
 - Set "may_not_apply" to a short reason, taken from the history, the coach note or a dismissal reason, only when the suggestion likely does not fit this person; otherwise null. Such a card is still shown, last.
 - Plain, warm, non-judgemental English. No scores, no streaks, no exclamation marks.
+- When "week_so_far" is true the week isn't over: say "so far this week", and don't treat a low total as a pattern yet.
 - "coach_note": rewrite the note (at most 1200 characters) from the old note, the history and this week. Keep the lines in "my_lines" word for word. State a pattern only when at least 2 weeks of history, a dismissal or a reason supports it. No numbers except ones copied from the input.
 
 Return one card per candidate, with its "candidate_id".`;
@@ -126,6 +127,7 @@ export function changeLines(changes: Change[]): string[] {
 }
 
 export type Context = {
+  week_so_far: boolean;
   history: string[];
   changes: string[];
   dismissed: Dismissed[];
@@ -150,8 +152,10 @@ export function buildContext(input: {
   dismissed: Dismissed[];
   note: { current: CoachNote | null; myLines: string[] };
   targets: string[];
+  partial?: boolean;
 }): Context {
   return {
+    week_so_far: input.partial ?? false,
     history: input.history,
     changes: input.changes,
     dismissed: input.dismissed,
@@ -210,7 +214,7 @@ export async function callClaude(context: Context, apiKey: string, fetchFn: type
 
 /** Builds the WordFn the run uses: loads the history, calls the AI, checks every card and the note. */
 export function makeWord(apiKey: string, db: InsightsDb, fetchFn: typeof fetch = fetch): WordFn {
-  return async ({ userId, week, ranked, templates }) => {
+  return async ({ userId, week, ranked, templates, partial }) => {
     const [summaries, cats, changes, dismissed, notes, targets, acts] = await Promise.all([
       db.getSummaries(userId, "2000-01-03"),
       db.getCategories(userId),
@@ -237,6 +241,7 @@ export function makeWord(apiKey: string, db: InsightsDb, fetchFn: typeof fetch =
       dismissed,
       note,
       targets: targetLines,
+      partial,
     });
     const reply = await callClaude(context, apiKey, fetchFn);
 
@@ -262,7 +267,9 @@ export function makeWord(apiKey: string, db: InsightsDb, fetchFn: typeof fetch =
 
     const body = reply.coach_note.trim();
     const problem = noteProblem(body, JSON.stringify(context), note.myLines);
-    if (problem) console.warn(`insights: coach note kept: ${problem}`);
+    // A mid-week run doesn't rewrite the long-term note: the week's numbers aren't final.
+    if (partial) { /* keep */ }
+    else if (problem) console.warn(`insights: coach note kept: ${problem}`);
     else if (body !== (note.current?.body ?? "")) await db.addCoachNote(userId, week, body);
 
     return { cards, model: reply.model, input_tokens: reply.input_tokens, output_tokens: reply.output_tokens };

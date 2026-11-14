@@ -2,7 +2,8 @@
 import type { CategoryRow, EntryRow, InsightRow, SettingsRow, SummaryRow } from './db';
 import { computeWeek, rolesOf, type WeekFacts } from './facts';
 
-export const MIN_LOGGED_DAYS = 5;
+/** "Get insights now" works mid-week from this many logged days (same as the Server). */
+export const MIN_LOGGED_DAYS_NOW = 2;
 export const SHOWN_FIRST = 3;
 
 /** This week's facts from the Entries on the phone (same rules as the Server). */

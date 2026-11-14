@@ -108,7 +108,8 @@ export const NotUseful: Story = {
     btn?.click();
   },
 };
-export const TooEarly: Story = { name: 'Too early (3 logged days)', args: { entries: week(3), now: Date.parse('2026-11-12T18:00:00Z'), insights: [] } };
+export const TooEarly: Story = { name: 'Too early (1 logged day)', args: { entries: week(1), now: Date.parse('2026-11-10T18:00:00Z'), insights: [] } };
+export const MidWeek: Story = { name: 'Mid-week: Get insights now (3 logged days)', args: { entries: week(3), now: Date.parse('2026-11-12T18:00:00Z'), insights: [] } };
 export const NoCardsYet: Story = { name: 'No cards yet: Get insights now', args: { insights: [] } };
 export const ChangeRunning: Story = {
   name: 'This week’s change',

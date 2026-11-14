@@ -91,6 +91,14 @@ Deno.test("target_gap: under for a floor, over for a Waste ceiling, by ≥ max(1
   assertEquals(targetGap(ctx(f, { targets: [overFloor] })), null);
 });
 
+Deno.test("target_gap mid-week: a floor isn't missed yet, a ceiling already passed is", () => {
+  const f = blank("2026-11-02", "2026-11-04T12:00:00.000Z"); // Wednesday noon
+  f.byActivity = { C: { total: 900, byCategory: { deep: 360, waste: 400 } } };
+  assertEquals(targetGap(ctx(f, { targets: [{ id: "t1", activity_id: "C", category_id: "deep", minutes: 600 }] })), null);
+  const ceiling = { id: "t2", activity_id: "C", category_id: "waste", minutes: 300 };
+  assertEquals(targetGap(ctx(f, { targets: [ceiling] }))!.facts.direction, "over");
+});
+
 Deno.test("sleep_short: ≥ 3 nights under 7 h", () => {
   const f = blank();
   f.nights = [400, 410, 419, 480].map((sleepMin, i) => ({ date: `2026-11-0${2 + i}`, sleepMin }));

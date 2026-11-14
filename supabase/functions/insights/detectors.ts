@@ -214,12 +214,18 @@ export function scatteredShallow(x: DetectContext): Candidate | null {
   };
 }
 
+/** Before Sunday 18:00 (the weekly run) the week is "so far": totals aren't final yet. */
+export const weekSoFar = (f: Parameters<typeof spanCells>[0]) => spanCells(f) < 6 * 24 + 18;
+
 export function targetGap(x: DetectContext): Candidate | null {
+  // Mid-week a target isn't missed yet; a ceiling already passed is.
+  const ended = !weekSoFar(x.current);
   let best: Candidate | null = null;
   for (const t of x.targets) {
     const row = x.current.byActivity[t.activity_id];
     const actual = row ? (t.category_id ? row.byCategory[t.category_id] ?? 0 : row.total) : 0;
     const ceiling = t.category_id !== null && t.category_id === x.roles.waste;
+    if (!ceiling && !ended) continue;
     const gap = ceiling ? actual - t.minutes : t.minutes - actual;
     if (gap < Math.max(T.targetGapMin, T.targetGapShare * t.minutes)) continue;
     if (best && best.stakeMin >= gap) continue;

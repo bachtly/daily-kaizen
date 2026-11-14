@@ -4,13 +4,15 @@ import { evidenceById } from "../_shared/evidence.ts";
 import { computeWeek, type FactsEntry, type Piece, rolesOf, type Roles, type WeekFacts } from "../_shared/facts.ts";
 import { mondayOf, weekBounds } from "../_shared/week.ts";
 import type { InsightRow, InsightsDb, UserSettings } from "./db.ts";
-import { detectAll } from "./detectors.ts";
+import { detectAll, weekSoFar } from "./detectors.ts";
 import { evaluate } from "./evaluate.ts";
 import { addDays, rank, type Ranked, WEIGHT_WEEKS } from "./rank.ts";
 import { templateText } from "./templates.ts";
 import type { CardText, DetectContext } from "./types.ts";
 
 export const MIN_LOGGED_DAYS = 5;
+/** "Get insights now" works mid-week, from this many logged days. */
+export const MIN_LOGGED_DAYS_NOW = 2;
 export const HISTORY_WEEKS = 8;
 export const FINALISE_WEEKS = 9;
 
@@ -20,6 +22,8 @@ export type WordFn = (input: {
   week: string;
   ranked: Ranked[];
   templates: CardText[];
+  /** the week isn't over yet: word it as "so far", and keep the coach note */
+  partial: boolean;
 }) => Promise<
   {
     cards: (CardText & { evidence_id: string; may_not_apply: string | null } | null)[];
@@ -107,7 +111,7 @@ export async function generate(
     const missing = Array.from({ length: HISTORY_WEEKS }, (_, k) => addDays(week, -7 * (k + 1))).filter((w) => !have.has(w));
     const computed = await computeSummaries(db, user, [week, ...missing], now, l);
     const cur = computed.get(week)!;
-    if (cur.facts.loggedDays < MIN_LOGGED_DAYS) {
+    if (cur.facts.loggedDays < (trigger === "me" ? MIN_LOGGED_DAYS_NOW : MIN_LOGGED_DAYS)) {
       await db.finishRun(user.user_id, runId, { status: "too_early" });
       return { status: "too_early", saved: 0 };
     }
@@ -134,7 +138,7 @@ export async function generate(
     let worded: Awaited<ReturnType<WordFn>> = null;
     if (word && ranked.length) {
       try {
-        worded = await word({ userId: user.user_id, week, ranked, templates });
+        worded = await word({ userId: user.user_id, week, ranked, templates, partial: weekSoFar(cur.facts) });
       } catch (e) {
         console.error(`insights: wording failed: ${(e as Error).message}`);
         status = "ai_failed";

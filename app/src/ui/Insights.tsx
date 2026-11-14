@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { EntryRow, InsightRow } from '../data/db';
-import { type ChangeResult, MIN_LOGGED_DAYS, resultLine, SHOWN_FIRST } from '../data/insights';
+import { type ChangeResult, MIN_LOGGED_DAYS_NOW, resultLine, SHOWN_FIRST } from '../data/insights';
 import type { Result } from '../data/request';
 import { hhmm, shortDate } from './weekFormat';
 
@@ -150,11 +150,11 @@ export function InsightsPanel({ cards, loggedDays, entries, tz, online, canReque
   return (
     <section className="panel" aria-labelledby="ins-h">
       <h2 id="ins-h">Insights</h2>
-      {cards.length === 0 && loggedDays < MIN_LOGGED_DAYS ? (
-        <p className="ins-sub">Insights appear after {MIN_LOGGED_DAYS} logged days. {loggedDays} so far.</p>
+      {cards.length === 0 && loggedDays < MIN_LOGGED_DAYS_NOW ? (
+        <p className="ins-sub">You can ask for insights after {MIN_LOGGED_DAYS_NOW} logged days. {loggedDays} so far.</p>
       ) : cards.length === 0 ? (
         <>
-          <p className="ins-sub">New insights come on Sunday at 18:00.</p>
+          <p className="ins-sub">New insights come on Sunday at 18:00, or ask now for the week so far.</p>
           {askButton('Get insights now')}
         </>
       ) : (

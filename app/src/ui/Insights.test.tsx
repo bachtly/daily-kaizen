@@ -52,11 +52,19 @@ afterEach(cleanup);
 
 describe('Insights panel', () => {
   it('too early: says how many logged days so far', () => {
-    view({ entries: loggedDays(3), now: Date.parse('2026-11-12T18:00:00Z') });
-    expect(within(panel()).getByText('Insights appear after 5 logged days. 3 so far.')).toBeTruthy();
+    view({ entries: loggedDays(1), now: Date.parse('2026-11-10T18:00:00Z') });
+    expect(within(panel()).getByText('You can ask for insights after 2 logged days. 1 so far.')).toBeTruthy();
+    expect(within(panel()).queryByRole('button', { name: 'Get insights now' })).toBeNull();
   });
 
-  it('with 5 logged days and no cards: Get insights now asks the Server, and a refusal says why', async () => {
+  it('mid-week with 2 logged days: Get insights now, no wait for Sunday', () => {
+    const a = actions();
+    view({ entries: loggedDays(2), now: Date.parse('2026-11-11T18:00:00Z'), insightActions: a });
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Get insights now' }));
+    expect(a.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('no cards: Get insights now asks the Server, and a refusal says why', async () => {
     const a = actions({ request: vi.fn(async (): Promise<Result<unknown>> => ({ ok: false, error: 'too_soon' })) });
     view({ insightActions: a });
     fireEvent.click(within(panel()).getByRole('button', { name: 'Get insights now' }));

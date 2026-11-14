@@ -6,13 +6,14 @@
 - **Make it next week's change** starts a small experiment; it prefills the review note. The next week's page shows it (**Keep it one more week** while it runs) and then its result: "Usual 5h–7h → 2h · Helped".
 - **Not useful** hides the card, with Undo and an optional one-line reason the AI reads from then on.
 - **When**: a heatmap of days × hours coloured by Category (or one Activity), with hours of many switches outlined; tap an hour for what was in it. **Last 8 weeks**: one line per Category.
-- **Get insights now** (and **Update insights** after more logging) asks for this or last week's insights at once.
+- **Get insights now** (and **Update insights** after more logging) asks for this or last week's insights at once, any day from 2 logged days, so I don't wait for Sunday. Mid-week cards cover the week so far.
 - Settings → **What the coach remembers**: the AI's short note about me, rewritten each week; I can edit or clear it.
 
 ## Rules
 - Code computes every number; the AI only words the cards, picks a source from the allowed list, and may say a card may not apply (the card then sorts last). A card whose wording fails a check (ids, source, numbers, length, if-then) uses template wording.
 - Sources come only from the hand-checked evidence library; a card keeps a copy of its source.
-- No insights before 5 **logged days** in the week: a day with at most 180 min Unlogged outside Quiet hours (unlogged sleep doesn't count against it).
+- Sunday's insights need 5 **logged days** in the week: a day with at most 180 min Unlogged outside Quiet hours (unlogged sleep doesn't count against it). Asking for them needs 2.
+- Before Sunday 18:00 the week is "so far": a target I'm under isn't a missed target yet (a Waste ceiling I've passed is), and the coach note isn't rewritten. Sunday's run still happens after a mid-week one.
 - 9 detectors: Waste in a 3-hour window, broken-up Deep work, my best Deep block length, scattered short Shallow Entries, a missed target (#74), short sleep (under 7 h), work in the 2 h before Quiet hours, Recovery under 2 h a day, Maintenance far from my usual.
 - At most 8 insights a week, one per kind, ranked by hours at stake × how useful that kind has been for me × freshness.
 - Not useful hides that kind of insight, for that subject, for 8 weeks. One shown 3 weeks in a row with no action pauses for 4.
