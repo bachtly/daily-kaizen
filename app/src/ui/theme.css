@@ -361,3 +361,10 @@ input.text[aria-invalid="true"], select.text[aria-invalid="true"] { border-color
 .activity-picker { margin-top: 10px; }
 .activity-picker .chip.selected { border-color: var(--accent); font-weight: 600; }
 .activity-picker .activity-add { margin-top: 6px; }
+
+/* 320 px: long labels and "actual / target" wrap instead of pushing the row wider */
+.act-split li, .act-split .split-line { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.act-split li > span:nth-child(2), .act-split .split-line > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.act-split .val { white-space: normal; text-align: right; flex: 0 1 auto; max-width: 55%; overflow-wrap: anywhere; }
+.target-editor, .target-editor label { display: block; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.target-editor .field-hint { overflow-wrap: anywhere; }
