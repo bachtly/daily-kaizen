@@ -5,9 +5,14 @@ import type { Result } from '../data/request';
  * "Mark review done" (AC-5.3) with an optional "one change for next week" note (#74, up to 140 characters).
  * Done shows only after the Server confirms; offline or a failure says so and keeps the button.
  */
-export function ReviewDoneButton({ onMark, online }: { onMark: (note: string) => Promise<Result<unknown>>; online: boolean }) {
+export function ReviewDoneButton({ onMark, online, initialNote }: {
+  onMark: (note: string) => Promise<Result<unknown>>;
+  online: boolean;
+  /** Prefilled from the card I made next week's change (#80); still editable. */
+  initialNote?: string;
+}) {
   const [state, setState] = useState<'idle' | 'saving' | 'needs-connection' | 'failed' | 'too-long'>('idle');
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(initialNote?.slice(0, 140) ?? '');
   const tap = async () => {
     if (state === 'saving') return;
     if (!online) { setState('needs-connection'); return; }

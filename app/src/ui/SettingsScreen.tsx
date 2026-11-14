@@ -3,9 +3,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { signOut } from '../data/auth';
+import type { CoachNoteRow } from '../data/db';
 import { browserEnv, openPush, turnOnPush, type PushState } from '../data/push';
+import type { Result } from '../data/request';
 import { getTimings, p95 } from '../data/timings';
 import { deviceZone, writes } from './liveWrites';
+import { CoachNoteSection } from './CoachNote';
 import { PushStatus } from './PushStatus';
 import { NudgeGapField } from './NudgeGapField';
 import { QuietHoursFields } from './QuietHoursFields';
@@ -49,6 +52,10 @@ export type SettingsViewProps = {
   onNudgeHours?: (v: number) => void;
   onSave?: () => void;
   onSignOut?: () => void;
+  /** The coach note (#80); the section is shown when `onCoachNote` is given. */
+  coachNote?: Pick<CoachNoteRow, 'body' | 'source'> | null;
+  coachNoteUpdated?: string | null;
+  onCoachNote?: (body: string) => Promise<Result<unknown>>;
   /** The floating + and its sheet (live: `useLogNow`). */
   fab?: React.ReactNode;
   sheet?: React.ReactNode;
@@ -61,7 +68,7 @@ const ms = (v: number | null | undefined) => (v == null ? '–' : `${v} ms`);
 export function SettingsView({
   connection = 'online', push = 'off', loading = {}, refreshedAt, pushBusy, pushProblem, quietStart = '23:00', quietEnd = '07:00', quietError, nudgeHours = 3, nudgeError,
   saving, saved, saveProblem, saveP95, refreshP95, signingOut, signOutProblem, onTurnOn, onQuietStart = () => {}, onQuietEnd = () => {}, onNudgeHours = () => {}, onSave, onSignOut,
-  fab, sheet,
+  coachNote = null, coachNoteUpdated, onCoachNote, fab, sheet,
 }: SettingsViewProps) {
   const online = connection !== 'offline';
   const error = quietError || quietStart === quietEnd ? EQUAL : undefined;
@@ -89,6 +96,8 @@ export function SettingsView({
       {!online && <p className="note">Saving needs a connection.</p>}
       {saveProblem && <p className="error" role="alert">{saveProblem}</p>}
       <p className="status" aria-live="polite">{saved ? 'Saved.' : ''}</p>
+
+      {onCoachNote && <CoachNoteSection note={coachNote} online={online} onSave={onCoachNote} updatedLabel={coachNoteUpdated} />}
 
       <section className="panel" aria-labelledby="diag-h">
         <h2 id="diag-h">Diagnostics</h2>
@@ -119,7 +128,7 @@ export function SettingsScreen() {
   const navigate = useNavigate();
   const [online, setOnline] = useState(() => navigator.onLine);
   const [signedOut, setSignedOut] = useState(false);
-  const { copy, ready } = useLocalCopy();
+  const { copy, ready, reload } = useLocalCopy();
   const logNow = useLogNow();
   const [push, setPush] = useState<PushState>();
   const [pushBusy, setPushBusy] = useState(false);
@@ -212,6 +221,14 @@ export function SettingsScreen() {
       onNudgeHours={(v) => { setNudgeEdit(v); setSaved(false); setNudgeRefused(false); }}
       onSave={() => void save()}
       onSignOut={() => void leave()}
+      coachNote={copy.coachNote ?? null}
+      coachNoteUpdated={copy.coachNote ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: deviceZone() }).format(Date.parse(copy.coachNote.created_at)) : null}
+      onCoachNote={async (body) => {
+        const r = await writes.setCoachNote(body); // refreshes the Local copy after the Server confirms
+        if (r.ok) { await reload(); setSignedOut(false); }
+        else if (r.error === 'session_lost') setSignedOut(true);
+        return r;
+      }}
       fab={logNow.fab} sheet={logNow.sheet}
     />
   );
