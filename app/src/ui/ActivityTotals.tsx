@@ -204,10 +204,16 @@ export function ActivityTotals({ totals, activities, categories, online, actions
                   {parts(t).map((c, i) => <span key={i} style={{ flex: c.ms, background: c.colour }} />)}
                 </span>
                 <span className="val">
-                  {withTarget(t.totalMs, t.targetMs)}
+                  {formatDuration(t.totalMs)}
+                  {t.targetMs ? (
+                    <>
+                      {' '}
+                      <span className="val-target">/ {formatDuration(t.targetMs)}</span>
+                    </>
+                  ) : null}
                   {t.targetMs !== null && t.totalMs >= t.targetMs && (
                     <>
-                      <span aria-hidden="true"> ✓</span>
+                      <span className="tick" aria-hidden="true"> ✓</span>
                       <span className="sr-only"> target met</span>
                     </>
                   )}
