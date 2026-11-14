@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useInRouterContext, useNavigate, useParams } from 'react-router';
 import { activityTotals, lastWeekNote } from '../data/activities';
 import { dateOf, dayBounds, loggedMs, shiftDate } from '../data/day';
-import type { ActivityRow, CategoryRow, EntryRow, TargetRow } from '../data/db';
+import type { ActivityRow, CategoryRow, EntryRow, InsightRow, SettingsRow, SummaryRow, TargetRow } from '../data/db';
+import { cardsOf, changeFor, phoneFacts, shiftWeek, trendWeeks } from '../data/insights';
 import type { Result } from '../data/request';
 import { mondayOf, weekBounds, weekTotals } from '../data/week';
 import { ActivityTotals, type ActivityActions } from './ActivityTotals';
 import { CategoryTotals } from './CategoryTotals';
+import { ChangeCard, InsightsPanel, type InsightActions } from './Insights';
 import { deviceZone, writes } from './liveWrites';
 import { useLogNow } from './LogNow';
 import { ConnectionBanner, Phone, type Connection } from './Phone';
@@ -15,6 +17,7 @@ import { ReviewDoneButton } from './ReviewDoneButton';
 import { Skeleton } from './Skeleton';
 import { SuggestedCategoryCard } from './SuggestedCategoryCard';
 import { useLocalCopy } from './useLocalCopy';
+import { TrendPanel, WeekHeatmap } from './WeekCharts';
 import { shiftMonday, useWeekEntries, type WeekLoad } from './useWeekEntries';
 import { countMoves, formatDuration, hhmm, shortDate } from './weekFormat';
 
@@ -52,6 +55,13 @@ export type WeekViewProps = {
   actions?: WeekActions;
   /** Entries that approving each Suggested category would move, by category id. */
   moveCounts?: Record<string, number>;
+  /** Insight cards (#80) from the Local copy; `undefined` for a week outside it (no Insights panel). */
+  insights?: readonly InsightRow[];
+  /** Weekly summaries for the trend (current week only). */
+  summaries?: readonly SummaryRow[];
+  /** Quiet hours, for logged days. */
+  settings?: Pick<SettingsRow, 'quiet_start' | 'quiet_end'> | null;
+  insightActions?: InsightActions;
   /** The floating + and its sheet (live: `useLogNow`). */
   fab?: ReactNode;
   sheet?: ReactNode;
@@ -106,6 +116,7 @@ function DayTotals({ monday, entries, timeZone: tz, now }: { monday: string; ent
 export function WeekView({
   monday, timeZone, now, isCurrentWeek, entries, categories, activities = [], targets = [], lastNote = null, reviewDone, refreshedAt,
   connection = 'online', load = 'ready', onPrev, onNext, onRetry, onReviewDone, actions, moveCounts = {}, fab, sheet,
+  insights, summaries = [], settings = null, insightActions,
 }: WeekViewProps) {
   const online = connection !== 'offline';
   const bounds = useMemo(() => weekBounds(monday, timeZone), [monday, timeZone]);
@@ -113,6 +124,12 @@ export function WeekView({
   const actTotals = useMemo(() => activityTotals(entries, bounds, now, targets), [entries, bounds, now, targets]);
   const refreshedLabel = refreshedAt ? hhmm(Date.parse(refreshedAt), timeZone) : null;
   const suggested = categories.filter((c) => c.status === 'suggested');
+  const facts = useMemo(() => phoneFacts(entries, monday, timeZone, now, categories, settings), [entries, monday, timeZone, now, categories, settings]);
+  const cards = insights ? cardsOf(insights, monday) : [];
+  const change = insights ? changeFor(insights, monday) : null;
+  const running = change !== null && change.active_until !== null && change.active_until >= monday;
+  const stale = cards.length > 0 && entries.some((e) => e.created_at > cards[0].generated_at);
+  const acceptedHere = cards.find((c) => c.status === 'accepted');
 
   return (
     <Phone tab="week" busy={load === 'loading'} fab={fab} overlay={sheet}>
@@ -143,7 +160,11 @@ export function WeekView({
         )}
       </div>
 
-      {load === 'ready' && lastNote && (
+      {load === 'ready' && change && (
+        <ChangeCard change={change} running={running} canKeep={isCurrentWeek && change.active_until === monday} online={online}
+          onKeep={insightActions ? () => insightActions.keep(change.id) : undefined} />
+      )}
+      {load === 'ready' && !change && lastNote && (
         <p className="last-note"><span className="field-hint">Your change for this week</span>{lastNote}</p>
       )}
 
@@ -159,6 +180,15 @@ export function WeekView({
       {load === 'ready' && (
         <>
           {entries.length === 0 && <div className="empty">Nothing logged this week yet.</div>}
+          {insights && (
+            <InsightsPanel cards={cards} loggedDays={facts.loggedDays} entries={entries} tz={timeZone} online={online}
+              canRequest stale={stale} actions={insightActions} />
+          )}
+          {entries.length > 0 && <WeekHeatmap facts={facts} categories={categories} activities={activities} />}
+          {isCurrentWeek && summaries.length > 0 && (
+            <TrendPanel weeks={trendWeeks(summaries, facts)} categories={categories}
+              changeWeek={change ? shiftWeek(change.week_start, 1) : null} />
+          )}
           <CategoryTotals totals={totals} categories={categories} hasEntries={entries.length > 0} />
           <ActivityTotals
             totals={actTotals} activities={activities} categories={categories} online={online}
@@ -176,7 +206,7 @@ export function WeekView({
           ))}
 
           {entries.length > 0 && reviewDone === false && onReviewDone && (
-            <ReviewDoneButton onMark={onReviewDone} online={online} />
+            <ReviewDoneButton key={acceptedHere?.id ?? 'none'} onMark={onReviewDone} online={online} initialNote={acceptedHere?.try_this} />
           )}
         </>
       )}
@@ -222,6 +252,13 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     mergeActivity: async (from, into) => w.afterWrite(await writes.mergeActivity(from, into)),
     setTarget: async (activityId, categoryId, minutes) => w.afterWrite(await writes.setActivityTarget(activityId, categoryId, minutes)),
   };
+  const insightActions: InsightActions = {
+    accept: async (id) => w.afterWrite(await writes.acceptInsight(id)),
+    dismiss: async (id, reason) => w.afterWrite(await writes.dismissInsight(id, reason)),
+    undo: async (id) => w.afterWrite(await writes.undoInsight(id)),
+    keep: async (id) => w.afterWrite(await writes.keepChange(id)),
+    request: async () => w.afterWrite(await writes.requestInsights(monday)),
+  };
   const goto = (m: string) => void navigate(m === currentMonday ? '/week' : `/week/${m}`);
 
   return (
@@ -231,6 +268,8 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
       reviewDone={w.inLocalCopy && copyReady ? copy.reviews.some((r) => r.week_start === monday) : undefined}
       connection={w.sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
       load={w.load} actions={actions} moveCounts={countMoves(copy.entries)}
+      insights={w.inLocalCopy && copyReady ? copy.insights ?? [] : undefined} summaries={copy.summaries} settings={copy.settings}
+      insightActions={insightActions}
       onPrev={() => goto(shiftMonday(monday, -7))}
       onNext={() => goto(shiftMonday(monday, 7))}
       onRetry={w.retry}

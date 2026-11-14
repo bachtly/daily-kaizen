@@ -25,3 +25,12 @@ export const SaveFailed: Story = { name: 'Save failed', args: { saveProblem: 'Ne
 export const TurnOnFailed: Story = { name: 'Turn on failed', args: { pushProblem: "Couldn't turn on. Try again." } };
 export const SigningOut: Story = { name: 'Signing out', args: { signingOut: true } };
 export const SignOutFailed: Story = { name: 'Sign out failed', args: { signOutProblem: "Couldn't sign out. Try again." } };
+const saveNote = () => new Promise<{ ok: true; data: null }>((res) => setTimeout(() => res({ ok: true, data: null }), 600));
+export const CoachNote: Story = {
+  name: 'What the coach remembers',
+  args: {
+    coachNote: { body: 'I work nights on Tuesdays.\nEvenings after 21:00 are when Waste happens; the phone-outside plan helped once.', source: 'ai' },
+    coachNoteUpdated: '15 Nov', onCoachNote: saveNote,
+  },
+};
+export const CoachNoteEmpty: Story = { name: 'What the coach remembers: nothing yet', args: { coachNote: null, onCoachNote: saveNote } };
