@@ -220,7 +220,7 @@ A card that fails gets its **template wording** (one per kind, filled from `fact
   - Rejected: Thompson sampling. Its randomness would confuse one person, and one decision a week is too few [S35].
   - Rejected: dismiss as a soft signal [S31][S32].
 - **D8 Model `claude-opus-5-5`, effort `medium`**, about $0.06–0.10 a week [S43]. Agreed 2026-11-14.
-  - Rejected: Haiku 5.5. It is about 40× cheaper ($0.002) but weaker at reasoning over a long history; it stays the tagger. The model is one constant, so we can benchmark and switch.
+  - Rejected: Haiku 5.5. It is about 40× cheaper ($0.002) but weaker at reasoning over a long history; it stays the tagger. The model is one constant. No side-by-side benchmark first (agreed 2026-11-14).
 - **D9 Generate Sunday 18:00 local, finalise and evaluate Monday 04:00**, plus on demand.
   - Rejected: daily insights (habituation [S33]).
   - Rejected: only after the week ends, which would miss the Sunday review.
@@ -233,8 +233,7 @@ A card that fails gets its **template wording** (one per kind, filled from `fact
 - **D12 One accepted change a week** [S17], matching #74's one change.
 
 ## 13. Open questions
-1. **Model check**: a 4-week side-by-side of Opus 5.5 and Haiku 5.5 on my real weeks, before settling (D8).
-2. **Mockup wording**: the focus card said "ended on plan", but there is no plan data. It now says "least often followed by Waste". The target card names the Activity target ("Company A · Deep: 6h of 10h").
+1. **Mockup wording**: the focus card said "ended on plan", but there is no plan data. It now says "least often followed by Waste". The target card names the Activity target ("Company A · Deep: 6h of 10h").
 
 ## 14. Work (PRs, in order)
 1. **db**: `week_summaries`, `insights`, `coach_notes`, `insight_runs`, RLS, RPCs, cron, pgTAP.
