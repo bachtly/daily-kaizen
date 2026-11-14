@@ -83,3 +83,29 @@ export function loadNotifyConfig(
     },
   };
 }
+
+export interface InsightsConfig {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  jobSecret: string;
+  /** optional: without it, cards use template wording */
+  anthropicApiKey?: string;
+}
+
+/** Everything the insights function needs; a missing required name is a 503. */
+export function loadInsightsConfig(
+  get: (name: string) => string | undefined,
+): { ok: true; config: InsightsConfig } | { ok: false; missing: string[] } {
+  const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "JOB_SECRET"] as const;
+  const missing = required.filter((n) => !get(n));
+  if (missing.length) return { ok: false, missing };
+  return {
+    ok: true,
+    config: {
+      supabaseUrl: get("SUPABASE_URL")!,
+      serviceRoleKey: get("SUPABASE_SERVICE_ROLE_KEY")!,
+      jobSecret: get("JOB_SECRET")!,
+      anthropicApiKey: get("ANTHROPIC_API_KEY") || undefined,
+    },
+  };
+}

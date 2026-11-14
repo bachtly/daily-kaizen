@@ -11,7 +11,8 @@ begin
     select * from (values
       ('job_secret', '__JOB_SECRET__'),
       ('tag_entries_url', 'https://naiiplbdydablbudaqzr.supabase.co/functions/v1/tag-entries'),
-      ('send_notifications_url', 'https://naiiplbdydablbudaqzr.supabase.co/functions/v1/send-notifications')
+      ('send_notifications_url', 'https://naiiplbdydablbudaqzr.supabase.co/functions/v1/send-notifications'),
+      ('insights_url', 'https://naiiplbdydablbudaqzr.supabase.co/functions/v1/insights')
     ) as t(name, value)
   loop
     select s.id into found from vault.secrets s where s.name = item.name;

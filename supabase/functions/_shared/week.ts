@@ -106,13 +106,13 @@ export type WeekTotals = {
 
 /**
  * Covered time in [winStart, winEnd) cut into pieces, each owned by one Entry: an Entry crossing a boundary counts its part
- * inside; overlapping time belongs to the Entry created last (AC-5.1). Shared by the Category and Activity totals.
+ * inside; overlapping time belongs to the Entry created last (AC-5.1). Pieces are in time order; adjacent pieces may share an Entry.
  */
-export function ownedSegments<E extends WeekEntry>(
+export function ownedPieces<E extends WeekEntry>(
   entries: readonly E[],
   winStart: number,
   winEnd: number,
-): { ms: number; entry: E }[] {
+): { start: number; end: number; entry: E }[] {
   const clipped = entries
     .map((entry) => ({
       s: Math.max(Date.parse(entry.started_at), winStart),
@@ -122,7 +122,7 @@ export function ownedSegments<E extends WeekEntry>(
     }))
     .filter((c) => c.e > c.s);
   const points = [...new Set([winStart, winEnd, ...clipped.flatMap((c) => [c.s, c.e])])].sort((a, b) => a - b);
-  const out: { ms: number; entry: E }[] = [];
+  const out: { start: number; end: number; entry: E }[] = [];
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i];
     const b = points[i + 1];
@@ -130,9 +130,18 @@ export function ownedSegments<E extends WeekEntry>(
     for (const c of clipped) {
       if (c.s <= a && c.e >= b && (!owner || c.created > owner.created)) owner = c;
     }
-    if (owner) out.push({ ms: b - a, entry: owner.entry });
+    if (owner) out.push({ start: a, end: b, entry: owner.entry });
   }
   return out;
+}
+
+/** The same pieces as `ownedPieces`, as durations. Shared by the Category and Activity totals. */
+export function ownedSegments<E extends WeekEntry>(
+  entries: readonly E[],
+  winStart: number,
+  winEnd: number,
+): { ms: number; entry: E }[] {
+  return ownedPieces(entries, winStart, winEnd).map((p) => ({ ms: p.end - p.start, entry: p.entry }));
 }
 
 /**
