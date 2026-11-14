@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useInRouterContext, useNavigate, useParams } from 'react-router';
-import { activityTotals } from '../data/activities';
+import { activityTotals, lastWeekNote } from '../data/activities';
 import { dateOf, dayBounds, loggedMs, shiftDate } from '../data/day';
-import type { ActivityRow, CategoryRow, EntryRow } from '../data/db';
+import type { ActivityRow, CategoryRow, EntryRow, TargetRow } from '../data/db';
 import type { Result } from '../data/request';
 import { mondayOf, weekBounds, weekTotals } from '../data/week';
 import { ActivityTotals, type ActivityActions } from './ActivityTotals';
@@ -35,6 +35,10 @@ export type WeekViewProps = {
   categories: readonly CategoryRow[];
   /** All of mine, Active and merged; the Activity panel is hidden while there are none. */
   activities?: readonly ActivityRow[];
+  /** Weekly targets per Activity (and optionally Category). */
+  targets?: readonly TargetRow[];
+  /** The note saved with last week's review ("one change for next week"); shown at the top. */
+  lastNote?: string | null;
   /** `undefined` when unknown (an earlier week outside the Local copy): the badge and button are hidden. */
   reviewDone?: boolean;
   /** ISO time of the last Local copy refresh; null = never. */
@@ -44,7 +48,7 @@ export type WeekViewProps = {
   onPrev?: () => void;
   onNext?: () => void;
   onRetry?: () => void;
-  onReviewDone?: () => Promise<Result<unknown>>;
+  onReviewDone?: (note: string) => Promise<Result<unknown>>;
   actions?: WeekActions;
   /** Entries that approving each Suggested category would move, by category id. */
   moveCounts?: Record<string, number>;
@@ -100,13 +104,13 @@ function DayTotals({ monday, entries, timeZone: tz, now }: { monday: string; ent
 
 /** Week page: time per Category and per day, Suggested categories, Review done (UC-4). Entries are edited on the Day view. */
 export function WeekView({
-  monday, timeZone, now, isCurrentWeek, entries, categories, activities = [], reviewDone, refreshedAt,
+  monday, timeZone, now, isCurrentWeek, entries, categories, activities = [], targets = [], lastNote = null, reviewDone, refreshedAt,
   connection = 'online', load = 'ready', onPrev, onNext, onRetry, onReviewDone, actions, moveCounts = {}, fab, sheet,
 }: WeekViewProps) {
   const online = connection !== 'offline';
   const bounds = useMemo(() => weekBounds(monday, timeZone), [monday, timeZone]);
   const totals = useMemo(() => weekTotals(entries, bounds, now), [entries, bounds, now]);
-  const actTotals = useMemo(() => activityTotals(entries, bounds, now), [entries, bounds, now]);
+  const actTotals = useMemo(() => activityTotals(entries, bounds, now, targets), [entries, bounds, now, targets]);
   const refreshedLabel = refreshedAt ? hhmm(Date.parse(refreshedAt), timeZone) : null;
   const suggested = categories.filter((c) => c.status === 'suggested');
 
@@ -139,6 +143,10 @@ export function WeekView({
         )}
       </div>
 
+      {load === 'ready' && lastNote && (
+        <p className="last-note"><span className="field-hint">Your change for this week</span>{lastNote}</p>
+      )}
+
       {load === 'loading' && <>{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} style={{ margin: '10px 0' }} />)}</>}
       {load === 'offline-earlier-week' && (
         <div className="empty">
@@ -154,7 +162,9 @@ export function WeekView({
           <CategoryTotals totals={totals} categories={categories} hasEntries={entries.length > 0} />
           <ActivityTotals
             totals={actTotals} activities={activities} categories={categories} online={online}
-            actions={actions?.renameActivity && actions.mergeActivity ? { renameActivity: actions.renameActivity, mergeActivity: actions.mergeActivity } : undefined}
+            actions={actions?.renameActivity && actions.mergeActivity
+              ? { renameActivity: actions.renameActivity, mergeActivity: actions.mergeActivity, setTarget: actions.setTarget }
+              : undefined}
           />
           <DayTotals monday={monday} entries={entries} timeZone={timeZone} now={now} />
 
@@ -210,21 +220,22 @@ export function WeekScreen(_props: { isCurrentWeek?: boolean }) {
     rejectCategory: async (id) => w.afterWrite(await writes.rejectCategory(id)),
     renameActivity: async (id, name) => w.afterWrite(await writes.renameActivity(id, name)),
     mergeActivity: async (from, into) => w.afterWrite(await writes.mergeActivity(from, into)),
+    setTarget: async (activityId, categoryId, minutes) => w.afterWrite(await writes.setActivityTarget(activityId, categoryId, minutes)),
   };
   const goto = (m: string) => void navigate(m === currentMonday ? '/week' : `/week/${m}`);
 
   return (
     <WeekView
       monday={monday} timeZone={tz} now={now} isCurrentWeek={monday >= currentMonday}
-      entries={w.entries} categories={copy.categories} activities={copy.activities} refreshedAt={copy.refreshedAt}
+      entries={w.entries} categories={copy.categories} activities={copy.activities} targets={copy.targets} lastNote={lastWeekNote(copy.reviews, monday)} refreshedAt={copy.refreshedAt}
       reviewDone={w.inLocalCopy && copyReady ? copy.reviews.some((r) => r.week_start === monday) : undefined}
       connection={w.sessionLost ? 'signed-out' : online ? 'online' : 'offline'}
       load={w.load} actions={actions} moveCounts={countMoves(copy.entries)}
       onPrev={() => goto(shiftMonday(monday, -7))}
       onNext={() => goto(shiftMonday(monday, 7))}
       onRetry={w.retry}
-      onReviewDone={async () => {
-        const r = await writes.reviewDone(monday); // refreshes the Local copy after the Server confirms
+      onReviewDone={async (note) => {
+        const r = await writes.reviewDone(monday, note); // refreshes the Local copy after the Server confirms
         if (r.ok) { await reload(); w.setSessionLost(false); }
         else if (r.error === 'session_lost') w.setSessionLost(true);
         return r;
