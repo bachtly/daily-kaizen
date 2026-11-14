@@ -139,7 +139,7 @@ Deno.test("a refusal: template cards saved, run ai_failed, retried that evening 
   );
 });
 
-Deno.test("phone: signed in, this or last week, once an hour", async () => {
+Deno.test("phone: signed in, this or last week, once a minute", async () => {
   const env: Record<string, string> = { SUPABASE_URL: "http://db", SUPABASE_SERVICE_ROLE_KEY: "svc", JOB_SECRET: "s" };
   const call = async (m: ReturnType<typeof memoryDb>, init: { auth?: string; body?: unknown }) => {
     const headers: Record<string, string> = {};
@@ -153,8 +153,10 @@ Deno.test("phone: signed in, this or last week, once an hour", async () => {
   assertEquals((await call(memoryDb(ENTRIES), {}))[0], 401);
   assertEquals((await call(memoryDb(ENTRIES), { auth: "bad" }))[0], 401);
   assertEquals(await call(memoryDb(ENTRIES), { auth: "good", body: { week_start: "2026-10-19" } }), [400, { error: "week_not_allowed" }]);
-  const soon = await call(memoryDb(ENTRIES, { lastMyRun: new Date(SUNDAY_1830 - 30 * 60_000).toISOString() }), { auth: "good" });
+  const soon = await call(memoryDb(ENTRIES, { lastMyRun: new Date(SUNDAY_1830 - 30_000).toISOString() }), { auth: "good" });
   assertEquals(soon[0], 429);
+  const again = await call(memoryDb(ENTRIES, { lastMyRun: new Date(SUNDAY_1830 - 61_000).toISOString() }), { auth: "good" });
+  assertEquals(again[0], 200, "again after a minute");
   const m = memoryDb(ENTRIES);
   const [status, body] = await call(m, { auth: "good", body: { week_start: "2026-10-26" } });
   assertEquals([status, body.status], [200, "ok"]);

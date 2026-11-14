@@ -18,7 +18,7 @@ type Evidence = { label?: string; source: string; shows: string; against?: strin
 
 const MESSAGES: Record<string, string> = {
   unknown: 'Needs a connection.',
-  too_soon: 'You can ask again in an hour.',
+  too_soon: 'You can ask again in a minute.',
   insight_too_old: 'This card is too old to start a change from.',
   insight_not_measurable: 'An AI-spotted card has no measure, so it can’t be a change.',
   reason_too_long: 'Keep it to 140 characters.',

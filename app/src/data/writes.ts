@@ -145,7 +145,7 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
   const setCoachNote = (body: string) => rpc((signal) => supabase.rpc('set_coach_note', { p_body: body }).abortSignal(signal));
 
   /**
-   * New insights for this or last week now (at most once an hour). The Server runs the AI, so it can take a minute.
+   * New insights for this or last week now (at most once a minute). The Server runs the AI, so it can take a minute.
    * 429 = too_soon, 400 = week_not_allowed; refreshes the Local copy when it answers.
    */
   async function requestInsights(weekStart: string): Promise<Result<{ status: string; saved: number }>> {
