@@ -4,7 +4,8 @@ Status: **draft for review**. UI: Storybook *Mockups / 80 Insights* (agreed). Ev
 
 ## 1. What it does
 - Once a week, before the Sunday review, the Server turns my Entries into **insights**: a finding from my own log, an if-then suggestion, and one hand-checked source. The Week page shows the top 3; **See more** lists the rest.
-- **Make it next week's change** starts a small experiment. The next week shows whether it helped, measured against my usual weeks, not just last week.
+- **Make it next week's change** starts a small experiment. When that week has ended, its **change result** shows whether it helped, measured against my usual weeks, not just last week.
+- **Not useful** hides a card and takes an optional one-line reason, which the AI reads from then on.
 - The AI **remembers my whole history**. Code keeps the facts (every week's numbers, every change and its result, every dismissal); the AI keeps a short **coach note** that it rewrites each week and I can read, edit or clear.
 - **Code computes every number. The AI only words them**, picks a source from an allowed list, and may say a suggestion may not apply to me. Code checks its output before saving.
 
@@ -54,6 +55,7 @@ All tables: `user_id … default auth.uid() references auth.users on delete casc
 | may_not_apply | text null | the AI's reason; the card sorts last and says so |
 | evidence | jsonb | snapshot of the source entry (label, shows, against, limits, url) |
 | status | enum `new`, `accepted`, `dismissed` | |
+| dismiss_reason | text null | my optional reason, ≤ 140 chars |
 | acted_at | timestamptz null | |
 | active_until | date null | accepted: the last Monday the change runs |
 | result | jsonb null | `{baseline:[…], after:[…], verdict, evaluated_at}` (§8) |
@@ -90,7 +92,7 @@ Definitions (one rule each):
 - **Switch**: two back-to-back pieces of owned time (gap ≤ 5 min) with a different Category or Activity set. It counts in the hour where the second piece starts. **Many switches** = 3 or more in an hour.
 - **Deep block**: back-to-back Deep pieces with gaps ≤ 5 min. `next` is `waste` when a Waste piece starts within 15 min of its end.
 - **Sleep**: a Recovery piece of 3 h or more that covers 02:00–05:00 local; it counts for the night it started.
-- **Logged day**: a fully elapsed day with Unlogged ≤ 180 min (ATUS's rule [S21]).
+- **Logged day**: a fully elapsed day with ≤ 180 min Unlogged **outside Quiet hours** (ATUS's 180-min rule [S21]). Unlogged sleep inside Quiet hours doesn't count against a day; logged sleep still counts as Recovery.
 - **Same-span rule**: comparing with earlier weeks uses the same span of each week (Monday 00:00 up to this week's `as_of` weekday and hour), read from `hours`. A Sunday-evening insight is therefore never compared with full weeks.
 - **My usual**: the median and range of up to 8 earlier weeks with ≥ 5 logged days, over the same span. With fewer than 3 such weeks, no "usual" is shown.
 
@@ -126,7 +128,7 @@ Each one returns at most one candidate a week (its biggest subject), with `facts
 **Context** (built by code, oldest first, about 3k tokens per year of history):
 1. `history`: one line per week for **all** weeks: logged days, hours per Category, median sleep, switches, the change that ran and its verdict. Weeks older than 2 years are folded into months.
 2. `changes`: every past change: wording, kind, weeks run, usual → after, verdict.
-3. `dismissed`: the last 26 weeks of `(kind, subject, week)`.
+3. `dismissed`: the last 26 weeks of `(kind, subject, week, reason)`; my reasons are quoted word for word.
 4. `coach_note`: the current note, and whether I wrote or edited it.
 5. `targets`: #74 targets with this week's actuals.
 6. `candidates`: id, kind, subject names, `facts`, Entry count, allowed sources (label, shows, limits).
@@ -146,7 +148,7 @@ A card that fails gets its **template wording** (one per kind, filled from `fact
 
 **Coach note rules** (§R1: the AI's memories spread errors, so add strictly):
 - Rewritten from the old note, the history and this week's outcomes; never appended; at most 1200 characters.
-- It may state a pattern only when ≥ 2 weeks of history or an explicit dismissal support it. Lines I wrote stay word for word.
+- It may state a pattern only when ≥ 2 weeks of history, a dismissal or one of my reasons supports it. Lines I wrote stay word for word.
 - It passes the same number check against `history`. If it fails or the call fails, the old note stays. Every accepted version is a new row, so a bad note can be rolled back.
 
 **Failure**: on an error, timeout or refusal, the cards come from templates, the note doesn't change, and the hourly check retries up to 3 times. A retry replaces template cards I haven't acted on.
@@ -154,7 +156,7 @@ A card that fails gets its **template wording** (one per kind, filled from `fact
 ## 8. Changes and results
 - **Accept** (`accept_insight`): `status = accepted`, `active_until` = the Monday after the insight's week. It replaces any other accepted card of that week. The Review done field is prefilled with `try_this` (still editable, ≤ 140).
 - **Keep it** on the next week's *Last week's change* card (`keep_change`): `active_until` moves on 7 days, so the experiment runs longer, as habits take weeks [S16].
-- **Evaluate** at Monday 04:00 local, for each accepted insight whose run includes the week that just ended:
+- **Change result** at Monday 04:00 local, once the week has fully ended (Sunday evening and night are often where the change matters), for each accepted insight whose run includes the week that just ended:
   - *after* = the metric in each full week of the run.
   - *baseline* = the metric in up to 4 weeks with ≥ 5 logged days, up to and including the insight's own week.
   - Verdict: **helped** when the median of *after* beats **every** baseline week; **worse** when it is worse than every baseline week; **unclear** otherwise; **too few weeks** with fewer than 3 baseline weeks [S14][S15]. Beating every week, rather than last week, keeps regression to the mean from counting as a win [S13].
@@ -163,12 +165,13 @@ A card that fails gets its **template wording** (one per kind, filled from `fact
 
 ## 9. Schedule and API
 - **Hourly cron** `insights-check` → Edge Function `insights` (job secret), per user with a time zone:
-  - Sunday 18:00–18:59 local (an hour before the Review reminder): compute this week's summary; with ≥ 5 logged days, generate insights once.
-  - Monday 04:00–04:59 local: recompute the last 9 weeks' summaries, which picks up backfills, then evaluate running changes.
+  - **Sunday 18:00–18:59 local, new insights**, an hour before the Review reminder, for this week's review: compute this week's summary (Monday 00:00 to now); with ≥ 5 logged days, generate insights once.
+  - **Monday 04:00–04:59 local, change results**: recompute the last 9 weeks' summaries, which picks up backfills, then judge each running change on the full week that just ended. The new week's *Last week's change* card shows it.
   - Retry failed AI runs, up to 3.
 - **On demand**, `POST /functions/v1/insights {week_start}` with my JWT: *Get insights now* (≥ 5 logged days, current or previous week) and *Update* (Entries changed since `generated_at`), at most once an hour. Cards I acted on stay.
 - **RPCs** (`authenticated`, `security definer`, every write filtered by `user_id = auth.uid()`):
-  - `accept_insight(p_id)`, `dismiss_insight(p_id)`, `undo_insight(p_id)` (back to `new`, for the Undo after dismiss).
+  - `accept_insight(p_id)`, `undo_insight(p_id)` (back to `new`, for the Undo after dismiss).
+  - `dismiss_insight(p_id, p_reason)`: the reason is optional (null, or 1–140 chars), and calling it again on a dismissed card sets or changes the reason.
   - `keep_change(p_id)`.
   - `set_coach_note(p_body)` (adds a `me` version; `''` clears it).
 - **Phone reads** (Local copy): `insights` for the current and previous week, the last 9 `week_summaries`, the current `coach_notes`.
@@ -176,7 +179,7 @@ A card that fails gets its **template wording** (one per kind, filled from `fact
 ## 10. Phone
 - **Heatmap**: computed on the phone with `facts.ts` from the week's Entries, as the Week totals are, so it works offline for the weeks the Local copy holds. The Activity chips use the same hour cells.
 - **Trend**: one line per Category over 8 weeks, from `week_summaries` plus the live current week; the dashed line marks a change's start.
-- **Cards**: from `insights`; *See N Entries* opens a sheet of those Entries (date, time, text). *Not useful* hides the card with "Hidden · Undo", held outside the list.
+- **Cards**: from `insights`; *See N Entries* opens a sheet of those Entries (date, time, text). *Not useful* hides the card. A line held outside the list says "Hidden for 8 weeks", with **Undo** and an optional **Why?** field (one line, Save).
 - **Settings → What the coach remembers**: the note, **Edit**, **Clear**, and when it last changed.
 
 ## 11. Rules (one each)
@@ -184,7 +187,7 @@ A card that fails gets its **template wording** (one per kind, filled from `fact
 - At most 8 insights a week, one per kind; 3 shown, the rest under *See more*.
 - Numbers on a card always come from code; a card whose AI wording fails a check uses its template.
 - A source is always from the evidence library, never free text from the AI.
-- *Not useful* hides that kind of insight for that subject for 8 weeks.
+- *Not useful* hides that kind of insight for that subject for 8 weeks; the optional reason is at most 140 characters and goes to the AI as I wrote it.
 - One accepted change per week; accepting another replaces it.
 - Results compare with my usual weeks, not with last week, and need 3 usual weeks.
 - No new notifications; the Review reminder stays the only nudge.
@@ -216,20 +219,22 @@ A card that fails gets its **template wording** (one per kind, filled from `fact
 - **D7 Adaptation = a slow per-kind weight + a hard 8-week hide on dismiss + a habituation pause.**
   - Rejected: Thompson sampling. Its randomness would confuse one person, and one decision a week is too few [S35].
   - Rejected: dismiss as a soft signal [S31][S32].
-- **D8 Model `claude-opus-5-5`, effort `medium`**, about $0.06–0.10 a week [S43].
+- **D8 Model `claude-opus-5-5`, effort `medium`**, about $0.06–0.10 a week [S43]. Agreed 2026-11-14.
   - Rejected: Haiku 5.5. It is about 40× cheaper ($0.002) but weaker at reasoning over a long history; it stays the tagger. The model is one constant, so we can benchmark and switch.
 - **D9 Generate Sunday 18:00 local, finalise and evaluate Monday 04:00**, plus on demand.
   - Rejected: daily insights (habituation [S33]).
   - Rejected: only after the week ends, which would miss the Sunday review.
-- **D10 A logged day has ≤ 180 min Unlogged** (ATUS [S21]); insights and usual weeks need ≥ 5 logged days.
+- **D10 A logged day has ≤ 180 min Unlogged outside Quiet hours** (ATUS's limit [S21]); insights and usual weeks need ≥ 5 logged days. Agreed 2026-11-14.
+  - Rejected: counting the whole day, which would keep insights away whenever I don't log sleep.
+- **D13 Not useful takes an optional one-line reason** (agreed 2026-11-14). A reason states my situation better than a hide alone, and the AI quotes it, never paraphrases it.
+  - Rejected: a required reason (friction on every dismiss).
+  - Rejected: a fixed list of reasons (can't say "I work nights").
 - **D11 No Entry text in the weekly call.** It is less data to send, and names and numbers are enough. Rejected: sending texts for richer wording.
 - **D12 One accepted change a week** [S17], matching #74's one change.
 
 ## 13. Open questions
-1. **Model**: Opus 5.5 (~$0.40/month) or Haiku 5.5 (~$0.01/month)? Recommendation: Opus 5.5, with a 4-week side-by-side on my real weeks before settling.
-2. **Logged day**: if I don't log sleep every night, ≤ 180 min Unlogged may keep insights away. Alternative: count only Unlogged outside Quiet hours.
-3. **Not useful with an optional reason** (one line, passed to the coach note)?
-4. **Mockup wording**: the focus card said "ended on plan", but there is no plan data. It becomes "least often followed by Waste". The target card names the Activity target ("Company A · Deep: 6h of 10h").
+1. **Model check**: a 4-week side-by-side of Opus 5.5 and Haiku 5.5 on my real weeks, before settling (D8).
+2. **Mockup wording**: the focus card said "ended on plan", but there is no plan data. It now says "least often followed by Waste". The target card names the Activity target ("Company A · Deep: 6h of 10h").
 
 ## 14. Work (PRs, in order)
 1. **db**: `week_summaries`, `insights`, `coach_notes`, `insight_runs`, RLS, RPCs, cron, pgTAP.

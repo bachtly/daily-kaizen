@@ -201,6 +201,11 @@ const css = `
 .ins .row .primary.small { min-height: 44px; font-size: 15px; }
 .ins .row2 { display: flex; gap: 16px; flex-wrap: wrap; }
 .more { width: 100%; margin-top: 10px; }
+.hid { border: 1px dashed var(--line); border-radius: 14px; padding: 10px 12px; margin-top: 10px; font-size: 14px; display: grid; gap: 6px; }
+.hid .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.hid form { display: flex; gap: 8px; }
+.hid input { flex: 1; min-width: 0; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; font-size: 15px; padding: 0 10px; }
+.hid .saved { color: var(--muted); margin: 0; }
 .changed { color: var(--done-text); font-weight: 600; font-size: 15px; }
 .lastweek { border: 1px solid var(--accent); border-radius: 14px; padding: 12px 14px; margin-top: 12px; }
 .lastweek p { margin: 0; }
@@ -368,13 +373,19 @@ export type InsightsMockupProps = {
   acceptedId?: string;
   /** Start with every insight listed, not only the first 3. */
   expanded?: boolean;
+  /** Start with this insight just hidden by Not useful. */
+  dismissedId?: string;
   /** Shows last week's change and whether it helped (next week's view). */
   lastWeek?: { change: string; result: string };
 };
 
-export function InsightsMockup({ state = 'ready', loggedDays = 7, openEvidence, acceptedId, expanded = false, lastWeek }: InsightsMockupProps) {
+export function InsightsMockup({ state = 'ready', loggedDays = 7, openEvidence, acceptedId, expanded = false, dismissedId, lastWeek }: InsightsMockupProps) {
   const [accepted, setAccepted] = useState<string | undefined>(acceptedId);
-  const [hidden, setHidden] = useState<string[]>([]);
+  const [hidden, setHidden] = useState<string[]>(dismissedId ? [dismissedId] : []);
+  const [lastHidden, setLastHidden] = useState<string | undefined>(dismissedId);
+  const [reason, setReason] = useState('');
+  const [saved, setSaved] = useState(false);
+  const hide = (id: string) => { setHidden([...hidden, id]); setLastHidden(id); setReason(''); setSaved(false); };
   const [all, setAll] = useState(expanded);
   const left = INSIGHTS.filter((i) => !hidden.includes(i.id));
   const shown = all ? left : left.slice(0, FIRST);
@@ -405,8 +416,23 @@ export function InsightsMockup({ state = 'ready', loggedDays = 7, openEvidence, 
             <p className="ins-sub">From this week’s log, most hours to win first. Each one says why it might help.</p>
             {shown.map((i) => (
               <InsightCard key={i.id} ins={i} open={openEvidence === i.id} accepted={accepted === i.id}
-                onAccept={() => setAccepted(i.id)} onDismiss={() => setHidden([...hidden, i.id])} />
+                onAccept={() => setAccepted(i.id)} onDismiss={() => hide(i.id)} />
             ))}
+            {lastHidden && (
+              <div className="hid" role="status">
+                <div className="top">
+                  <span>Hidden for 8 weeks</span>
+                  <button className="link" onClick={() => { setHidden(hidden.filter((h) => h !== lastHidden)); setLastHidden(undefined); }}>Undo</button>
+                </div>
+                {saved ? <p className="saved">Saved. The coach will take it into account.</p> : (
+                  <form onSubmit={(e) => { e.preventDefault(); setSaved(true); }}>
+                    <input aria-label="Why not useful? (optional)" placeholder="Why? (optional)" maxLength={140}
+                      value={reason} onChange={(e) => setReason(e.target.value)} />
+                    <button className="secondary" type="submit" disabled={!reason.trim()}>Save</button>
+                  </form>
+                )}
+              </div>
+            )}
             {rest > 0 && (
               <button className="secondary more" aria-expanded={all} onClick={() => setAll(!all)}>
                 {all ? 'Show fewer' : `See ${rest} more`}
