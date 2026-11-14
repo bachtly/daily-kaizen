@@ -24,6 +24,9 @@ export type WriteDeps = {
 
 const fail = (error: ErrorKey): Result<never> => ({ ok: false, error });
 
+/** Asking for insights runs the AI on the Server (design: up to 120 s), so it gets more than the usual 10 s. */
+export const INSIGHTS_TIMEOUT_MS = 150_000;
+
 /**
  * Phone writes (04-api Contracts). Each is safe to resend after an unknown result (AC-2.2).
  * A write is "confirmed" when the Server answers; only then does it record its duration and refresh (AC-2.1, AC-2.3).
@@ -128,6 +131,44 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
     return confirmed(started, r.ok ? { ok: true as const, data: r.data[0] ?? null } : r);
   }
 
+  // ---- Insights (#80) ----
+  /** Make it next week's change (this or last week's card); replaces another accepted card of that week. */
+  const acceptInsight = (id: string) => rpc((signal) => supabase.rpc('accept_insight', { p_id: id }).abortSignal(signal));
+  /** Not useful, with an optional one-line reason (1-140 characters); calling it again adds or changes the reason. */
+  const dismissInsight = (id: string, reason?: string | null) =>
+    rpc((signal) => supabase.rpc('dismiss_insight', reason?.trim() ? { p_id: id, p_reason: reason.trim() } : { p_id: id }).abortSignal(signal));
+  /** Undo a dismiss or an accept. */
+  const undoInsight = (id: string) => rpc((signal) => supabase.rpc('undo_insight', { p_id: id }).abortSignal(signal));
+  /** Keep the running change one more week. */
+  const keepChange = (id: string) => rpc((signal) => supabase.rpc('keep_change', { p_id: id }).abortSignal(signal));
+  /** My version of the coach note (at most 1200 characters); '' clears it. */
+  const setCoachNote = (body: string) => rpc((signal) => supabase.rpc('set_coach_note', { p_body: body }).abortSignal(signal));
+
+  /**
+   * New insights for this or last week now (at most once an hour). The Server runs the AI, so it can take a minute.
+   * 429 = too_soon, 400 = week_not_allowed; refreshes the Local copy when it answers.
+   */
+  async function requestInsights(weekStart: string): Promise<Result<{ status: string; saved: number }>> {
+    const started = performance.now();
+    try {
+      const { data, error } = await supabase.functions.invoke('insights', {
+        body: { week_start: weekStart },
+        timeout: INSIGHTS_TIMEOUT_MS,
+      });
+      if (error) {
+        const status = (error as { context?: { status?: number } }).context?.status ?? 0;
+        if (status === 401) return fail('session_lost');
+        if (status === 429) return fail('too_soon');
+        if (status === 400) return fail('week_not_allowed');
+        if (status === 409) return fail('time_zone_unknown');
+        return fail(status === 0 ? 'unknown' : 'server');
+      }
+      return confirmed(started, { ok: true as const, data: data as { status: string; saved: number } });
+    } catch {
+      return fail('unknown');
+    }
+  }
+
   /** Same endpoint again just sets the same values. Not part of the Local copy, so no refresh. */
   async function upsertPushSubscription(sub: PushSubscriptionInput) {
     const started = performance.now();
@@ -149,6 +190,12 @@ export function createWrites({ refresh, recordTiming }: WriteDeps) {
     mergeActivity,
     setActivityTarget,
     reviewDone,
+    acceptInsight,
+    dismissInsight,
+    undoInsight,
+    keepChange,
+    setCoachNote,
+    requestInsights,
     saveSettings,
     upsertPushSubscription,
   };

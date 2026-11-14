@@ -17,12 +17,18 @@ export const VALIDATION_KEYS = [
   'category_not_found',
   'target_out_of_range',
   'next_change_too_long',
+  'insight_not_found',
+  'insight_too_old',
+  'reason_too_long',
+  'change_not_running',
+  'note_too_long',
 ] as const;
 
 export type ValidationKey = (typeof VALIDATION_KEYS)[number];
 // unknown = no connection or timeout (result unknown, safe to resend); session_lost = sign in again;
 // server = 5xx or any other refusal.
-export type ErrorKey = ValidationKey | 'unknown' | 'session_lost' | 'server';
+// too_soon / week_not_allowed: refused requests for new insights (#80).
+export type ErrorKey = ValidationKey | 'unknown' | 'session_lost' | 'server' | 'too_soon' | 'week_not_allowed';
 
 export type PostgrestLikeError = {
   code?: string;

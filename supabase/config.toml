@@ -428,6 +428,10 @@ verify_jwt = false
 [functions.send-notifications]
 verify_jwt = false
 
+# Job calls use x-job-secret; phone calls (next PR) are checked in the function.
+[functions.insights]
+verify_jwt = false
+
 # Hosted project only: `supabase config push` applies these over the local values above.
 [remotes.production]
 project_id = "naiiplbdydablbudaqzr"

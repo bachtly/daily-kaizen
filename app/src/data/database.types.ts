@@ -114,6 +114,34 @@ export type Database = {
         };
         Relationships: [];
       };
+      coach_notes: {
+        Row: {
+          body: string;
+          created_at: string;
+          id: string;
+          source: Database["public"]["Enums"]["tag_source"];
+          user_id: string;
+          week_start: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          body: string;
+          created_at?: string;
+          id?: string;
+          source: Database["public"]["Enums"]["tag_source"];
+          user_id?: string;
+          week_start?: string | null;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          id?: string;
+          source?: Database["public"]["Enums"]["tag_source"];
+          user_id?: string;
+          week_start?: string | null;
+        };
+        Relationships: [];
+      };
       entries: {
         Row: {
           activity_source: Database["public"]["Enums"]["tag_source"] | null;
@@ -231,6 +259,125 @@ export type Database = {
           },
         ];
       };
+      insight_runs: {
+        Row: {
+          error: string | null;
+          finished_at: string | null;
+          id: string;
+          input_tokens: number | null;
+          model: string | null;
+          output_tokens: number | null;
+          started_at: string;
+          status: string;
+          trigger: string;
+          user_id: string;
+          week_start: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          error?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          input_tokens?: number | null;
+          model?: string | null;
+          output_tokens?: number | null;
+          started_at?: string;
+          status?: string;
+          trigger: string;
+          user_id: string;
+          week_start: string;
+        };
+        Update: {
+          error?: string | null;
+          finished_at?: string | null;
+          id?: string;
+          input_tokens?: number | null;
+          model?: string | null;
+          output_tokens?: number | null;
+          started_at?: string;
+          status?: string;
+          trigger?: string;
+          user_id?: string;
+          week_start?: string;
+        };
+        Relationships: [];
+      };
+      insights: {
+        Row: {
+          acted_at: string | null;
+          active_until: string | null;
+          detail: string;
+          dismiss_reason: string | null;
+          entry_ids: string[];
+          evidence: NonNullable<Json>;
+          facts: NonNullable<Json>;
+          finding: string;
+          generated_at: string;
+          id: string;
+          kind: string;
+          may_not_apply: string | null;
+          metric: NonNullable<Json>;
+          rank: number;
+          result: Json | null;
+          score: number;
+          status: Database["public"]["Enums"]["insight_status"];
+          subject_key: string;
+          text_source: string;
+          try_this: string;
+          user_id: string;
+          week_start: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          acted_at?: string | null;
+          active_until?: string | null;
+          detail: string;
+          dismiss_reason?: string | null;
+          entry_ids?: string[];
+          evidence: NonNullable<Json>;
+          facts: NonNullable<Json>;
+          finding: string;
+          generated_at?: string;
+          id?: string;
+          kind: string;
+          may_not_apply?: string | null;
+          metric: NonNullable<Json>;
+          rank: number;
+          result?: Json | null;
+          score: number;
+          status?: Database["public"]["Enums"]["insight_status"];
+          subject_key?: string;
+          text_source: string;
+          try_this: string;
+          user_id?: string;
+          week_start: string;
+        };
+        Update: {
+          acted_at?: string | null;
+          active_until?: string | null;
+          detail?: string;
+          dismiss_reason?: string | null;
+          entry_ids?: string[];
+          evidence?: NonNullable<Json>;
+          facts?: NonNullable<Json>;
+          finding?: string;
+          generated_at?: string;
+          id?: string;
+          kind?: string;
+          may_not_apply?: string | null;
+          metric?: NonNullable<Json>;
+          rank?: number;
+          result?: Json | null;
+          score?: number;
+          status?: Database["public"]["Enums"]["insight_status"];
+          subject_key?: string;
+          text_source?: string;
+          try_this?: string;
+          user_id?: string;
+          week_start?: string;
+        };
+        Relationships: [];
+      };
       notifications_sent: {
         Row: {
           about: string;
@@ -303,6 +450,37 @@ export type Database = {
         };
         Relationships: [];
       };
+      week_summaries: {
+        Row: {
+          as_of: string;
+          computed_at: string;
+          facts: NonNullable<Json>;
+          logged_days: number;
+          time_zone: string;
+          user_id: string;
+          week_start: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          as_of: string;
+          computed_at?: string;
+          facts: NonNullable<Json>;
+          logged_days: number;
+          time_zone: string;
+          user_id?: string;
+          week_start: string;
+        };
+        Update: {
+          as_of?: string;
+          computed_at?: string;
+          facts?: NonNullable<Json>;
+          logged_days?: number;
+          time_zone?: string;
+          user_id?: string;
+          week_start?: string;
+        };
+        Relationships: [];
+      };
       weekly_reviews: {
         Row: {
           done_at: string;
@@ -357,6 +535,7 @@ export type Database = {
       };
     };
     Functions: {
+      accept_insight: { Args: { p_id: string }; Returns: Json };
       activity_slots: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -383,7 +562,44 @@ export type Database = {
         };
       };
       cut_long_activity_names: { Args: Record<PropertyKey, never>; Returns: undefined };
+      dismiss_insight: { Args: { p_id: string; p_reason?: string }; Returns: Json };
       entry_json: { Args: { p_entry_id: string; p_user_id: string }; Returns: Json };
+      insight_json: { Args: { p_id: string; p_user_id: string }; Returns: Json };
+      keep_change: { Args: { p_id: string }; Returns: Json };
+      local_monday: { Args: { p_user_id: string }; Returns: string };
+      lock_insight: {
+        Args: { p_id: string; p_user_id: string };
+        Returns: {
+          acted_at: string | null;
+          active_until: string | null;
+          detail: string;
+          dismiss_reason: string | null;
+          entry_ids: string[];
+          evidence: NonNullable<Json>;
+          facts: NonNullable<Json>;
+          finding: string;
+          generated_at: string;
+          id: string;
+          kind: string;
+          may_not_apply: string | null;
+          metric: NonNullable<Json>;
+          rank: number;
+          result: Json | null;
+          score: number;
+          status: Database["public"]["Enums"]["insight_status"];
+          subject_key: string;
+          text_source: string;
+          try_this: string;
+          user_id: string;
+          week_start: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "insights";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       merge_activity: { Args: { p_from: string; p_into: string }; Returns: Json };
       post_job: { Args: { p_url_secret: string }; Returns: undefined };
       record_tag_failure: {
@@ -405,11 +621,16 @@ export type Database = {
         };
         Returns: boolean;
       };
+      save_insights: {
+        Args: { p_cards: Json; p_user_id: string; p_week_start: string };
+        Returns: number;
+      };
       seed_account: { Args: { uid: string }; Returns: undefined };
       set_activity_target: {
         Args: { p_activity_id: string; p_category_id: string; p_minutes: number };
         Returns: Json;
       };
+      set_coach_note: { Args: { p_body: string }; Returns: Json };
       set_entry_activities: { Args: { p_entry_id: string; p_names: string[] }; Returns: Json };
       set_entry_activity_rows: {
         Args: {
@@ -421,6 +642,7 @@ export type Database = {
         Returns: undefined;
       };
       set_entry_tag: { Args: { category_id: string; entry_id: string }; Returns: Json };
+      undo_insight: { Args: { p_id: string }; Returns: Json };
       untagged_due: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -452,6 +674,7 @@ export type Database = {
     Enums: {
       activity_status: "active" | "merged";
       category_status: "active" | "suggested" | "rejected";
+      insight_status: "new" | "accepted" | "dismissed";
       notification_kind: "nudge" | "review_reminder";
       tag_source: "ai" | "me";
     };
@@ -571,6 +794,7 @@ export const Constants = {
     Enums: {
       activity_status: ["active", "merged"],
       category_status: ["active", "suggested", "rejected"],
+      insight_status: ["new", "accepted", "dismissed"],
       notification_kind: ["nudge", "review_reminder"],
       tag_source: ["ai", "me"],
     },
