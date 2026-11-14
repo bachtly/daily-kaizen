@@ -38,6 +38,7 @@ export function evaluate(
   justEnded: string,
   now: Date,
 ): ChangeResult | null {
+  if (ins.metric.fn === "none") return null;
   const after: number[] = [];
   for (let w = addDays(ins.week_start, 7); w <= ins.active_until && w <= justEnded; w = addDays(w, 7)) {
     const f = weeks.get(w);

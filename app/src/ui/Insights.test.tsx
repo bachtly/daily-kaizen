@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CategoryRow, EntryRow, InsightRow } from '../data/db';
-import { card } from '../data/insightFixtures';
+import { adhocCard, card } from '../data/insightFixtures';
 import type { Result } from '../data/request';
 import { CoachNoteSection } from './CoachNote';
 import type { InsightActions } from './Insights';
@@ -116,6 +116,31 @@ describe('Insights panel', () => {
   it('a card that may not apply says why', () => {
     view({ insights: [card('a', MONDAY, { may_not_apply: 'You said you work nights.' })] });
     expect(screen.getByText('May not apply to you: You said you work nights.')).toBeTruthy();
+  });
+
+  it('AI-spotted cards sit in their own section: labelled, no source, not a change, not counted in See more', () => {
+    const fixed = ['a', 'b', 'c', 'd'].map((id, i) => card(id, MONDAY, { rank: i + 1 }));
+    view({ insights: [...fixed, adhocCard('x', MONDAY), adhocCard('y', MONDAY, { evidence: card('e', MONDAY).evidence })] });
+    expect(within(panel()).getByRole('button', { name: 'See 1 more' })).toBeTruthy();
+    const spotted = screen.getByRole('region', { name: 'Spotted by AI' });
+    const [x, y] = within(spotted).getAllByRole('article');
+    expect(within(x).getByText('AI-spotted · not a fixed check')).toBeTruthy();
+    expect(within(x).getByText(/No study checked for this one/)).toBeTruthy();
+    expect(within(x).queryByRole('button', { name: 'Make it next week’s change' })).toBeNull();
+    expect(within(y).getByRole('button', { name: /Why: If-then plans/ })).toBeTruthy();
+  });
+
+  it('a first week with only AI-spotted cards still shows them', () => {
+    view({ insights: [adhocCard('x', MONDAY)], insightActions: actions() });
+    expect(within(screen.getByRole('region', { name: 'Spotted by AI' })).getAllByRole('article')).toHaveLength(1);
+    expect(within(panel()).queryByText(/most hours to win first/)).toBeNull();
+  });
+
+  it('Regenerate insights while cards are on screen', () => {
+    const a = actions();
+    view({ insights: [card('a', MONDAY, { generated_at: '2026-11-16T00:00:00Z' })], insightActions: a });
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Regenerate insights' }));
+    expect(a.request).toHaveBeenCalledTimes(1);
   });
 
   it('Update insights shows when Entries changed after the cards were made', () => {

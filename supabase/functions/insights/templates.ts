@@ -65,13 +65,13 @@ export function templateText(c: Candidate): CardText {
         return {
           finding: `Work ran into the hours before Quiet hours on ${f.days} days`,
           detail: `${f.work} of Deep or Shallow after ${f.from}; your Quiet hours start at ${f.quiet_start}.`,
-          try_this: "If I stop work, then I write tomorrow's first step and close the laptop.",
+          try_this: `If it's ${f.from}, then I write tomorrow's first step and close the laptop.`,
         };
       case "squeezed_recovery":
         return {
           finding: `${f.days_under} days had under ${f.under} of Recovery`,
-          detail: `Not counting sleep; your median day had ${f.median_recovery} across ${f.logged_days} logged days.`,
-          try_this: "If I finish work, then I take 30 minutes for a walk or something I enjoy.",
+          detail: `Not counting sleep, your median day had ${f.median_recovery} of Recovery across ${f.logged_days} logged days.`,
+          try_this: "If I close the laptop for the day, then I take 30 minutes for a walk or something I enjoy.",
         };
       case "maintenance_drift":
         return f.direction === "more"

@@ -10,3 +10,11 @@ export const card = (id: string, week: string, extra: Partial<InsightRow> = {}):
   status: 'new', dismiss_reason: null, acted_at: null, active_until: null, result: null, generated_at: '2026-11-08T11:00:00Z',
   ...extra,
 });
+
+/** A card the AI spotted itself: no measure, and here no source. */
+export const adhocCard = (id: string, week: string, extra: Partial<InsightRow> = {}): InsightRow =>
+  card(id, week, {
+    kind: 'adhoc', subject_key: `r1:${id}`, rank: 9, text_source: 'ai', evidence: {},
+    finding: 'Deep work starts at 07:00 every day', detail: 'Each morning opens with Company A.',
+    try_this: "If it's 07:00, then I start with the hardest task.", ...extra,
+  });

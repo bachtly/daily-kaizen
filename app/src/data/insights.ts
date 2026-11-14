@@ -5,6 +5,9 @@ import { computeWeek, rolesOf, type WeekFacts } from './facts';
 /** "Get insights now" works mid-week from this many logged days (same as the Server). */
 export const MIN_LOGGED_DAYS_NOW = 2;
 export const SHOWN_FIRST = 3;
+/** A card the AI spotted itself in the week's data, not one of the fixed checks (Server ADHOC_KIND). */
+export const ADHOC_KIND = 'adhoc';
+export const isAdhoc = (i: Pick<InsightRow, 'kind'>) => i.kind === ADHOC_KIND;
 
 /** This week's facts from the Entries on the phone (same rules as the Server). */
 export function phoneFacts(

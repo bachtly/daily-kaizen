@@ -76,6 +76,25 @@ export function cardProblem(
   return null;
 }
 
+export type AdhocCard = CardText & { evidence_id: string | null; refs: string[] };
+
+/** Why an ad-hoc card fails, or null: same lengths and if-then shape, numbers only from the input, refs that exist. */
+export function adhocProblem(
+  card: AdhocCard,
+  extra: { allowed: Set<string>; refs: Set<string>; evidenceIds: Set<string> },
+): string | null {
+  const finding = clean(card.finding);
+  const detail = clean(card.detail);
+  const tryThis = clean(card.try_this);
+  if (!finding || !detail || !tryThis) return "empty";
+  if (finding.length > LIMITS.finding || detail.length > LIMITS.detail || tryThis.length > LIMITS.try_this) return "too long";
+  if (!IF_THEN.test(tryThis)) return "not if-then";
+  if (card.evidence_id !== null && !extra.evidenceIds.has(card.evidence_id)) return "evidence not in the library";
+  if (!Array.isArray(card.refs) || !card.refs.length || !card.refs.every((r) => extra.refs.has(r))) return "refs";
+  for (const text of [finding, detail, tryThis]) if (!numbersOk(text, extra.allowed)) return "number not in the data";
+  return null;
+}
+
 /** The note passes: within length, numbers only from the context, and my own lines kept word for word. */
 export function noteProblem(note: string, context: string, myLines: string[]): string | null {
   const body = note.trim();
