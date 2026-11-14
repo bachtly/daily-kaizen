@@ -46,7 +46,7 @@ const openFirstActivity = async ({ canvasElement }: { canvasElement: HTMLElement
 const weekEarlier = (iso: string) => new Date(Date.parse(iso) - 7 * 86_400_000).toISOString();
 const ok = () => Promise.resolve({ ok: true as const, data: null });
 const later = (r: Result<unknown> = { ok: true, data: null }) => () => new Promise<Result<unknown>>((res) => setTimeout(() => res(r), 600));
-const actions: WeekActions = { approveCategory: later(), rejectCategory: later(), renameActivity: later(), mergeActivity: later() };
+const actions: WeekActions = { approveCategory: later(), rejectCategory: later(), renameActivity: later(), mergeActivity: later(), setTarget: later() };
 
 const meta = {
   title: 'Screens/2 Week',
@@ -135,5 +135,44 @@ export const RenameBlank: Story = {
 export const ActivitiesOffline: Story = {
   name: 'With Activities: offline',
   args: { entries: withActivities, activities, connection: 'offline' },
+  play: openFirstActivity,
+};
+
+const targets = [
+  { id: 't1', activity_id: 'ca', category_id: null, minutes: 360 },
+  { id: 't2', activity_id: 'ca', category_id: 'deep', minutes: 120 },
+  { id: 't3', activity_id: 'dn', category_id: null, minutes: 60 },
+  { id: 't4', activity_id: 'gm', category_id: null, minutes: 180 },
+];
+export const WithTargets: Story = {
+  name: 'Targets: rows, 0h row, last week note',
+  args: { entries: withActivities, activities, targets, lastNote: 'Stop checking email before lunch' },
+  play: openFirstActivity,
+  parameters: { docs: { description: { story: 'Company A and Dinner show actual / target (a tick once met); Game A has a target and no time (0h). Category lines of the open row show their own targets. The note from the last review is at the top.' } } },
+};
+const tapText = (root: HTMLElement, text: string) => [...root.querySelectorAll('button')].find((b) => b.textContent === text)?.click();
+export const TargetEditing: Story = {
+  name: 'Targets: editing the any-Category target',
+  args: { entries: withActivities, activities, targets },
+  play: async ({ canvasElement }) => {
+    await openFirstActivity({ canvasElement });
+    tapText(canvasElement, 'Target');
+    await new Promise((r) => setTimeout(r, 50));
+  },
+};
+export const TargetZeroRow: Story = {
+  name: 'Targets: 0h row (target, no time this week)',
+  args: {
+    entries: withActivities, activities: [...activities, { id: 'rd', name: 'Reading', status: 'active', merged_into_id: null }],
+    targets: [...targets, { id: 't5', activity_id: 'rd', category_id: null, minutes: 180 }],
+  },
+};
+export const NoteOffline: Story = {
+  name: 'Review note: offline',
+  args: { connection: 'offline', lastNote: 'Stop checking email before lunch' },
+};
+export const TargetsOffline: Story = {
+  name: 'Targets: offline',
+  args: { entries: withActivities, activities, targets, connection: 'offline' },
   play: openFirstActivity,
 };
