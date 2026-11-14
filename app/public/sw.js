@@ -1,5 +1,5 @@
 // App-shell service worker. Registered at /sw.js with scope /, which pushManager.subscribe also needs.
-// Declarative Web Push (iOS 18.4+) needs no push handler here.
+// Declarative Web Push (iOS 18.4+) needs no push handler; the one below is for Android Chrome (see push, at the end).
 const CACHE = 'dk-shell-v1'
 const NAV_TIMEOUT_MS = 3000
 
@@ -73,4 +73,29 @@ self.addEventListener('fetch', (event) => {
       ),
     )
   }
+})
+
+// Android Chrome: show the Declarative Web Push payload `{web_push: 8030, notification: {title, body, navigate}}`.
+// iPhone never fires this event for it (the payload isn't `mutable`), so there's no second notification there.
+self.addEventListener('push', (event) => {
+  let n
+  try {
+    n = event.data?.json()?.notification
+  } catch {
+    // not JSON: nothing of ours
+  }
+  if (!n?.title) return
+  event.waitUntil(
+    self.registration.showNotification(n.title, {
+      body: n.body,
+      icon: '/icons/icon-192.png',
+      data: { navigate: n.navigate },
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.navigate ?? '/'
+  event.waitUntil(self.clients.openWindow(url))
 })

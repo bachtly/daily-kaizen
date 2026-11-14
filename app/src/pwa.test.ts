@@ -113,7 +113,8 @@ describe('sw.js', () => {
       location: { origin: 'https://app.example' },
       addEventListener: (t: string, h: Handler) => (handlers[t] = h),
       skipWaiting: vi.fn(),
-      clients: { claim: vi.fn() },
+      clients: { claim: vi.fn(), openWindow: vi.fn().mockResolvedValue(null) },
+      registration: { showNotification: vi.fn().mockResolvedValue(undefined) },
     }
     new Function('self', 'caches', 'fetch', read('sw.js'))(self, caches, fetchFn)
     return { handlers, store, fetched, caches, self }
@@ -190,5 +191,43 @@ describe('sw.js', () => {
     const sw = load({ online: true })
     expect(await respond(sw, { method: 'GET', url: 'https://x.supabase.co/rest/v1/entries', mode: 'cors' })).toBeUndefined()
     expect(await respond(sw, { method: 'POST', url: 'https://app.example/assets/a.js', mode: 'cors' })).toBeUndefined()
+  })
+
+  const pushed = (data: unknown) => ({ json: () => (typeof data === 'string' ? JSON.parse(data) : data) })
+
+  it('shows the Declarative Web Push payload on push (Android Chrome)', async () => {
+    const sw = load({ online: true })
+    const w = waitUntil()
+    sw.handlers.push({
+      data: pushed({ web_push: 8030, notification: { title: 'T', body: 'B', navigate: 'https://app.example/week' } }),
+      waitUntil: w.fn,
+    })
+    await w.done()
+    expect(sw.self.registration.showNotification).toHaveBeenCalledWith('T', {
+      body: 'B',
+      icon: '/icons/icon-192.png',
+      data: { navigate: 'https://app.example/week' },
+    })
+  })
+
+  it('shows nothing for a push that is not ours', () => {
+    const sw = load({ online: true })
+    const w = vi.fn()
+    sw.handlers.push({ data: pushed('not json{'), waitUntil: w })
+    sw.handlers.push({ data: null, waitUntil: w })
+    sw.handlers.push({ data: pushed({ hello: 1 }), waitUntil: w })
+    expect(sw.self.registration.showNotification).not.toHaveBeenCalled()
+  })
+
+  it('opens the notification link on tap, or / without one', async () => {
+    const sw = load({ online: true })
+    const close = vi.fn()
+    const w = waitUntil()
+    sw.handlers.notificationclick({ notification: { close, data: { navigate: 'https://app.example/week' } }, waitUntil: w.fn })
+    await w.done()
+    expect(close).toHaveBeenCalled()
+    expect(sw.self.clients.openWindow).toHaveBeenCalledWith('https://app.example/week')
+    sw.handlers.notificationclick({ notification: { close, data: null }, waitUntil: vi.fn() })
+    expect(sw.self.clients.openWindow).toHaveBeenLastCalledWith('/')
   })
 })

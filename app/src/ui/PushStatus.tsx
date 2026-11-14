@@ -21,7 +21,7 @@ export function PushStatus({ state, loading, online = true, busy, problem, onTur
     );
   }
   if (state === 'denied') {
-    return <p className="note">Push is off. Turn it on in iOS Settings → Notifications → daily-kaizen. The Sunday email still arrives.</p>;
+    return <p className="note">Push is off. Allow notifications for daily-kaizen in your phone's Settings. The Sunday email still arrives.</p>;
   }
   return (
     <>
