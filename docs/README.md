@@ -8,6 +8,7 @@ What the app does today, one short file per feature (what it does, rules, decisi
 | [tagging](features/tagging.md) | Categories, AI tags, suggestions, learning from my corrections |
 | [activities](features/activities.md) | The second label, chips, time per Activity, rename and merge |
 | [week-review](features/week-review.md) | Week page, Review done |
+| [insights](features/insights.md) | Weekly insights with sources, heatmap, trend, change results, the coach note |
 | [reminders](features/reminders.md) | Nudge, Review reminder, Quiet hours, push and email |
 | [account](features/account.md) | Sign-in, install, offline Local copy, sign-out |
 
