@@ -11,6 +11,10 @@ export const ACTIVITY_COLUMNS = 'id, name, status, merged_into_id' as const;
 export const SETTINGS_COLUMNS = 'time_zone, quiet_start, quiet_end, nudge_gap_hours' as const;
 export const REVIEW_COLUMNS = 'week_start, next_change' as const;
 export const TARGET_COLUMNS = 'id, activity_id, category_id, minutes' as const;
+export const INSIGHT_COLUMNS =
+  'id, week_start, kind, subject_key, rank, facts, entry_ids, finding, detail, try_this, text_source, may_not_apply, evidence, status, dismiss_reason, acted_at, active_until, result, generated_at' as const;
+export const SUMMARY_COLUMNS = 'week_start, facts' as const;
+export const COACH_NOTE_COLUMNS = 'id, body, source, created_at' as const;
 
 export type EntryRow = Pick<
   Tables['entries']['Row'],
@@ -50,6 +54,34 @@ export type ReviewRow = Pick<Tables['weekly_reviews']['Row'], 'week_start'> & Pa
 /** A weekly target (minutes) for an Activity; `category_id` null = any Category. */
 export type TargetRow = Pick<Tables['activity_targets']['Row'], 'id' | 'activity_id' | 'category_id' | 'minutes'>;
 
+/** An insight card (#80): its numbers, wording, source snapshot, status and change result. */
+export type InsightRow = Pick<
+  Tables['insights']['Row'],
+  | 'id'
+  | 'week_start'
+  | 'kind'
+  | 'subject_key'
+  | 'rank'
+  | 'facts'
+  | 'entry_ids'
+  | 'finding'
+  | 'detail'
+  | 'try_this'
+  | 'text_source'
+  | 'may_not_apply'
+  | 'evidence'
+  | 'status'
+  | 'dismiss_reason'
+  | 'acted_at'
+  | 'active_until'
+  | 'result'
+  | 'generated_at'
+>;
+/** One week's facts, computed by the Server (the trend reads these). */
+export type SummaryRow = Pick<Tables['week_summaries']['Row'], 'week_start' | 'facts'>;
+/** The current coach note (newest version). */
+export type CoachNoteRow = Pick<Tables['coach_notes']['Row'], 'id' | 'body' | 'source' | 'created_at'>;
+
 export type MetaRow = { key: string; value: unknown };
 
 /** The Local copy: read-only on the phone, replaced whole by each refresh. Disposable (no migrations). */
@@ -62,6 +94,9 @@ export class LocalDb extends Dexie {
   settings!: EntityTable<SettingsRow & { key: string }, 'key'>;
   activity_targets!: EntityTable<TargetRow, 'id'>;
   weekly_reviews!: EntityTable<ReviewRow, 'week_start'>;
+  insights!: EntityTable<InsightRow, 'id'>;
+  week_summaries!: EntityTable<SummaryRow, 'week_start'>;
+  coach_notes!: EntityTable<CoachNoteRow, 'id'>;
   meta!: EntityTable<MetaRow, 'key'>;
 
   constructor(name = 'daily-kaizen') {
@@ -81,6 +116,12 @@ export class LocalDb extends Dexie {
     // v3: weekly targets per Activity (the Reviews keep their key; `next_change` is just another field)
     this.version(3).stores({
       activity_targets: 'id',
+    });
+    // v4: Insights (#80): cards of this and last week (and a change still running), 9 weekly summaries, the coach note
+    this.version(4).stores({
+      insights: 'id, week_start',
+      week_summaries: 'week_start',
+      coach_notes: 'id',
     });
   }
 }

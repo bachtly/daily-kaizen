@@ -62,8 +62,15 @@ function rpc(name: string, args: unknown) {
   return b;
 }
 let session: { user: { id: string } } | null = { user: { id: 'u1' } };
+const invokeCalls: { name: string; options: unknown }[] = [];
+let invokeReply: { data: unknown; error: unknown } | Error = { data: { status: 'ok', saved: 3 }, error: null };
+async function invoke(name: string, options: unknown) {
+  invokeCalls.push({ name, options });
+  if (invokeReply instanceof Error) throw invokeReply;
+  return invokeReply;
+}
 vi.mock('./supabase', () => ({
-  supabase: { from, rpc, auth: { getSession: async () => ({ data: { session } }) } },
+  supabase: { from, rpc, functions: { invoke }, auth: { getSession: async () => ({ data: { session } }) } },
 }));
 
 const { createWrites } = await import('./writes');
@@ -309,5 +316,55 @@ describe('after a confirmed write', () => {
   it('a failing refresh does not fail the write', async () => {
     refresh.mockRejectedValueOnce(new Error('offline'));
     expect((await w.deleteEntry('e1')).ok).toBe(true);
+  });
+});
+
+describe('insights (#80)', () => {
+  it('accepts, dismisses with or without a reason, undoes, keeps and sets the coach note, refreshing after each', async () => {
+    await w.acceptInsight('i1');
+    await w.dismissInsight('i1');
+    await w.dismissInsight('i1', '  I work nights  ');
+    await w.dismissInsight('i1', '   ');
+    await w.undoInsight('i1');
+    await w.keepChange('i1');
+    await w.setCoachNote('I work nights.');
+    expect(rpcCalls).toEqual([
+      { name: 'accept_insight', args: { p_id: 'i1' } },
+      { name: 'dismiss_insight', args: { p_id: 'i1' } },
+      { name: 'dismiss_insight', args: { p_id: 'i1', p_reason: 'I work nights' } },
+      { name: 'dismiss_insight', args: { p_id: 'i1' } },
+      { name: 'undo_insight', args: { p_id: 'i1' } },
+      { name: 'keep_change', args: { p_id: 'i1' } },
+      { name: 'set_coach_note', args: { p_body: 'I work nights.' } },
+    ]);
+    expect(refresh).toHaveBeenCalledTimes(7);
+  });
+
+  it('passes the insight error keys through', async () => {
+    for (const key of ['insight_too_old', 'reason_too_long', 'change_not_running', 'note_too_long', 'insight_not_found']) {
+      rpcReply = { data: null, error: { message: key }, status: 400 };
+      expect(await w.acceptInsight('i1')).toEqual({ ok: false, error: key });
+    }
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('asks for insights with a long timeout and refreshes after', async () => {
+    invokeCalls.length = 0;
+    invokeReply = { data: { status: 'ok', saved: 3 }, error: null };
+    expect(await w.requestInsights('2026-11-09')).toEqual({ ok: true, data: { status: 'ok', saved: 3 } });
+    expect(invokeCalls).toEqual([{ name: 'insights', options: { body: { week_start: '2026-11-09' }, timeout: 150_000 } }]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps refused requests for insights and does not refresh', async () => {
+    const http = (status: number) => ({ data: null, error: { context: { status } } });
+    for (const [status, key] of [[429, 'too_soon'], [400, 'week_not_allowed'], [401, 'session_lost'], [409, 'time_zone_unknown'], [500, 'server']] as const) {
+      invokeReply = http(status);
+      expect(await w.requestInsights('2026-11-09')).toEqual({ ok: false, error: key });
+    }
+    invokeReply = new Error('offline');
+    expect(await w.requestInsights('2026-11-09')).toEqual({ ok: false, error: 'unknown' });
+    expect(refresh).not.toHaveBeenCalled();
+    invokeReply = { data: { status: 'ok', saved: 3 }, error: null };
   });
 });

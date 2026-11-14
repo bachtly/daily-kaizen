@@ -1,6 +1,9 @@
 import {
   ACTIVITY_COLUMNS,
   CATEGORY_COLUMNS,
+  COACH_NOTE_COLUMNS,
+  INSIGHT_COLUMNS,
+  SUMMARY_COLUMNS,
   db,
   ENTRY_COLUMNS,
   REVIEW_COLUMNS,
@@ -8,6 +11,9 @@ import {
   TARGET_COLUMNS,
   type ActivityRow,
   type CategoryRow,
+  type CoachNoteRow,
+  type InsightRow,
+  type SummaryRow,
   toEntryRow,
   type EntryRow,
   type EntryWithLinks,
@@ -36,6 +42,12 @@ export type LocalCopy = {
   targets?: TargetRow[];
   settings: SettingsRow | null;
   reviews: ReviewRow[];
+  /** Insight cards (#80) of this and last week, and any change still running; same note as `activities` */
+  insights?: InsightRow[];
+  /** Weekly summaries for the trend, up to 9 weeks before this one; same note */
+  summaries?: SummaryRow[];
+  /** The current coach note; null when there is none */
+  coachNote?: CoachNoteRow | null;
   /** ISO time of the last successful refresh; null when there is no Local copy yet */
   refreshedAt: string | null;
 };
@@ -43,10 +55,17 @@ export type LocalCopy = {
 /** What a refresh reads from: Entries ending after `since` (previous Monday 00:00, ISO) and Reviews from `sinceDate` (YYYY-MM-DD). */
 export type RefreshWindow = { since: string; sinceDate: string };
 
+/** Weekly summaries kept before `sinceDate`: 8 more weeks, so the trend shows 9 past weeks. */
+export const SUMMARY_WEEKS_BEFORE = 8;
+const shiftDays = (date: string, days: number) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+};
+
 let inFlight: Promise<Result<{ refreshedAt: string }>> | null = null;
 
 /**
- * Seven reads in parallel (04-api); the Local copy is replaced, in one transaction, only when all succeed.
+ * Ten reads in parallel (04-api, #80); the Local copy is replaced, in one transaction, only when all succeed.
  * Concurrent calls share one refresh. Records the duration (success only) for the NFR-3 report.
  */
 export function refresh(window: RefreshWindow): Promise<Result<{ refreshedAt: string }>> {
@@ -58,7 +77,7 @@ export function refresh(window: RefreshWindow): Promise<Result<{ refreshedAt: st
 
 async function doRefresh({ since, sinceDate }: RefreshWindow): Promise<Result<{ refreshedAt: string }>> {
   const started = performance.now();
-  const [entries, categories, activities, slots, targets, settings, reviews] = await Promise.all([
+  const [entries, categories, activities, slots, targets, settings, reviews, insights, summaries, notes] = await Promise.all([
     request((signal) =>
       supabase.from('entries').select(ENTRY_COLUMNS).gt('ended_at', since).order('started_at').abortSignal(signal),
     ),
@@ -70,6 +89,23 @@ async function doRefresh({ since, sinceDate }: RefreshWindow): Promise<Result<{ 
     request((signal) =>
       supabase.from('weekly_reviews').select(REVIEW_COLUMNS).gte('week_start', sinceDate).abortSignal(signal),
     ),
+    request((signal) =>
+      supabase
+        .from('insights')
+        .select(INSIGHT_COLUMNS)
+        .or(`week_start.gte.${sinceDate},and(status.eq.accepted,active_until.gte.${sinceDate})`)
+        .abortSignal(signal),
+    ),
+    request((signal) =>
+      supabase
+        .from('week_summaries')
+        .select(SUMMARY_COLUMNS)
+        .gte('week_start', shiftDays(sinceDate, -7 * SUMMARY_WEEKS_BEFORE))
+        .abortSignal(signal),
+    ),
+    request((signal) =>
+      supabase.from('coach_notes').select(COACH_NOTE_COLUMNS).order('created_at', { ascending: false }).limit(1).abortSignal(signal),
+    ),
   ]);
   if (!entries.ok) return entries;
   if (!categories.ok) return categories;
@@ -78,10 +114,13 @@ async function doRefresh({ since, sinceDate }: RefreshWindow): Promise<Result<{ 
   if (!targets.ok) return targets;
   if (!settings.ok) return settings;
   if (!reviews.ok) return reviews;
+  if (!insights.ok) return insights;
+  if (!summaries.ok) return summaries;
+  if (!notes.ok) return notes;
 
   const refreshedAt = new Date().toISOString();
   try {
-    await db.transaction('rw', [db.entries, db.categories, db.activities, db.activity_slots, db.activity_targets, db.settings, db.weekly_reviews, db.meta], async () => {
+    await db.transaction('rw', [db.entries, db.categories, db.activities, db.activity_slots, db.activity_targets, db.settings, db.weekly_reviews, db.insights, db.week_summaries, db.coach_notes, db.meta], async () => {
       await Promise.all([
         db.entries.clear(),
         db.categories.clear(),
@@ -89,6 +128,7 @@ async function doRefresh({ since, sinceDate }: RefreshWindow): Promise<Result<{ 
         db.activity_slots.clear(),
         db.activity_targets.clear(),
         db.settings.clear(), db.weekly_reviews.clear(),
+        db.insights.clear(), db.week_summaries.clear(), db.coach_notes.clear(),
       ]);
       await db.entries.bulkPut((entries.data as EntryWithLinks[]).map(toEntryRow));
       await db.categories.bulkPut(categories.data);
@@ -97,6 +137,9 @@ async function doRefresh({ since, sinceDate }: RefreshWindow): Promise<Result<{ 
       await db.activity_targets.bulkPut(targets.data);
       if (settings.data[0]) await db.settings.put({ key: SETTINGS_KEY, ...settings.data[0] });
       await db.weekly_reviews.bulkPut(reviews.data);
+      await db.insights.bulkPut(insights.data as InsightRow[]);
+      await db.week_summaries.bulkPut(summaries.data as SummaryRow[]);
+      await db.coach_notes.bulkPut(notes.data as CoachNoteRow[]);
       await db.meta.put({ key: REFRESHED_AT, value: refreshedAt });
     });
   } catch {
@@ -110,7 +153,7 @@ async function doRefresh({ since, sinceDate }: RefreshWindow): Promise<Result<{ 
 
 /** Read everything the screens need from the Local copy. */
 export async function readLocalCopy(): Promise<LocalCopy> {
-  const [entries, categories, activities, slots, targets, settings, reviews, refreshedAt] = await Promise.all([
+  const [entries, categories, activities, slots, targets, settings, reviews, insights, summaries, notes, refreshedAt] = await Promise.all([
     db.entries.orderBy('started_at').toArray(),
     db.categories.toArray(),
     db.activities.toArray(),
@@ -118,6 +161,9 @@ export async function readLocalCopy(): Promise<LocalCopy> {
     db.activity_targets.toArray(),
     db.settings.get(SETTINGS_KEY),
     db.weekly_reviews.toArray(),
+    db.insights.toArray(),
+    db.week_summaries.orderBy('week_start').toArray(),
+    db.coach_notes.toArray(),
     db.meta.get(REFRESHED_AT),
   ]);
   return {
@@ -128,6 +174,9 @@ export async function readLocalCopy(): Promise<LocalCopy> {
     targets,
     settings: settings ? { time_zone: settings.time_zone, quiet_start: settings.quiet_start, quiet_end: settings.quiet_end, nudge_gap_hours: settings.nudge_gap_hours } : null,
     reviews,
+    insights: insights.sort((a, b) => a.week_start.localeCompare(b.week_start) || a.rank - b.rank),
+    summaries,
+    coachNote: notes[0] ?? null,
     refreshedAt: (refreshedAt?.value as string | undefined) ?? null,
   };
 }

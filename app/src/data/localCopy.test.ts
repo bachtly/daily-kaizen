@@ -10,7 +10,7 @@ function builder(table: string) {
   const ops: [string, unknown[]][] = [];
   calls.push({ table, ops });
   const b: Record<string, unknown> = {};
-  for (const m of ['select', 'eq', 'gt', 'gte', 'lt', 'order', 'abortSignal', 'update']) {
+  for (const m of ['select', 'eq', 'gt', 'gte', 'lt', 'or', 'order', 'limit', 'abortSignal', 'update']) {
     b[m] = (...args: unknown[]) => {
       ops.push([m, args]);
       return b;
@@ -49,7 +49,7 @@ beforeEach(async () => {
 });
 
 describe('refresh', () => {
-  it('reads seven sources and replaces the copy with refreshed_at', async () => {
+  it('reads ten sources and replaces the copy with refreshed_at', async () => {
     replies.entries = ok([
       { ...entry('a'), entry_activities: [{ activity_id: 'z', created_at: '2026-11-03T02:00:02Z' }, { activity_id: 'y', created_at: '2026-11-03T02:00:01Z' }] },
       { ...entry('b'), entry_activities: [] },
@@ -62,7 +62,7 @@ describe('refresh', () => {
     replies.weekly_reviews = ok([{ week_start: '2026-11-02', next_change: 'No games' }]);
     const r = await refresh(window);
     expect(r.ok).toBe(true);
-    expect(calls.map((c) => c.table).sort()).toEqual(['activities', 'activity_slots', 'activity_targets', 'categories', 'entries', 'settings', 'weekly_reviews']);
+    expect(calls.map((c) => c.table).sort()).toEqual(['activities', 'activity_slots', 'activity_targets', 'categories', 'coach_notes', 'entries', 'insights', 'settings', 'week_summaries', 'weekly_reviews']);
     const entryOps = calls.find((c) => c.table === 'entries')!.ops;
     expect(entryOps).toContainEqual(['gt', ['ended_at', window.since]]);
     expect(calls.find((c) => c.table === 'weekly_reviews')!.ops).toContainEqual(['gte', ['week_start', '2026-11-02']]);
@@ -190,5 +190,37 @@ describe('timings', () => {
     await recordTiming('save', 120);
     await refresh(window);
     expect(await getTimings('save')).toEqual([120]);
+  });
+});
+
+describe('Insights in the Local copy (#80)', () => {
+  const card = (id: string, week: string, rank: number) => ({
+    id, week_start: week, kind: 'waste_window', subject_key: '', rank, facts: { from: '21:00' }, entry_ids: [], finding: 'f',
+    detail: 'd', try_this: 'If x, then y.', text_source: 'template', may_not_apply: null, evidence: { id: 'if-then-plans' },
+    status: 'new', dismiss_reason: null, acted_at: null, active_until: null, result: null, generated_at: '2026-11-08T11:00:00Z',
+  });
+
+  it('reads this and last week, a change still running, 9 summaries and the newest coach note', async () => {
+    replies.insights = ok([card('i2', '2026-11-09', 2), card('i1', '2026-11-09', 1), card('i0', '2026-11-02', 1)]);
+    replies.week_summaries = ok([{ week_start: '2026-10-26', facts: { v: 1 } }, { week_start: '2026-09-07', facts: { v: 1 } }]);
+    replies.coach_notes = ok([{ id: 'n1', body: 'I work nights.', source: 'me', created_at: '2026-11-08T00:00:00Z' }]);
+    await refresh(window);
+    expect(calls.find((c) => c.table === 'insights')!.ops).toContainEqual(['or', ['week_start.gte.2026-11-02,and(status.eq.accepted,active_until.gte.2026-11-02)']]);
+    expect(calls.find((c) => c.table === 'week_summaries')!.ops).toContainEqual(['gte', ['week_start', '2026-09-07']]);
+    const notes = calls.find((c) => c.table === 'coach_notes')!.ops;
+    expect(notes).toContainEqual(['order', ['created_at', { ascending: false }]]);
+    expect(notes).toContainEqual(['limit', [1]]);
+    const copy = await readLocalCopy();
+    expect(copy.insights!.map((i) => i.id)).toEqual(['i0', 'i1', 'i2']);
+    expect(copy.summaries!.map((s) => s.week_start)).toEqual(['2026-09-07', '2026-10-26']);
+    expect(copy.coachNote!.body).toBe('I work nights.');
+  });
+
+  it('keeps the old copy when an Insights read fails', async () => {
+    replies.insights = ok([card('i1', '2026-11-09', 1)]);
+    await refresh(window);
+    replies.week_summaries = { data: null, error: { message: 'x' }, status: 500 };
+    expect((await refresh(window)).ok).toBe(false);
+    expect((await readLocalCopy()).insights!.map((i) => i.id)).toEqual(['i1']);
   });
 });
