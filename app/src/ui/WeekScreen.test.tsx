@@ -210,8 +210,39 @@ describe('WeekScreen', () => {
     readLocalCopy.mockResolvedValue(copy({ entries, reviews: [{ week_start: '2026-11-02' }] }));
     mount('/week');
     fireEvent.click(await screen.findByText('Mark review done'));
-    await waitFor(() => expect(reviewDone).toHaveBeenCalledWith('2026-11-02'));
+    await waitFor(() => expect(reviewDone).toHaveBeenCalledWith('2026-11-02', ''));
     await screen.findByText('Review done ✓');
     expect(screen.queryByText('Mark review done')).toBeNull();
+  });
+
+  it('sends the note with Mark review done and shows the previous week note at the top', async () => {
+    const onReviewDone = vi.fn(async () => ({ ok: true as const, data: null }));
+    view({ onReviewDone, lastNote: 'Stop checking email before lunch' });
+    expect(screen.getByText('Stop checking email before lunch')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/One change for next week/), { target: { value: '  No phone at dinner ' } });
+    fireEvent.click(screen.getByText('Mark review done'));
+    await waitFor(() => expect(onReviewDone).toHaveBeenCalledWith('No phone at dinner'));
+  });
+
+  it('disables the note field offline and keeps 140 as its limit', () => {
+    view({ connection: 'offline' });
+    const field = screen.getByLabelText(/One change for next week/) as HTMLInputElement;
+    expect(field.disabled).toBe(true);
+    expect(field.maxLength).toBe(140);
+  });
+
+  it('puts the too-long error right under the note field', async () => {
+    view({ onReviewDone: async () => ({ ok: false as const, error: 'next_change_too_long' }) });
+    fireEvent.click(screen.getByText('Mark review done'));
+    const msg = await screen.findByText('Keep it to 140 characters.');
+    const field = screen.getByLabelText(/One change for next week/);
+    expect(field.getAttribute('aria-describedby')).toBe(msg.id);
+    expect(field.compareDocumentPosition(msg) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(msg.compareDocumentPosition(screen.getByText('Mark review done')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows no note line when last week has none', () => {
+    view();
+    expect(document.querySelector('.last-note')).toBeNull();
   });
 });

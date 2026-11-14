@@ -28,13 +28,14 @@ const totals = activityTotals(entries, bounds);
 
 const rename = vi.fn<(id: string, name: string) => Promise<Result<unknown>>>();
 const merge = vi.fn<(from: string, into: string) => Promise<Result<unknown>>>();
-const actions: ActivityActions = { renameActivity: rename, mergeActivity: merge };
+const setTarget = vi.fn<NonNullable<ActivityActions['setTarget']>>();
+const actions: ActivityActions = { renameActivity: rename, mergeActivity: merge, setTarget };
 
 const mount = (props: Partial<React.ComponentProps<typeof ActivityTotals>> = {}) =>
   render(<ActivityTotals totals={totals} activities={activities} categories={categories} online actions={actions} {...props} />);
 const openCompanyA = () => fireEvent.click(screen.getByRole('button', { name: /^Company A/ }));
 
-beforeEach(() => { rename.mockReset(); merge.mockReset(); });
+beforeEach(() => { rename.mockReset(); merge.mockReset(); setTarget.mockReset(); });
 afterEach(cleanup);
 
 describe('ActivityTotals', () => {
@@ -139,5 +140,94 @@ describe('ActivityTotals', () => {
     fireEvent.click(screen.getByText('Rename'));
     expect(rename).not.toHaveBeenCalled();
     expect(merge).not.toHaveBeenCalled();
+  });
+
+  describe('targets (#74)', () => {
+    const H = 3_600_000;
+    const targets = [
+      { id: 't1', activity_id: 'ca', category_id: null, minutes: 180 },
+      { id: 't2', activity_id: 'ca', category_id: 'deep', minutes: 60 },
+      { id: 't3', activity_id: 'gm', category_id: null, minutes: 300 },
+    ];
+    const withTargets = () => activityTotals(entries, bounds, bounds.end, targets);
+
+    it('shows actual / target with a tick when met, and 0h for an Activity with a target but no time', () => {
+      mount({ totals: withTargets() });
+      const ca = screen.getByRole('button', { name: /^Company A/ });
+      expect(ca.textContent).toContain('3h 00m / 3h 00m');
+      expect(within(ca).getByText('target met')).toBeTruthy();
+      const gm = screen.getByRole('button', { name: /^Game/ });
+      expect(gm.textContent).toContain('0h 00m / 5h 00m');
+      expect(within(gm).queryByText('target met')).toBeNull();
+      expect(H).toBe(3_600_000);
+    });
+
+    it('shows the Category target on its line when the row is open', () => {
+      mount({ totals: withTargets() });
+      openCompanyA();
+      const split = document.querySelector('.act-split') as HTMLElement;
+      expect(within(split).getByText('Deep').closest('li')?.textContent).toContain('2h 00m / 1h 00m');
+      expect(within(split).getByText('Shallow').closest('li')?.textContent).not.toContain('/');
+    });
+
+    it('sets the any-Category target from the Target button, in minutes', async () => {
+      setTarget.mockResolvedValueOnce({ ok: true, data: null });
+      mount();
+      openCompanyA();
+      fireEvent.click(screen.getByText('Target'));
+      fireEvent.change(screen.getByLabelText(/hours per week/), { target: { value: '12.5' } });
+      fireEvent.click(screen.getByText('Save'));
+      await waitFor(() => expect(setTarget).toHaveBeenCalledWith('ca', null, 750));
+    });
+
+    it('sets a Category pair by tapping its line, and clears with an empty field', async () => {
+      setTarget.mockResolvedValueOnce({ ok: true, data: null });
+      mount({ totals: withTargets() });
+      openCompanyA();
+      fireEvent.click(screen.getByRole('button', { name: /^Deep/ }));
+      const field = screen.getByLabelText(/hours per week/) as HTMLInputElement;
+      expect(field.value).toBe('1');
+      fireEvent.change(field, { target: { value: '' } });
+      fireEvent.click(screen.getByText('Save'));
+      await waitFor(() => expect(setTarget).toHaveBeenCalledWith('ca', 'deep', null));
+    });
+
+    it.each(['0.2', '81', 'abc'])('refuses %s hours without calling the Server', (value) => {
+      mount();
+      openCompanyA();
+      fireEvent.click(screen.getByText('Target'));
+      fireEvent.change(screen.getByLabelText(/hours per week/), { target: { value } });
+      fireEvent.click(screen.getByText('Save'));
+      expect(screen.getByRole('alert').textContent).toBe('Between 0.5 and 80 hours.');
+      expect(setTarget).not.toHaveBeenCalled();
+    });
+
+    it('puts the error under the field, above Save', () => {
+      mount();
+      openCompanyA();
+      fireEvent.click(screen.getByText('Target'));
+      fireEvent.change(screen.getByLabelText(/hours per week/), { target: { value: '99' } });
+      fireEvent.click(screen.getByText('Save'));
+      const msg = screen.getByRole('alert');
+      expect(screen.getByLabelText(/hours per week/).getAttribute('aria-describedby')).toBe(msg.id);
+      expect(msg.compareDocumentPosition(screen.getByText('Save')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('shows the Server refusal and stays open', async () => {
+      setTarget.mockResolvedValueOnce({ ok: false, error: 'target_out_of_range' });
+      mount();
+      openCompanyA();
+      fireEvent.click(screen.getByText('Target'));
+      fireEvent.change(screen.getByLabelText(/hours per week/), { target: { value: '10' } });
+      fireEvent.click(screen.getByText('Save'));
+      await screen.findByText('Between 0.5 and 80 hours.');
+    });
+
+    it('disables Target and the Category lines offline', () => {
+      mount({ online: false, totals: withTargets() });
+      openCompanyA();
+      expect((screen.getByText('Target') as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: /^Deep/ }) as HTMLButtonElement).disabled).toBe(true);
+    });
   });
 });
