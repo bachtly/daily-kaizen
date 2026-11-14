@@ -29,8 +29,8 @@ const messageFor = (error: string) =>
   : error === 'unknown' ? 'Needs a connection.'
   : "Couldn't save. Try again.";
 
-function Split({ total, categories, onPick }: {
-  total: ActivityTotal; categories: readonly CategoryRow[]; onPick?: (categoryId: string) => void;
+function Split({ total, categories, online, onPick }: {
+  total: ActivityTotal; categories: readonly CategoryRow[]; online: boolean; onPick?: (categoryId: string) => void;
 }) {
   const rows = categories
     .filter((c) => (total.byCategory[c.id] ?? 0) > 0 || total.categoryTargetMs[c.id])
@@ -49,7 +49,7 @@ function Split({ total, categories, onPick }: {
         return (
           <li key={r.id}>
             {onPick && r.pick
-              ? <button className="split-line" onClick={() => onPick(r.id)}>{body}</button>
+              ? <button className="split-line" disabled={!online} onClick={() => onPick(r.id)}>{body}</button>
               : body}
           </li>
         );
@@ -140,8 +140,8 @@ function Open({ total, activity, active, categories, online, actions }: {
   return (
     <>
       <Split
-        total={total} categories={categories}
-        onPick={activity && setTarget && online ? (categoryId) => setEditing({ categoryId }) : undefined}
+        total={total} categories={categories} online={online}
+        onPick={activity && setTarget ? (categoryId) => setEditing({ categoryId }) : undefined}
       />
       {activity && editing && setTarget && (
         <div className="act-manage">

@@ -20,14 +20,15 @@ export function ReviewDoneButton({ onMark, online }: { onMark: (note: string) =>
   const message =
     state === 'needs-connection' ? 'Needs a connection.'
     : state === 'failed' ? "Couldn't save. Try again."
-    : state === 'too-long' ? 'Keep it to 140 characters.'
     : '';
   return (
     <>
       <label className="review-note">
-        <span className="note" style={{ marginTop: 0 }}>One change for next week (optional)</span>
-        <input className="text" value={note} maxLength={140} onChange={(e) => setNote(e.target.value)} disabled={!online} />
+        <span className="field-hint">One change for next week (optional)</span>
+        <input className="text" value={note} maxLength={140} onChange={(e) => setNote(e.target.value)} disabled={!online}
+          aria-invalid={state === 'too-long' ? true : undefined} aria-describedby={state === 'too-long' ? 'note-error' : undefined} />
       </label>
+      {state === 'too-long' && <p className="error" id="note-error" role="alert">Keep it to 140 characters.</p>}
       <button className="primary" onClick={() => void tap()} disabled={state === 'saving'}>
         {state === 'saving' ? 'Saving…' : 'Mark review done'}
       </button>

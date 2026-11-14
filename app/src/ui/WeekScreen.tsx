@@ -144,7 +144,7 @@ export function WeekView({
       </div>
 
       {load === 'ready' && lastNote && (
-        <p className="last-note"><span className="note" style={{ marginTop: 0, display: "block" }}>Your change for this week</span>{lastNote}</p>
+        <p className="last-note"><span className="field-hint">Your change for this week</span>{lastNote}</p>
       )}
 
       {load === 'loading' && <>{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} style={{ margin: '10px 0' }} />)}</>}

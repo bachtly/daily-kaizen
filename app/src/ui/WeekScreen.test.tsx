@@ -231,6 +231,16 @@ describe('WeekScreen', () => {
     expect(field.maxLength).toBe(140);
   });
 
+  it('puts the too-long error right under the note field', async () => {
+    view({ onReviewDone: async () => ({ ok: false as const, error: 'next_change_too_long' }) });
+    fireEvent.click(screen.getByText('Mark review done'));
+    const msg = await screen.findByText('Keep it to 140 characters.');
+    const field = screen.getByLabelText(/One change for next week/);
+    expect(field.getAttribute('aria-describedby')).toBe(msg.id);
+    expect(field.compareDocumentPosition(msg) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(msg.compareDocumentPosition(screen.getByText('Mark review done')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('shows no note line when last week has none', () => {
     view();
     expect(document.querySelector('.last-note')).toBeNull();

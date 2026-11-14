@@ -47,17 +47,17 @@ export function TargetEditor({ label, currentMs, online, onSave, onClose }: {
   return (
     <form className="target-editor" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <label>
-        <span className="note" style={{ marginTop: 0 }}>{label}: hours per week (empty clears)</span>
+        <span className="field-hint">{label}: hours per week (empty clears)</span>
         <input
           className="text" inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)}
-          aria-invalid={message ? true : undefined} placeholder="e.g. 15"
+          aria-invalid={message ? true : undefined} aria-describedby={message ? 'target-error' : undefined} placeholder="e.g. 15"
         />
       </label>
+      {message && <p className="error" id="target-error" role="alert">{message}</p>}
       <div className="row-actions">
         <button className="secondary" type="submit" disabled={busy || !online}>Save</button>
         <button className="secondary" type="button" onClick={onClose}>Cancel</button>
       </div>
-      {message && <p className="error" role="alert">{message}</p>}
     </form>
   );
 }

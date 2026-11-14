@@ -160,6 +160,17 @@ export const TargetEditing: Story = {
     await new Promise((r) => setTimeout(r, 50));
   },
 };
+export const TargetZeroRow: Story = {
+  name: 'Targets: 0h row (target, no time this week)',
+  args: {
+    entries: withActivities, activities: [...activities, { id: 'rd', name: 'Reading', status: 'active', merged_into_id: null }],
+    targets: [...targets, { id: 't5', activity_id: 'rd', category_id: null, minutes: 180 }],
+  },
+};
+export const NoteOffline: Story = {
+  name: 'Review note: offline',
+  args: { connection: 'offline', lastNote: 'Stop checking email before lunch' },
+};
 export const TargetsOffline: Story = {
   name: 'Targets: offline',
   args: { entries: withActivities, activities, targets, connection: 'offline' },

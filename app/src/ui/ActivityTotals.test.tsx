@@ -202,6 +202,17 @@ describe('ActivityTotals', () => {
       expect(setTarget).not.toHaveBeenCalled();
     });
 
+    it('puts the error under the field, above Save', () => {
+      mount();
+      openCompanyA();
+      fireEvent.click(screen.getByText('Target'));
+      fireEvent.change(screen.getByLabelText(/hours per week/), { target: { value: '99' } });
+      fireEvent.click(screen.getByText('Save'));
+      const msg = screen.getByRole('alert');
+      expect(screen.getByLabelText(/hours per week/).getAttribute('aria-describedby')).toBe(msg.id);
+      expect(msg.compareDocumentPosition(screen.getByText('Save')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     it('shows the Server refusal and stays open', async () => {
       setTarget.mockResolvedValueOnce({ ok: false, error: 'target_out_of_range' });
       mount();
@@ -216,7 +227,7 @@ describe('ActivityTotals', () => {
       mount({ online: false, totals: withTargets() });
       openCompanyA();
       expect((screen.getByText('Target') as HTMLButtonElement).disabled).toBe(true);
-      expect(screen.queryByRole('button', { name: /^Deep/ })).toBeNull();
+      expect((screen.getByRole('button', { name: /^Deep/ }) as HTMLButtonElement).disabled).toBe(true);
     });
   });
 });
