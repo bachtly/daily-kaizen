@@ -22,7 +22,9 @@ export type Metric =
   | { fn: "target_actual"; activity_id: Id; category_id: Id | null; better: "lower" | "higher" }
   | { fn: "short_nights"; under: number; better: "lower" }
   | { fn: "days_recovery_under"; under: number; better: "lower" }
-  | { fn: "category_minutes"; role: Role; better: "toward"; target: number };
+  | { fn: "category_minutes"; role: Role; better: "toward"; target: number }
+  /** an ad-hoc card: nothing code can measure, so it can't be a change */
+  | { fn: "none" };
 
 /** A detector's output: the numbers a card may show, as display strings (design §7 validation). */
 export type Candidate = {

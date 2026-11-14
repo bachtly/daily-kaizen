@@ -1,18 +1,21 @@
 // The weekly AI step (design §7): one Messages call per user-week. The AI words cards, picks a source
-// from each candidate's list, may flag "may not apply", and rewrites the coach note. Code checks it all.
-import { type Evidence, evidenceById } from "../_shared/evidence.ts";
-import { rolesOf, type WeekFacts } from "../_shared/facts.ts";
+// from each candidate's list, may flag "may not apply", adds up to 5 ad-hoc findings of its own from the
+// week's data, and rewrites the coach note. Code checks it all.
+import { EVIDENCE, type Evidence, evidenceById } from "../_shared/evidence.ts";
+import { type Piece, rolesOf, type WeekFacts } from "../_shared/facts.ts";
 import type { InsightsDb } from "./db.ts";
 import { fmtH, median } from "./metrics.ts";
 import type { Ranked } from "./rank.ts";
 import type { WordFn } from "./run.ts";
 import type { CardText } from "./types.ts";
-import { type AiCard, cardProblem, noteProblem } from "./validate.ts";
+import { type AdhocCard, adhocProblem, type AiCard, allowedFrom, cardProblem, noteProblem } from "./validate.ts";
+import { dataTexts, weekData, type WeekData } from "./weekdata.ts";
 
 export const MODEL = "claude-opus-5-5";
 export const EFFORT = "medium";
 export const AI_TIMEOUT_MS = 120_000;
 export const FOLD_AFTER_WEEKS = 104;
+export const ADHOC_MAX = 5;
 
 export const SYSTEM = `You are the weekly coach in a personal time-tracking app. Each week the app's code finds candidate insights in the user's own log and computes every number. You word them, and you keep a short coach note that carries what you learn about this person from week to week.
 
@@ -23,16 +26,23 @@ Rules:
 - Respect the user's dismissals and their reasons, quoted in "dismissed". Do not argue with them.
 - "evidence_id" must be one of the candidate's "allowed_evidence" ids.
 - Set "may_not_apply" to a short reason, taken from the history, the coach note or a dismissal reason, only when the suggestion likely does not fit this person; otherwise null. Such a card is still shown, last.
+- The "If" part is a concrete cue: a clock time from the facts, a place, or an event that happens anyway ("If I close the laptop for the day"), never an intention ("If I stop work").
 - Plain, warm, non-judgemental English. No scores, no streaks, no exclamation marks.
 - When "week_so_far" is true the week isn't over: say "so far this week", and don't treat a low total as a pattern yet.
 - "coach_note": rewrite the note (at most 1200 characters) from the old note, the history and this week. Keep the lines in "my_lines" word for word. State a pattern only when at least 2 weeks of history, a dismissal or a reason supports it. No numbers except ones copied from the input.
 
-Return one card per candidate, with its "candidate_id".`;
+Return one card per candidate, with its "candidate_id".
+
+Ad-hoc findings ("adhoc"): the candidates come from fixed checks. Also read "week_data" yourself and add up to 5 findings it shows that no candidate already covers: patterns across days and hours, what tends to follow what, how an Activity's time is spread, anything a person would want to know about their week. Each one:
+- "finding", "detail" and an if-then "try_this", with the same lengths and rules as the cards; every number copied from the input.
+- "refs": the "week_data.timeline" refs it rests on, at least one.
+- "evidence_id": an id from "library" only when that source really supports the suggestion; otherwise null. Never stretch a source to fit.
+Only state what the data clearly shows; a finding from one or two days says so. Return fewer, or none, rather than guess.`;
 
 export const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["cards", "coach_note"],
+  required: ["cards", "adhoc", "coach_note"],
   properties: {
     cards: {
       type: "array",
@@ -47,6 +57,21 @@ export const SCHEMA = {
           try_this: { type: "string" },
           evidence_id: { type: "string" },
           may_not_apply: { anyOf: [{ type: "string" }, { type: "null" }] },
+        },
+      },
+    },
+    adhoc: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["finding", "detail", "try_this", "evidence_id", "refs"],
+        properties: {
+          finding: { type: "string" },
+          detail: { type: "string" },
+          try_this: { type: "string" },
+          evidence_id: { anyOf: [{ type: "string" }, { type: "null" }] },
+          refs: { type: "array", items: { type: "string" } },
         },
       },
     },
@@ -70,7 +95,10 @@ type Dismissed = { kind: string; subject: string; week_start: string; reason: st
 /** One line per week, all weeks; weeks older than 2 years folded into months. */
 export function historyLines(weeks: WeekFacts[], names: { id: string; name: string }[], changes: Change[]): string[] {
   const roles = rolesOf(names);
-  const sorted = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+  const all = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+  // Weeks before I started logging aren't history: they'd read as gaps.
+  const first = all.findIndex((f) => Object.values(f.minutes.byCategory).some((m) => m > 0) || f.minutes.untagged > 0);
+  const sorted = first < 0 ? [] : all.slice(first);
   const changeFor = (w: string) =>
     changes.find((c) => c.week_start < w && c.active_until >= w);
   const nums = (f: WeekFacts) => ({
@@ -134,6 +162,8 @@ export type Context = {
   coach_note: string;
   my_lines: string[];
   targets: string[];
+  week_data: WeekData;
+  library: { id: string; label: string; shows: string; against?: string; limits: string }[];
   candidates: {
     candidate_id: number;
     kind: string;
@@ -153,6 +183,7 @@ export function buildContext(input: {
   note: { current: CoachNote | null; myLines: string[] };
   targets: string[];
   partial?: boolean;
+  weekData: WeekData;
 }): Context {
   return {
     week_so_far: input.partial ?? false,
@@ -162,6 +193,8 @@ export function buildContext(input: {
     coach_note: input.note.current?.body ?? "",
     my_lines: input.note.myLines,
     targets: input.targets,
+    week_data: input.weekData,
+    library: EVIDENCE.map(({ id, label, shows, against, limits }) => ({ id, label, shows, against, limits })),
     candidates: input.ranked.map((c, i) => ({
       candidate_id: i + 1,
       kind: c.kind,
@@ -174,7 +207,7 @@ export function buildContext(input: {
   };
 }
 
-export type AiReply = { cards: AiCard[]; coach_note: string; model: string; input_tokens: number; output_tokens: number };
+export type AiReply = { cards: AiCard[]; adhoc: AdhocCard[]; coach_note: string; model: string; input_tokens: number; output_tokens: number };
 
 /** Calls the Messages API with structured output; throws on a timeout, non-2xx, refusal, truncation or bad JSON. */
 export async function callClaude(context: Context, apiKey: string, fetchFn: typeof fetch = fetch): Promise<AiReply> {
@@ -205,6 +238,7 @@ export async function callClaude(context: Context, apiKey: string, fetchFn: type
   if (!Array.isArray(parsed?.cards) || typeof parsed?.coach_note !== "string") throw new Error("reply shape");
   return {
     cards: parsed.cards,
+    adhoc: Array.isArray(parsed.adhoc) ? parsed.adhoc : [],
     coach_note: parsed.coach_note,
     model: String(body?.model ?? MODEL),
     input_tokens: Number(body?.usage?.input_tokens ?? 0),
@@ -214,7 +248,7 @@ export async function callClaude(context: Context, apiKey: string, fetchFn: type
 
 /** Builds the WordFn the run uses: loads the history, calls the AI, checks every card and the note. */
 export function makeWord(apiKey: string, db: InsightsDb, fetchFn: typeof fetch = fetch): WordFn {
-  return async ({ userId, week, ranked, templates, partial }) => {
+  return async ({ userId, week, ranked, templates, partial, facts, pieces }) => {
     const [summaries, cats, changes, dismissed, notes, targets, acts] = await Promise.all([
       db.getSummaries(userId, "2000-01-03"),
       db.getCategories(userId),
@@ -233,6 +267,7 @@ export function makeWord(apiKey: string, db: InsightsDb, fetchFn: typeof fetch =
       return `${actName[t.activity_id] ?? "an Activity"}${t.category_id ? ` · ${catName[t.category_id] ?? ""}` : ""}: target ${fmtH(t.minutes)}, this week ${fmtH(actual)}`;
     });
     const note = noteState(notes);
+    const wd = weekData(facts, pieces, catName, actName);
     const context = buildContext({
       ranked,
       templates,
@@ -242,6 +277,7 @@ export function makeWord(apiKey: string, db: InsightsDb, fetchFn: typeof fetch =
       note,
       targets: targetLines,
       partial,
+      weekData: wd.data,
     });
     const reply = await callClaude(context, apiKey, fetchFn);
 
@@ -272,7 +308,34 @@ export function makeWord(apiKey: string, db: InsightsDb, fetchFn: typeof fetch =
     else if (problem) console.warn(`insights: coach note kept: ${problem}`);
     else if (body !== (note.current?.body ?? "")) await db.addCoachNote(userId, week, body);
 
-    return { cards, model: reply.model, input_tokens: reply.input_tokens, output_tokens: reply.output_tokens };
+    // Ad-hoc findings: numbers only from the context, refs that exist, a source only from the library.
+    const allowed = allowedFrom([
+      ...dataTexts(wd.data),
+      ...context.history,
+      ...context.targets,
+      ...names,
+      ...ranked.flatMap((c) => Object.values(c.facts)),
+      ...EVIDENCE.flatMap((e) => [e.label, e.shows, e.against ?? "", e.limits]),
+    ]);
+    const refs = new Set(wd.data.timeline.map((t) => t.ref));
+    const evidenceIds = new Set(EVIDENCE.map((e) => e.id));
+    const adhoc = reply.adhoc.flatMap((a) => {
+      const problem = adhocProblem(a, { allowed, refs, evidenceIds });
+      if (problem) {
+        console.warn(`insights: ad-hoc finding dropped: ${problem}`);
+        return [];
+      }
+      const tidy = (s: string) => s.replace(/\s+/g, " ").trim();
+      return [{
+        finding: tidy(a.finding),
+        detail: tidy(a.detail),
+        try_this: tidy(a.try_this),
+        evidence_id: a.evidence_id,
+        entry_ids: [...new Set(a.refs.flatMap((r) => wd.entriesByRef.get(r) ?? []))],
+      }];
+    }).slice(0, ADHOC_MAX);
+
+    return { cards, adhoc, model: reply.model, input_tokens: reply.input_tokens, output_tokens: reply.output_tokens };
   };
 }
 

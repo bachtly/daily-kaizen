@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { EVIDENCE } from '../../../supabase/functions/_shared/evidence.ts';
 import type { ActivityRow, CategoryRow, EntryRow, InsightRow, SummaryRow } from '../data/db';
-import { card } from '../data/insightFixtures';
+import { adhocCard, card } from '../data/insightFixtures';
 import type { Result } from '../data/request';
 import type { InsightActions } from './Insights';
 import { LogFab } from './LogFab';
@@ -106,6 +106,20 @@ export const NotUseful: Story = {
   play: async ({ canvasElement }) => {
     const btn = [...canvasElement.querySelectorAll('button')].find((b) => b.textContent === 'Not useful');
     btn?.click();
+  },
+};
+export const Spotted: Story = {
+  name: 'With AI-spotted findings',
+  args: {
+    insights: [
+      ...cards,
+      adhocCard('a1', '2026-11-09', { entry_ids: [entries[0].id] }),
+      adhocCard('a2', '2026-11-09', {
+        finding: 'Email ran past 18:00 on 4 of 6 days', detail: 'Those evenings had the least Recovery.',
+        try_this: "If it's 18:00, then I close Email for the day.",
+        evidence: cards.find((c) => c.id === 'rec')!.evidence,
+      }),
+    ],
   },
 };
 export const TooEarly: Story = { name: 'Too early (1 logged day)', args: { entries: week(1), now: Date.parse('2026-11-10T18:00:00Z'), insights: [] } };

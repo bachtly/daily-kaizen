@@ -48,13 +48,15 @@ export function measure(m: Metric, f: WeekFacts, roles: Partial<Record<Role, Id>
       return f.days.filter((d) => d.logged && d.recoveryAwake < m.under).length;
     case "category_minutes":
       return cellMinutes(f, [roles[m.role]], upto);
+    case "none":
+      return 0;
   }
 }
 
 /** Lower is better, for any metric: comparable across weeks. */
 export function badness(m: Metric, value: number): number {
   if (m.fn === "category_minutes") return Math.abs(value - m.target);
-  return m.better === "higher" ? -value : value;
+  return "better" in m && m.better === "higher" ? -value : value;
 }
 
 export const USUAL_MIN_WEEKS = 3;

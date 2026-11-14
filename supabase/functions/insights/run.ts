@@ -10,6 +10,8 @@ import { addDays, rank, type Ranked, WEIGHT_WEEKS } from "./rank.ts";
 import { templateText } from "./templates.ts";
 import type { CardText, DetectContext } from "./types.ts";
 
+/** Cards the AI spotted itself in the week's data, not from a fixed check. */
+export const ADHOC_KIND = "adhoc";
 export const MIN_LOGGED_DAYS = 5;
 /** "Get insights now" works mid-week, from this many logged days. */
 export const MIN_LOGGED_DAYS_NOW = 2;
@@ -24,9 +26,14 @@ export type WordFn = (input: {
   templates: CardText[];
   /** the week isn't over yet: word it as "so far", and keep the coach note */
   partial: boolean;
+  /** this week's facts and owned time, for the AI's own (ad-hoc) findings */
+  facts: WeekFacts;
+  pieces: readonly Piece[];
 }) => Promise<
   {
     cards: (CardText & { evidence_id: string; may_not_apply: string | null } | null)[];
+    /** up to 5 findings the AI spotted itself, already checked */
+    adhoc?: (CardText & { evidence_id: string | null; entry_ids: string[] })[];
     model?: string;
     input_tokens?: number;
     output_tokens?: number;
@@ -136,9 +143,18 @@ export async function generate(
 
     let status: GenerateOutcome["status"] = "ok";
     let worded: Awaited<ReturnType<WordFn>> = null;
-    if (word && ranked.length) {
+    // The AI runs even with no candidates: its ad-hoc findings help most in a first week.
+    if (word) {
       try {
-        worded = await word({ userId: user.user_id, week, ranked, templates, partial: weekSoFar(cur.facts) });
+        worded = await word({
+          userId: user.user_id,
+          week,
+          ranked,
+          templates,
+          partial: weekSoFar(cur.facts),
+          facts: cur.facts,
+          pieces: cur.pieces,
+        });
       } catch (e) {
         console.error(`insights: wording failed: ${(e as Error).message}`);
         status = "ai_failed";
@@ -167,6 +183,25 @@ export async function generate(
     });
     // A card flagged "may not apply" sorts last (design §6); ranks follow the new order.
     rows.sort((a, b) => Number(a.may_not_apply !== null) - Number(b.may_not_apply !== null) || a.rank - b.rank);
+    // Ad-hoc findings come after the fixed checks' cards, with their own subject per run so a regenerated
+    // one never collides with an earlier one I dismissed.
+    (worded?.adhoc ?? []).forEach((a, i) =>
+      rows.push({
+        kind: ADHOC_KIND,
+        subject_key: `${runId.slice(0, 8)}:${i + 1}`,
+        rank: 0,
+        score: 0,
+        facts: {},
+        entry_ids: a.entry_ids,
+        metric: { fn: "none" },
+        finding: a.finding,
+        detail: a.detail,
+        try_this: a.try_this,
+        text_source: "ai",
+        may_not_apply: null,
+        evidence: (a.evidence_id && evidenceById(a.evidence_id)) || {},
+      })
+    );
     rows.forEach((r, i) => (r.rank = i + 1));
 
     const saved = await db.saveInsights(user.user_id, week, rows);

@@ -19,6 +19,7 @@ export const VALIDATION_KEYS = [
   'next_change_too_long',
   'insight_not_found',
   'insight_too_old',
+  'insight_not_measurable',
   'reason_too_long',
   'change_not_running',
   'note_too_long',
