@@ -23,7 +23,7 @@
 - A change result (Monday 04:00, once the week has fully ended) compares the change weeks with up to 4 earlier weeks with ≥ 5 logged days: **Helped** only when it beats every one of them; at least 3 are needed.
 - Weeks before my first Entry aren't sent as history.
 - The coach note is at most 1200 characters, rewritten (never appended), keeps the lines I wrote word for word, and may only use numbers from my history; otherwise the old note stays.
-- Asking for insights: at most once an hour; it can take a minute. A failed AI run gives template cards and retries that Sunday evening, up to 3 runs.
+- Asking for insights: at most once a minute; it can take a minute. A failed AI run gives template cards and retries that Sunday evening, up to 3 runs.
 - No Entry text goes to the AI, only Category and Activity names and numbers.
 - No new notifications; the Review reminder stays the only nudge. Everything except reading needs a connection.
 

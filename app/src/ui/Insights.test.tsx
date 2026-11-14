@@ -68,7 +68,7 @@ describe('Insights panel', () => {
     const a = actions({ request: vi.fn(async (): Promise<Result<unknown>> => ({ ok: false, error: 'too_soon' })) });
     view({ insightActions: a });
     fireEvent.click(within(panel()).getByRole('button', { name: 'Get insights now' }));
-    await waitFor(() => expect(within(panel()).getByText('You can ask again in an hour.')).toBeTruthy());
+    await waitFor(() => expect(within(panel()).getByText('You can ask again in a minute.')).toBeTruthy());
     expect(a.request).toHaveBeenCalledTimes(1);
   });
 

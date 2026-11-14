@@ -1,7 +1,7 @@
 // Insights function (design §9).
 // Job (x-job-secret), hourly: per user with a time zone, Sunday 18:00-18:59 local -> new insights once a
 // week, retried up to 3 times that evening if the AI failed; Monday 04:00-04:59 local -> change results.
-// Phone (Authorization: Bearer <my JWT>): new insights for this or last week now, at most once an hour.
+// Phone (Authorization: Bearer <my JWT>): new insights for this or last week now, at most once a minute.
 import { loadInsightsConfig } from "../_shared/config.ts";
 import { isJobAuthorized } from "../_shared/jobAuth.ts";
 import { mondayOf, weekBounds, zonedParts } from "../_shared/week.ts";
@@ -21,7 +21,7 @@ export interface HandlerDeps {
 export const GENERATE = { weekday: 6, hour: 18 } as const; // Sunday, an hour before the Review reminder
 export const FINALISE = { weekday: 0, hour: 4 } as const; // Monday, once the week has fully ended
 export const MAX_AI_RETRIES = 3;
-export const MY_RUN_GAP_MS = 60 * 60_000;
+export const MY_RUN_GAP_MS = 60_000;
 
 export function dueAction(user: UserSettings, now: number): "generate" | "retry" | "finalise" | null {
   const p = zonedParts(now, user.time_zone);
@@ -58,7 +58,7 @@ const CORS = {
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "content-type": "application/json" } });
 
-/** The phone's "Get insights now" / "Update": this or last week, once an hour. */
+/** The phone's "Get insights now" / "Update": this or last week, once a minute. */
 async function forMe(req: Request, db: InsightsDb, now: number, word?: WordFn): Promise<Response> {
   const jwt = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const userId = jwt ? await db.userFromJwt(jwt) : null;
