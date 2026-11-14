@@ -61,9 +61,9 @@ const INSIGHTS: Insight[] = [
   },
   {
     id: 'focus-length',
-    finding: 'Your Deep blocks of 50–70 min ended on plan most often',
-    detail: '5 of 6 such blocks ended when planned; blocks over 2h were cut short by Waste 3 of 4 times.',
-    tryThis: 'If I start Deep work, then I plan about 60 min and choose my own break.',
+    finding: 'Your Deep blocks of 60–90 min were least often followed by Waste',
+    detail: 'Over 4 weeks, 1 of 7 such blocks was followed by Waste; after blocks over 2h, 3 of 4 were.',
+    tryThis: 'If I start Deep work, then I plan about 75 min and choose my own break.',
     entries: 10,
     evidence: {
       label: 'Break timing · 1 study, mixed',
@@ -90,8 +90,8 @@ const INSIGHTS: Insight[] = [
   },
   {
     id: 'progress',
-    finding: 'Deep was 6h, under your 10h target',
-    detail: 'Mon and Fri had no Deep entries; the other days had 1–2h.',
+    finding: 'Company A · Deep was 6h of your 10h target',
+    detail: 'Mon and Fri had no Company A Deep time; the other days had 1–2h.',
     tryThis: 'If it’s Sunday evening, then I put next week’s Deep blocks in my calendar.',
     entries: 6,
     evidence: {
@@ -104,8 +104,8 @@ const INSIGHTS: Insight[] = [
   },
   {
     id: 'detach',
-    finding: 'Two workdays ran past 21:00 with no Recovery after',
-    detail: 'On Tue and Thu, work entries ended after 21:00 and the next entry was Waste.',
+    finding: 'Work ran into the 2h before Quiet hours on 2 days',
+    detail: 'On Tue and Thu, Deep or Shallow went past 21:00; Quiet hours start at 23:00.',
     tryThis: 'If I stop work, then I write tomorrow’s first step and close the laptop.',
     entries: 4,
     evidence: {
