@@ -1,0 +1,18 @@
+name: agent
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+jobs:
+  agent:
+    if: >-
+      github.event.sender.login == github.repository_owner &&
+      (github.event.label.name == 'agent' || contains(github.event.comment.body, '@agent'))
+    uses: bachtly/agent-kit/.github/workflows/agent.yml@v1
+    with:
+      app_client_id: ${{ vars.AGENT_APP_CLIENT_ID }}
+      node_version: "lts/*"
+      setup_command: npm --prefix app ci
