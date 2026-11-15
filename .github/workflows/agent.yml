@@ -12,6 +12,7 @@ jobs:
       github.event.sender.login == github.repository_owner &&
       (github.event.label.name == 'agent' || contains(github.event.comment.body, '@agent'))
     uses: bachtly/agent-kit/.github/workflows/agent.yml@v1
+    secrets: inherit
     with:
       app_client_id: ${{ vars.AGENT_APP_CLIENT_ID }}
       node_version: "lts/*"
