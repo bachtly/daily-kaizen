@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --prefix app ci)",
+      "Bash(npm --prefix app run lint)",
+      "Bash(npm --prefix app run build)",
+      "Bash(npm --prefix app test:*)"
+    ],
+    "deny": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(gh:*)",
+      "Bash(git push:*)",
+      "Edit(.github/workflows/**)",
+      "Write(.github/workflows/**)"
+    ]
+  }
+}
