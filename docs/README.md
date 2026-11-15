@@ -10,6 +10,7 @@ What the app does today, one short file per feature (what it does, rules, decisi
 | [week-review](features/week-review.md) | Week page, Review done |
 | [insights](features/insights.md) | Weekly insights with sources, heatmap, trend, change results, the coach note |
 | [reminders](features/reminders.md) | Nudge, Review reminder, Quiet hours, push and email |
+| [flows](features/flows.md) | Flow charts and sequence diagrams: log time, generate insights, set a weekly target |
 | [account](features/account.md) | Sign-in, install, offline Local copy, sign-out |
 
 [`design/`](design/README.md) is a frozen archive of the approved designs. A behaviour change updates its feature doc, never the archive. Keep each feature doc under about 60 lines.
