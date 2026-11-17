@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, useInRouterContext, useNavigate, useParams } from 'react-router';
+import { useInRouterContext, useParams } from 'react-router';
+import { Link, useNavigate } from './nav';
 import { activityTotals, lastWeekNote } from '../data/activities';
 import { dateOf, dayBounds, loggedMs, shiftDate } from '../data/day';
 import type { ActivityRow, CategoryRow, EntryRow, InsightRow, SettingsRow, SummaryRow, TargetRow } from '../data/db';
@@ -97,6 +98,7 @@ function DayTotals({ monday, entries, timeZone: tz, now }: { monday: string; ent
           const label = shortDate(r.start, tz);
           if (r.date > today) return <li key={r.date}><span className="off"><span>{label}</span><span /><span className="val">–</span><span /></span></li>;
           const to = r.date === today ? '/' : `/day/${r.date}`;
+          // A drill-down: push, so back returns to this week.
           const body = (
             <>
               <span>{label}</span>{' '}
@@ -105,7 +107,7 @@ function DayTotals({ monday, entries, timeZone: tz, now }: { monday: string; ent
               <span aria-hidden="true">›</span>
             </>
           );
-          return <li key={r.date}>{inRouter ? <Link to={to}>{body}</Link> : <a href={to}>{body}</a>}</li>;
+          return <li key={r.date}>{inRouter ? <Link to={to} replace={false}>{body}</Link> : <a href={to}>{body}</a>}</li>;
         })}
       </ul>
     </section>

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useNavigationType } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CategoryRow, EntryRow } from '../data/db';
 import type { LocalCopy } from '../data/localCopy';
@@ -30,7 +30,7 @@ const copy = (over: Partial<LocalCopy> = {}): LocalCopy => ({
 
 function Where() {
   const l = useLocation();
-  return <output data-testid="where">{l.pathname}{l.search}</output>;
+  return <><output data-testid="where">{l.pathname}{l.search}</output><output data-testid="how">{useNavigationType()}</output></>;
 }
 const mount = (path: string) =>
   render(
@@ -123,6 +123,7 @@ describe('DayScreen', () => {
     mount('/');
     fireEvent.click(await screen.findByRole('button', { name: /^Mon\s*2\s*Nov, 1h 00m logged$/ }));
     await waitFor(() => expect(where()).toBe('/day/2026-11-02'));
+    expect(screen.getByTestId('how').textContent).toBe('REPLACE'); // Android back leaves the app, not the day
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Mon 2 Nov');
     expect(screen.getByText('Entry c')).toBeTruthy();
     expect((screen.getByRole('button', { name: /^Thu\s*5\s*Nov$/ }) as HTMLButtonElement).disabled).toBe(true);

@@ -1,5 +1,6 @@
 import type React from 'react';
-import { Link, useInRouterContext } from 'react-router';
+import { useInRouterContext } from 'react-router';
+import { Link } from './nav';
 
 export type Tab = 'day' | 'week' | 'settings';
 
@@ -23,7 +24,9 @@ function Icon({ tab }: { tab: Tab }) {
   );
 }
 
-/** Three destinations, one tap each. Targets are at least 44 pt tall. Plain anchors outside a Router (Storybook). */
+/**
+ * Three destinations, one tap each. Targets are at least 44 pt tall. Plain anchors outside a Router (Storybook).
+ */
 export function TabBar({ current }: { current: Tab }) {
   const inRouter = useInRouterContext();
   return (
