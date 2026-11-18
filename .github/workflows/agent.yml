@@ -8,9 +8,12 @@ permissions:
   contents: read
 jobs:
   agent:
+    # Owner events, plus the App starting a slice run of an epic (the kit re-checks it is this App).
     if: >-
-      github.event.sender.login == github.repository_owner &&
-      (github.event.label.name == 'agent' || contains(github.event.comment.body, '@agent'))
+      (github.event.sender.login == github.repository_owner &&
+       (github.event.label.name == 'agent' || contains(github.event.comment.body, '@agent'))) ||
+      (github.event.sender.type == 'Bot' && github.event.label.name == 'agent' &&
+       contains(github.event.issue.labels.*.name, 'type:slice'))
     uses: bachtly/agent-kit/.github/workflows/agent.yml@v1
     secrets: inherit
     with:
