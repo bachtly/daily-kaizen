@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
@@ -62,6 +62,14 @@ test('tab bar links point to the three destinations', async () => {
   await screen.findByRole('navigation', { name: 'Main' })
   const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'))
   expect(links).toEqual(['/', '/week', '/settings'])
+})
+
+test('switching tabs replaces the history entry, so Android back leaves the app', async () => {
+  const router = at('/')
+  await screen.findByRole('navigation', { name: 'Main' })
+  fireEvent.click(screen.getByRole('link', { name: 'Week' }))
+  await waitFor(() => expect(router.state.location.pathname).toBe('/week'))
+  expect(router.state.historyAction).toBe('REPLACE')
 })
 
 test('refresh window starts at the previous Monday 00:00 in the zone', () => {

@@ -17,11 +17,13 @@
 - Sign-out needs a connection (the button is disabled offline); on failure the session and Local copy stay with "Couldn't sign out. Try again."
 - Sign-out ends only this device's session and clears every Local copy table, so a table added later can't be missed (#72).
 - A wrong or expired code shows an error; a new code can be requested after a wait.
+- Switching tabs and paging days or weeks replaces the page in history, so Android's back button leaves the app. Opening a day from the Week page still adds one, so back returns to the Week page.
 
 ## Decisions
 - Anyone can sign up, with the same copy for every email (#48).
 - Sign-in from any browser, with install steps on their own page (#56).
 - Android is supported as a home-screen web app from Chrome, like the iPhone; no native app.
+- Navigation replaces history by default, everywhere, not only in the home-screen app: simpler, at the cost of the browser back button skipping those moves too. `src/ui/nav.tsx` sets the default and lint keeps react-router's own `Link`/`useNavigate` out, so a new screen can't forget it.
 - Online writes with a read-only Local copy, not an Outbox (D3).
 - Sign-out clears via `db.tables` rather than a hand-kept list (#72).
 

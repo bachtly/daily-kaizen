@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from './nav';
 
 import { signOut } from '../data/auth';
 import type { CoachNoteRow } from '../data/db';
@@ -203,7 +203,7 @@ export function SettingsScreen() {
     setSigningOut(true);
     setSignOutProblem(undefined);
     const r = await signOut();
-    if (r.ok) { void navigate('/sign-in', { replace: true }); return; }
+    if (r.ok) { void navigate('/sign-in'); return; }
     setSigningOut(false);
     setSignOutProblem(r.error === 'unknown' ? 'Needs a connection.' : "Couldn't sign out. Try again.");
   };

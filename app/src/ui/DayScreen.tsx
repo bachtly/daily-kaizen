@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
+import { useNavigate } from './nav';
 import { coverage, dateOf, dayBounds, dayItems, loggedMs, shiftDate } from '../data/day';
 import type { ActivityRow, CategoryRow, EntryRow, SlotRow } from '../data/db';
 import type { Result } from '../data/request';

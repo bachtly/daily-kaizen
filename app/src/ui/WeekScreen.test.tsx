@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useNavigationType } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CategoryRow, EntryRow } from '../data/db';
 import type { LocalCopy } from '../data/localCopy';
@@ -146,6 +146,22 @@ describe('WeekScreen', () => {
     fireEvent.click(screen.getByLabelText('Next week'));
     await waitFor(() => expect(screen.queryByText('Earlier weeks need a connection.')).toBeNull());
     expect(screen.getByText('12 Oct – 18 Oct')).toBeTruthy();
+  });
+
+  it('paging weeks replaces the history entry, so Android back leaves the app', async () => {
+    readLocalCopy.mockResolvedValue(copy());
+    fetchWeek.mockReturnValue(new Promise(() => {}));
+    const How = () => <output data-testid="how">{useNavigationType()}</output>;
+    render(
+      <MemoryRouter initialEntries={['/week/2026-10-05']}>
+        <Routes>
+          <Route path="/week/:monday" element={<><WeekScreen isCurrentWeek={false} /><How /></>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByLabelText('Next week'));
+    await screen.findByText('12 Oct – 18 Oct');
+    expect(screen.getByTestId('how').textContent).toBe('REPLACE');
   });
 
   it('shows a skeleton, not Not reviewed or Not updated yet, until the Local copy is read', async () => {

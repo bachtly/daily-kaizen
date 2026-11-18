@@ -3,6 +3,16 @@
   "plugins": ["react", "typescript", "oxc"],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "no-restricted-imports": ["error", {
+      "paths": [{
+        "name": "react-router",
+        "importNames": ["Link", "NavLink", "Navigate", "useNavigate"],
+        "message": "Use ./nav (src/ui/nav.tsx): it replaces the history entry by default, so Android's back button leaves the app."
+      }]
+    }]
+  },
+  "overrides": [
+    { "files": ["src/ui/nav.tsx"], "rules": { "no-restricted-imports": "off" } }
+  ]
 }

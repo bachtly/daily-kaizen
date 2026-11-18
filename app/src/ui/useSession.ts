@@ -1,5 +1,5 @@
 import { createElement, useEffect, useState, type ReactNode } from 'react';
-import { Navigate } from 'react-router';
+import { Navigate } from './nav';
 import { supabase } from '../data/supabase';
 
 export type SessionState = 'loading' | 'signed-in' | 'signed-out';
@@ -27,6 +27,6 @@ export function useSession(): SessionState {
 export function RequireSession({ children }: { children: ReactNode }) {
   const state = useSession();
   if (state === 'loading') return null;
-  if (state === 'signed-out') return createElement(Navigate, { to: '/sign-in', replace: true });
+  if (state === 'signed-out') return createElement(Navigate, { to: '/sign-in' });
   return children;
 }

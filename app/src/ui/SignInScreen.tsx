@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from './nav';
 import { sendCode, verifyCode } from '../data/auth';
 import { Phone } from './Phone';
 
@@ -126,7 +126,7 @@ export function SignInScreen({ onSignedIn }: { onSignedIn?: () => void } = {}) {
     setBusy(false);
     if (r.ok) {
       onSignedIn?.();
-      void navigate('/', { replace: true });
+      void navigate('/');
     } else {
       setError(r.error === 'invalid_code' ? 'wrong-code' : r.error === 'unknown' ? 'offline' : 'server');
     }

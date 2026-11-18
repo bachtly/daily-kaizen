@@ -1,4 +1,5 @@
-import { Link, useInRouterContext } from 'react-router';
+import { useInRouterContext } from 'react-router';
+import { Link } from './nav';
 
 export type Connection = 'online' | 'offline' | 'signed-out';
 
