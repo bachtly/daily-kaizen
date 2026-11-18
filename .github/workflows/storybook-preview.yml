@@ -1,0 +1,49 @@
+name: Storybook preview
+
+# Builds Storybook for every PR and publishes it on GitHub Pages at
+# https://<owner>.github.io/<repo>/pr-preview/pr-<N>/ (the action comments the link on the PR).
+# Closing the PR removes it. Requires Settings → Pages → "Deploy from a branch": gh-pages, / (root).
+# The previews are public, like the repo.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+    paths:
+      - app/**
+      - .github/workflows/storybook-preview.yml
+
+concurrency:
+  group: storybook-preview-${{ github.event.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # push to gh-pages
+  pull-requests: write # comment the preview link
+
+jobs:
+  preview:
+    # Fork PRs get a read-only token and can't publish.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        if: github.event.action != 'closed'
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Build Storybook
+        if: github.event.action != 'closed'
+        working-directory: app
+        run: |
+          npm ci
+          npm run build-storybook
+      - uses: rossjrw/pr-preview-action@873417d2df72380da1f3978378fb58560bcde976 # v1.8.2
+        with:
+          source-dir: app/storybook-static
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: auto
