@@ -8,9 +8,7 @@
     ],
     "deny": [
       "Bash(curl:*)",
-      "Bash(wget:*)",
-      "Edit(.github/workflows/**)",
-      "Write(.github/workflows/**)"
+      "Bash(wget:*)"
     ]
   }
 }
