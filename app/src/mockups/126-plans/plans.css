@@ -1,0 +1,36 @@
+/* #126 Plans mockups: only what theme.css doesn't already have. */
+.plan { background: var(--bg); border-radius: 14px; padding: 14px; margin-top: 10px; }
+.plan.paused { border: 1px dashed var(--neutral-bar); }
+.plan .trig { font-size: 13px; color: var(--muted); margin: 0 0 2px; }
+.plan .do { font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.plan .meta { font-size: 14px; margin: 6px 0 0; display: grid; gap: 2px; }
+.plan .meta span { color: var(--muted); }
+.plan .saves { color: var(--done-text); font-weight: 600; }
+.plan .why { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.sentence { font-size: 17px; line-height: 2.4; }
+.sentence select, .sentence input {
+  font: inherit; font-size: 16px; min-height: 44px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--accent); background: var(--bg); color: var(--text); max-width: 100%;
+}
+.sentence input { width: 100%; }
+.ai-box textarea, .chat-in textarea {
+  width: 100%; min-height: 76px; font: inherit; font-size: 16px; padding: 10px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text); resize: vertical;
+}
+.msg-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.msg-list li { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 15px; }
+.bubble { border-radius: 16px; padding: 10px 12px; margin: 8px 0; font-size: 15px; max-width: 88%; }
+.bubble.me { background: var(--accent); color: var(--accent-text); margin-left: auto; }
+.bubble.ai { background: var(--surface); }
+.steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; gap: 6px; }
+.steps li { flex: 1; text-align: center; font-size: 13px; color: var(--muted); border-bottom: 3px solid var(--line); padding-bottom: 6px; }
+.steps li[aria-current="step"] { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+.lock { flex: 1; background: #1b2433; color: #ffffff; min-height: 100%; padding: 40px 14px; border-radius: 0; }
+.lock .clock { text-align: center; font-size: 64px; font-weight: 300; margin: 0; }
+.lock .date { text-align: center; font-size: 17px; margin: 0 0 40px; }
+.push { background: rgba(255, 255, 255, 0.92); color: #1c1c1e; border-radius: 18px; padding: 12px 14px; }
+.push .app { font-size: 13px; color: #4a4a50; display: flex; justify-content: space-between; margin: 0 0 4px; }
+.push .t { font-weight: 600; margin: 0; }
+.push .b { margin: 2px 0 0; font-size: 15px; }
+.push .g { margin: 4px 0 0; font-size: 14px; color: #2f6a4a; font-weight: 600; }
+.tabbar.four .tab { font-size: 11px; }
